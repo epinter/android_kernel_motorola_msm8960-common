@@ -2400,8 +2400,6 @@ void __init msm8960_init_usb(void (*vbus_power)(bool on))
 {
 	msm_otg_pdata.vbus_power = vbus_power;
 	msm8960_device_otg.dev.platform_data = &msm_otg_pdata;
-	msm8960_device_gadget_peripheral.dev.parent = &msm8960_device_otg.dev;
-	msm_device_hsusb_host.dev.parent = &msm8960_device_otg.dev;
 }
 
 /* Sensors DSPS platform data */
