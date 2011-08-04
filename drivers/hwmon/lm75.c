@@ -27,6 +27,7 @@
 #include <linux/hwmon-sysfs.h>
 #include <linux/err.h>
 #include <linux/mutex.h>
+#include <linux/interrupt.h>
 #include "lm75.h"
 
 
@@ -137,6 +138,15 @@ static const struct attribute_group lm75_group = {
 
 /*-----------------------------------------------------------------------*/
 
+static irqreturn_t lm75_talert_irq_handler(int irq, void *data)
+{
+	struct lm75_data *lm75data = (struct lm75_data *)data;
+
+	kobject_uevent(&lm75data->hwmon_dev->kobj, KOBJ_CHANGE);
+
+	return IRQ_HANDLED;
+}
+
 /* device probe and removal */
 
 static int
@@ -146,6 +156,7 @@ lm75_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	int status;
 	u8 set_mask, clr_mask;
 	int new;
+	int ret;
 
 	if (!i2c_check_functionality(client->adapter,
 			I2C_FUNC_SMBUS_BYTE_DATA | I2C_FUNC_SMBUS_WORD_DATA))
@@ -187,6 +198,16 @@ lm75_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	if (IS_ERR(data->hwmon_dev)) {
 		status = PTR_ERR(data->hwmon_dev);
 		goto exit_remove;
+	}
+
+	kobject_uevent(&data->hwmon_dev->kobj, KOBJ_ADD);
+	if (client->irq > 0) {
+		ret = request_threaded_irq(client->irq, NULL,
+			lm75_talert_irq_handler,
+			IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+			"pcb_temp_sensor", (void *)data);
+		if (ret)
+			pr_warn("%s: request irq failed(%d)\n", __func__, ret);
 	}
 
 	dev_info(&client->dev, "%s: sensor '%s'\n",
