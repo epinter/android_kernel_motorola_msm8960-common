@@ -581,6 +581,30 @@ static struct msm_gpiomux_config msm8960_hsic_configs[] = {
 };
 #endif
 
+#define HAP_SHIFT_LVL_OE_GPIO	47
+
+static struct gpiomux_setting hap_lvl_shft_suspended_config = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_DOWN,
+};
+
+static struct gpiomux_setting hap_lvl_shft_active_config = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_UP,
+};
+
+static struct msm_gpiomux_config hap_lvl_shft_config[] __initdata = {
+	{
+		.gpio = HAP_SHIFT_LVL_OE_GPIO,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &hap_lvl_shft_suspended_config,
+			[GPIOMUX_ACTIVE] = &hap_lvl_shft_active_config,
+		},
+	},
+};
+
 #ifdef CONFIG_KERNEL_PMEM_EBI_REGION
 static unsigned pmem_kernel_ebi1_size = MSM_PMEM_KERNEL_EBI1_SIZE;
 static int __init pmem_kernel_ebi1_size_setup(char *p)
@@ -1698,6 +1722,10 @@ int __init gpiomux_init(void)
 	msm_gpiomux_install(wcnss_5wire_interface,
 			ARRAY_SIZE(wcnss_5wire_interface));
 
+	if (machine_is_msm8960_mtp() || machine_is_msm8960_fluid() ||
+		machine_is_msm8960_liquid() || machine_is_msm8960_cdp())
+		msm_gpiomux_install(hap_lvl_shft_config,
+			ARRAY_SIZE(hap_lvl_shft_config));
 	return 0;
 }
 
