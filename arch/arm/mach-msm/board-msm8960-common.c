@@ -114,10 +114,23 @@ static struct gpiomux_setting spi_suspended_config = {
 	.pull = GPIOMUX_PULL_DOWN,
 };
 
+
 static struct gpiomux_setting gsbi3_suspended_cfg = {
 	.func = GPIOMUX_FUNC_1,
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_KEEPER,
+};
+
+static struct gpiomux_setting spi_active_config2 = {
+	.func = GPIOMUX_FUNC_2,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct gpiomux_setting spi_suspended_config2 = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_UP,
 };
 
 static struct gpiomux_setting gsbi3_active_cfg = {
@@ -198,6 +211,13 @@ static struct msm_gpiomux_config msm8960_gsbi_configs[] __initdata = {
 		.settings = {
 			[GPIOMUX_SUSPENDED] = &spi_suspended_config,
 			[GPIOMUX_ACTIVE] = &spi_active,
+		},
+	},
+	{
+		.gpio      = 14,		/* GSBI1 SPI_CS_1 */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &spi_suspended_config2,
+			[GPIOMUX_ACTIVE] = &spi_active_config2,
 		},
 	},
 	{

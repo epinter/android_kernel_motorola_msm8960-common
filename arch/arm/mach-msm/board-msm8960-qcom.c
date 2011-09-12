@@ -113,7 +113,6 @@ static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 								DOUT_CTRL_LOW),
 };
 
-#define FPGA_CS_GPIO		14
 #define KS8851_RST_GPIO		89
 #define KS8851_IRQ_GPIO		90
 
@@ -153,12 +152,6 @@ struct msm_gpiomux_config msm8960_gpiomux_configs[NR_GPIO_IRQS] = {
 	},
 	{
 		.gpio = KS8851_RST_GPIO,
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_eth_config,
-		}
-	},
-	{
-		.gpio = FPGA_CS_GPIO,
 		.settings = {
 			[GPIOMUX_SUSPENDED] = &gpio_eth_config,
 		}
@@ -484,6 +477,7 @@ static struct platform_device mipi_dsi_toshiba_panel_device = {
 	}
 };
 
+#define FPGA_3D_GPIO_CONFIG_ADDR	0xB5
 static int dsi2lvds_gpio[2] = {
 	0,/* Backlight PWM-ID=0 for PMIC-GPIO#24 */
 	0x1F08 /* DSI2LVDS Bridge GPIO Output, mask=0x1f, out=0x08 */
@@ -509,6 +503,8 @@ static struct mipi_dsi_phy_ctrl dsi_novatek_cmd_mode_phy_db = {
 };
 
 static struct mipi_dsi_panel_platform_data novatek_pdata = {
+	.fpga_3d_config_addr  = FPGA_3D_GPIO_CONFIG_ADDR,
+	.fpga_ctrl_mode = FPGA_SPI_INTF,
 	.phy_ctrl_settings = &dsi_novatek_cmd_mode_phy_db,
 };
 
@@ -1238,6 +1234,13 @@ static struct spi_board_info spi_board_info[] __initdata = {
 		.mode                   = SPI_MODE_0,
 		.platform_data		= &spi_eth_pdata
 	},
+	{
+		.modalias               = "dsi_novatek_3d_panel_spi",
+		.max_speed_hz           = 10800000,
+		.bus_num                = 0,
+		.chip_select            = 1,
+		.mode                   = SPI_MODE_0,
+	},
 };
 
 static struct platform_device msm8960_device_ext_3p3v_vreg __devinitdata = {
@@ -1408,30 +1411,6 @@ static struct platform_device *cdp_devices[] __initdata = {
 	&msm_tsens_device,
 };
 
-
-#if defined(CONFIG_KS8851) || defined(CONFIG_KS8851_MODULE)
-static int fpga_init(void)
-{
-	int ret;
-
-	ret = gpio_request(FPGA_CS_GPIO, "fpga_cs");
-	if (ret) {
-		pr_err("FPGA CS gpio_request failed: %d\n", ret);
-		goto fail;
-	}
-
-	gpio_direction_output(FPGA_CS_GPIO, 1);
-
-	return 0;
-fail:
-	return ret;
-}
-#else
-static int fpga_init(void)
-{
-	return 0;
-}
-#endif
 
 #ifdef CONFIG_I2C
 #define I2C_SURF 1
@@ -1925,8 +1904,6 @@ static void __init msm8960_cdp_init(void)
 			ARRAY_SIZE(msm8960_cyts_configs));
 #endif
 
-	if (machine_is_msm8960_cdp())
-		fpga_init();
 	if (machine_is_msm8960_liquid())
 		pm8921_init(&keypad_data_liquid, 0, 10, 40);
 	else
