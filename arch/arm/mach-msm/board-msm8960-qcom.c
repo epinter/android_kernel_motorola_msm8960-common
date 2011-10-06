@@ -89,6 +89,7 @@
 #include "rpm_log.h"
 #include "smd_private.h"
 #include "pm-boot.h"
+#include "msm_watchdog.h"
 
 /* Initial PM8921 GPIO configurations */
 static struct pm8xxx_gpio_init pm8921_gpios[] __initdata = {
@@ -1814,6 +1815,10 @@ static struct msm_gpiomux_config msm8960_cyts_configs[] __initdata = {
 
 static void __init msm8960_sim_init(void)
 {
+	struct msm_watchdog_pdata *wdog_pdata = (struct msm_watchdog_pdata *)
+		&msm8960_device_watchdog.dev.platform_data;
+
+	wdog_pdata->bark_time = 15000;
 	msm8960_init_rpm();
 	regulator_suppress_info_printing();
 	msm8960_init_regulators();

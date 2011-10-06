@@ -90,6 +90,7 @@
 #include "rpm_log.h"
 #include "smd_private.h"
 #include "pm-boot.h"
+#include "msm_watchdog.h"
 
 #ifdef CONFIG_MSM_RPM_STATS_LOG
 #include "rpm_stats.h"
@@ -2459,6 +2460,7 @@ struct platform_device *common_devices[] __initdata = {
 	&msm_ptm_device,
 #endif
 	&msm_device_dspcrashd_8960,
+	&msm8960_device_watchdog,
 };
 
 void __init msm8960_i2c_init(unsigned clk_freq)
