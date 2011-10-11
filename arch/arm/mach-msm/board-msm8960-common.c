@@ -2480,6 +2480,7 @@ struct platform_device *common_devices[] __initdata = {
 	&msm_etb_device,
 	&msm_tpiu_device,
 	&msm_funnel_device,
+	&msm_debug_device,
 	&msm_ptm_device,
 #endif
 	&msm_device_dspcrashd_8960,
