@@ -70,6 +70,11 @@ ofile = None
 warning_re = re.compile(r'''(.*/|)([^/]+\.[a-z]+:\d+):(\d+:)? warning:''')
 def interpret_warning(line):
     """Decode the message from gcc.  The messages we care about have a filename, and a warning"""
+    # Begin Motorola - skip MOT_MERGE_WARNINGs.
+    # We use these to mark merge issues that developers must resolved.
+    if "MOT_MERGE_WARNING" in line:
+        return
+    # End Motorola - skip MOT_MERGE_WARNINGs
     line = line.rstrip('\n')
     m = warning_re.match(line)
     if m and m.group(2) not in allowed_warnings:
