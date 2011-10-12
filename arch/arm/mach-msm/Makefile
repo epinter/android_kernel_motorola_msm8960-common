@@ -223,6 +223,7 @@ obj-$(CONFIG_ARCH_MSM8960) += footswitch-8x60.o
 obj-$(CONFIG_ARCH_MSM8960) += acpuclock-8960.o
 obj-$(CONFIG_ARCH_MSM8960) += memory_topology.o
 obj-$(CONFIG_ARCH_MSM8960) += saw-regulator.o rpm-regulator.o rpm-regulator-8960.o
+obj-$(CONFIG_TOUCHSCREEN_CYTTSP3) += board-mot-cyttsp3.o
 obj-$(CONFIG_MACH_MSM8960_SIM) += board-msm8960.o devices-8960.o board-msm8960-regulator.o
 obj-$(CONFIG_MACH_MSM8960_RUMI3) += board-msm8960.o devices-8960.o board-msm8960-regulator.o
 obj-$(CONFIG_MACH_MSM8960_CDP) += board-msm8960.o devices-8960.o board-msm8960-regulator.o board-msm8960-sensors.o
