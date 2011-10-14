@@ -144,6 +144,9 @@ static irqreturn_t lm75_talert_irq_handler(int irq, void *data)
 
 	kobject_uevent(&lm75data->hwmon_dev->kobj, KOBJ_CHANGE);
 
+	/* force an update to the data everytime after an interrupt */
+	lm75data->valid = 0;
+
 	return IRQ_HANDLED;
 }
 
@@ -172,7 +175,7 @@ lm75_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	/* Set to LM75 resolution (9 bits, 1/2 degree C) and range.
 	 * Then tweak to be more precise when appropriate.
 	 */
-	set_mask = 0;
+	set_mask = (1 << 3) | (1 << 4);		/* fault queue to 6 faults */
 	clr_mask = (1 << 0)			/* continuous conversions */
 		| (1 << 6) | (1 << 5);		/* 9-bit mode */
 
