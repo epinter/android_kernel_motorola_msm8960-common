@@ -1475,6 +1475,7 @@ static struct platform_device *mmi_devices[] __initdata = {
 	&hdmi_msm_device,
 #endif
 	&msm_compr_dsp,
+	&msm_cpudai_incall_music_rx,
 	&msm_pcm_hostless,
 	&msm_bus_apps_fabric,
 	&msm_bus_sys_fabric,
