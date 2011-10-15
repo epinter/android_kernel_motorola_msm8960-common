@@ -143,6 +143,23 @@ struct tag_memclk {
 	__u32 fmemclk;
 };
 
+/* legacy motorola monolythic ATAG: a source of trouble when extended */
+#define ATAG_MOTOROLA	0x41000810
+#define ATAG_BLDEBUG	0x41000811
+
+#define ATAG_BASEBAND	0x41000812
+
+struct tag_baseband {
+	char baseband[1];
+};
+
+#define ATAG_DISPLAY	0x41000813
+
+/* currently just a string denoting the panel type */
+struct tag_display {
+	char display[1];
+};
+
 struct tag {
 	struct tag_header hdr;
 	union {
@@ -165,6 +182,12 @@ struct tag {
 		 * DC21285 specific
 		 */
 		struct tag_memclk	memclk;
+
+		/*
+		 * Motorola specific
+		 */
+		struct tag_baseband	baseband;
+		struct tag_display	display;
 	} u;
 };
 
