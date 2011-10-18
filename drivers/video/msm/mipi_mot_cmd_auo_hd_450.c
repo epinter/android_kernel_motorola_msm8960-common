@@ -35,6 +35,13 @@ static int __init mipi_cmd_mot_auo_qhd_450_init(void)
 {
 	int ret;
 
+	pr_info("%s\n", __func__);
+
+#if defined(CONFIG_FB_MSM_MIPI_MOT_DETECT)
+	if (msm_fb_detect_client("mipi_mot_cmd_auo_hd_450"))
+		return 0;
+#endif
+
 	pinfo.xres = 720;
 	pinfo.yres = 1280;
 	pinfo.type = MIPI_CMD_PANEL;
@@ -84,6 +91,8 @@ static int __init mipi_cmd_mot_auo_qhd_450_init(void)
 						MIPI_DSI_PANEL_HD);
 	if (ret)
 		pr_err("%s: failed to register device!\n", __func__);
+
+	pr_info("%s device registered\n", __func__);
 
 	return ret;
 }

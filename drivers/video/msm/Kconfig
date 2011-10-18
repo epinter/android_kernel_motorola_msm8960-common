@@ -300,6 +300,22 @@ config FB_MSM_MIPI_SIMULATOR_VIDEO
 	select FB_MSM_MIPI_DSI_SIMULATOR
 	default n
 
+config FB_MSM_MIPI_MOT_CMD_HD_PT
+	bool
+	select FB_MSM_MIPI_DSI_MOT
+	default n
+
+config FB_MSM_MIPI_MOT_VIDEO_HD_PT
+	bool
+	select FB_MSM_MIPI_DSI_MOT
+	default n
+
+config FB_MSM_MIPI_MOT_DETECT
+	bool
+	select FB_MSM_MIPI_MOT_CMD_HD_PT
+	select FB_MSM_MIPI_MOT_VIDEO_HD_PT
+	default n
+
 config FB_MSM_OVERLAY_WRITEBACK
 	depends on FB_MSM_OVERLAY
         bool "MDP overlay write back mode enable"
@@ -496,10 +512,6 @@ config FB_MSM_MIPI_NOVATEK_CMD_QHD_PT_PANEL
 	bool "MIPI NOVATEK CMD QHD PT Panel"
 	select FB_MSM_MIPI_NOVATEK_CMD_QHD_PT
 
-config FB_MSM_MIPI_MOT_PANEL
-        bool "MIPI MOT Panel"
-        select FB_MSM_MIPI_DSI_MOT
-
 config FB_MSM_MIPI_RENESAS_VIDEO_FWVGA_PT_PANEL
 	bool "MIPI Renesas Video FWVGA PT Panel"
 	select FB_MSM_MIPI_RENESAS_VIDEO_FWVGA_PT
@@ -519,6 +531,18 @@ config FB_MSM_MIPI_TRULY_VIDEO_WVGA_PT_PANEL
 config FB_MSM_MIPI_SIMULATOR_VIDEO_PANEL
 	bool "MIPI Simulator Video Panel"
 	select FB_MSM_MIPI_SIMULATOR_VIDEO
+
+config FB_MSM_MIPI_MOT_CMD_HD_PT_PANEL
+	bool "MIPI MOT CMD HD PT Panel"
+	select FB_MSM_MIPI_MOT_CMD_HD_PT
+
+config FB_MSM_MIPI_MOT_VIDEO_HD_PT_PANEL
+	bool "MIPI MOT VIDEO HD PT Panel"
+	select FB_MSM_MIPI_MOT_VIDEO_HD_PT
+
+config FB_MSM_MIPI_MOT_DETECT_PANEL
+	bool "MIPI MOT Auto-Detect Panel"
+	select FB_MSM_MIPI_MOT_DETECT
 
 config FB_MSM_EBI2_TMD_QVGA_EPSON_QCIF
 	bool "EBI2 TMD QVGA Epson QCIF Dual Panel"

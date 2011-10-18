@@ -223,6 +223,9 @@ static int mipi_dsi_on(struct platform_device *pdev)
 					(hbp + width + dummy_xres + hfp));
 		}
 
+		if (mipi->hs_clk_always_on)
+			MIPI_OUTP(MIPI_DSI_BASE + 0x00a8, 0x10000000);
+
 		MIPI_OUTP(MIPI_DSI_BASE + 0x2c, (hspw << 16));
 		MIPI_OUTP(MIPI_DSI_BASE + 0x30, 0);
 		MIPI_OUTP(MIPI_DSI_BASE + 0x34, (vspw << 16));

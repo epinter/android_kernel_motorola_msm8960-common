@@ -111,6 +111,7 @@ struct mipi_panel_info {
 	char eof_bllp_power_stop;
 	char bllp_power_stop;
 	char traffic_mode;
+	char hs_clk_always_on;
 	char frame_rate;
 	/* command mode */
 	char interleave_max;
