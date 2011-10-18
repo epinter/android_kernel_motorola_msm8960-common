@@ -306,3 +306,7 @@ obj-$(CONFIG_ARCH_MSM7X27A) += board-msm7x27a-regulator.o
 endif
 
 obj-$(CONFIG_ARCH_MSM8960) += mdm2.o mdm_common.o
+
+ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
+obj-$(CONFIG_ARCH_MSM8960) += board-msm8960-melfas-touch.o
+endif
