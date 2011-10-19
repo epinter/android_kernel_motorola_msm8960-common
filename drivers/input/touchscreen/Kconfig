@@ -825,4 +825,13 @@ config TOUCHSCREEN_CYTTSP_I2C
 
          To compile this driver as a module, choose M here: the
          module will be called cyttsp-i2c.
+
+config TOUCHSCREEN_MELFAS100_TS
+	tristate "Melfas MMS-100 based touchscreens"
+	depends on I2C
+	default n
+	help
+	  Say Y here if you have a Melfas touchscreen controller.
+
+	  If unsure, say N.
 endif
