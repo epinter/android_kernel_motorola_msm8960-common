@@ -24,15 +24,13 @@
 #include <linux/input.h>
 
 #include <linux/melfas100_ts.h>
+#include "board-msm8960-melfas-touch.h"
 
-#define MELFAS_TOUCH_INT_GPIO		46
-#define MELFAS_TOUCH_RESET_GPIO		50
-
-
-static struct melfas_ts_platform_data touch_pdata = {
+struct melfas_ts_platform_data touch_pdata = {
 	.flags = TS_FLIP_X | TS_FLIP_Y,
 	};
 
+/*
 static struct i2c_board_info i2c_bus3_melfas_ts_info[] __initdata = {
 	{
 		I2C_BOARD_INFO(MELFAS_TS_NAME, 0x48),
@@ -40,6 +38,7 @@ static struct i2c_board_info i2c_bus3_melfas_ts_info[] __initdata = {
 		.platform_data = &touch_pdata,
 	},
 };
+*/
 
 int __init melfas_ts_platform_init(void)
 {
@@ -52,9 +51,9 @@ int __init melfas_ts_platform_init(void)
 	/* melfas interrupt gpio */
 	gpio_request(MELFAS_TOUCH_INT_GPIO, "touch_irq");
 	gpio_direction_input(MELFAS_TOUCH_INT_GPIO);
-
+	/*
 	i2c_register_board_info(3, i2c_bus3_melfas_ts_info,
 		ARRAY_SIZE(i2c_bus3_melfas_ts_info));
-
+	*/
 	return 0;
 }
