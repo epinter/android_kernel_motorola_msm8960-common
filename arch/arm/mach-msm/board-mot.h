@@ -1,7 +1,7 @@
 /*
- * include/linux/keyreset.h - platform data structure for resetkeys driver
+ * arch/arm/mach-msm/board-mot.h
  *
- * Copyright (C) 2008 Google, Inc.
+ * Copyright (C) 2011 Motorola, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -14,16 +14,12 @@
  *
  */
 
-#ifndef _LINUX_KEYRESET_H
-#define _LINUX_KEYRESET_H
+#ifndef __ARCH_ARM_MACH_MSM_BOARD_MOT_H
+#define __ARCH_ARM_MACH_MSM_BOARD_MOT_H
 
-#define KEYRESET_NAME "keyreset"
+#include <linux/mfd/pm8xxx/pm8921.h>
 
-struct keyreset_platform_data {
-	int delay;
-	int (*reset_fn)(void);
-	int *keys_up;
-	int keys_down[]; /* 0 terminated */
-};
-
-#endif /* _LINUX_KEYRESET_H */
+extern void __init mot_vibrator_init(void);
+extern int __init mot_keypad_init(void);
+extern struct pm8xxx_keypad_platform_data mot_keypad_data;
+#endif
