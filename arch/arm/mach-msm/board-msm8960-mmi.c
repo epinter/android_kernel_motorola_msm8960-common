@@ -159,6 +159,99 @@ static unsigned pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_vanquish);
 static struct pm8xxx_keypad_platform_data *keypad_data = &mmi_keypad_data;
 static int keypad_mode = MMI_KEYPAD_RESET;
 
+#ifdef CONFIG_EMU_DETECTION
+
+#define MSM8960_HSUSB_PHYS		0x12500000
+#define MSM8960_HSUSB_SIZE		SZ_4K
+
+static struct resource resources_emu_det[] __initdata = {
+	{
+		.start	= MSM8960_HSUSB_PHYS,
+		.end	= MSM8960_HSUSB_PHYS + MSM8960_HSUSB_SIZE,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.name	= "PHY_USB_IRQ",
+		.start	= USB1_HS_IRQ,
+		.end	= USB1_HS_IRQ,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.name	= "EMU_SCI_OUT_GPIO",
+		.start	= 90,	/* MSM GPIO */
+		.end	= 90,
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.name	= "EMU_ID_EN_GPIO",
+		.start	= PM8921_MPP_PM_TO_SYS(9),	/* PM MPP */
+		.end	= PM8921_MPP_PM_TO_SYS(9),
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.name	= "EMU_MUX_CTRL1_GPIO",
+		.start	= 96,	/* MSM GPIO */
+		.end	= 96,
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.name	= "EMU_MUX_CTRL0_GPIO",
+		.start	= 107,	/* MSM GPIO */
+		.end	= 107,
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.name	= "SEMU_ALT_MODE_EN_GPIO",
+		.start	= PM8921_GPIO_PM_TO_SYS(17),	/* PM GPIO */
+		.end	= PM8921_GPIO_PM_TO_SYS(17),
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.name	= "SEMU_PPD_DET_GPIO",
+		.start	= PM8921_GPIO_PM_TO_SYS(35),	/* PM GPIO */
+		.end	= PM8921_GPIO_PM_TO_SYS(35),
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.name	= "EMU_ID_GPIO",
+		.start	= PM8921_MPP_PM_TO_SYS(10),	/* PM MPP */
+		.end	= PM8921_MPP_PM_TO_SYS(10),
+		.flags	= IORESOURCE_IO,
+	},
+};
+
+static struct platform_device emu_det_device __initdata = {
+	.name		= "emu_det",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(resources_emu_det),
+	.resource	= resources_emu_det,
+};
+
+static int regulator_init;
+
+static __init void mot_init_emu_detection(int reg_init)
+{
+	msm_otg_pdata.otg_control = OTG_ACCY_CONTROL;
+	msm_otg_pdata.pmic_id_irq = 0;
+	msm_otg_pdata.accy_pdev = &emu_det_device;
+
+	if (reg_init) {
+		struct regulator *vdd;
+		int rc;
+		vdd = regulator_get(NULL, "8921_l7");
+		if (!IS_ERR(vdd)) {
+			rc = regulator_set_voltage(vdd,
+					2700000, 2700000);
+			if (!rc)
+				rc = regulator_enable(vdd);
+			if (rc)
+				pr_err("unable to set 8921_l7 to 2.7V\n");
+
+		}
+	}
+}
+#endif
+
 /* defaulting to qinara, atag parser will override */
 /* todo: finalize the names, move display related stuff to board-msm8960-panel.c */
 #if defined(CONFIG_FB_MSM_MIPI_MOT_CMD_HD_PT)
@@ -1358,6 +1451,10 @@ static void __init msm8960_mmi_init(void)
 	msm8960_init_usb(msm_hsusb_vbus_power);
 	mot_init_usb();
 
+#ifdef CONFIG_EMU_DETECTION
+	mot_init_emu_detection(regulator_init);
+#endif
+
 	platform_add_devices(mmi_devices, ARRAY_SIZE(mmi_devices));
 #ifdef CONFIG_MSM_CAMERA
 	msm8960_init_cam();
@@ -1401,6 +1498,19 @@ static int __init mot_parse_atag_display(const struct tag *tag)
 }
 __tagtable(ATAG_DISPLAY, mot_parse_atag_display);
 
+static void __init set_emu_detection_resource(const char *res_name, int value)
+{
+	struct resource *res = platform_get_resource_byname(
+				&emu_det_device,
+				IORESOURCE_IO, res_name);
+	if (res) {
+		res->start = res->end = value;
+		pr_info("resource (%s) set to %d\n",
+				res_name, value);
+	} else
+		pr_err("cannot set resource (%s)\n", res_name);
+}
+
 static __init void teufel_init(void)
 {
 	if (system_rev <= HWREV_P1)
@@ -1415,6 +1525,27 @@ static __init void teufel_init(void)
 		ENABLE_I2C_DEVICE(TOUCHSCREEN_CYTTSP3);
 		ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
 	}
+
+#ifdef CONFIG_EMU_DETECTION
+	if (system_rev < HWREV_P3) {
+		struct rpm_regulator_init_data  *init_data =
+				msm_rpm_regulator_pdata.init_data;
+		struct regulator_init_data *id;
+		int i;
+		for (i = 0; i < msm_rpm_regulator_pdata.num_regulators; i++) {
+			if (init_data->id == PM8921_VREG_ID_L7) {
+				id = &init_data->init_data;
+				id->constraints.min_uV = 2700000;
+				id->constraints.max_uV = 2700000;
+				pr_info("L7(%d) regulator set to 2.7V\n", i);
+				break;
+			}
+			init_data++;
+		}
+		set_emu_detection_resource("EMU_ID_EN_GPIO", 94);
+		regulator_init = 1;
+	}
+#endif
 
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	if (system_rev >= HWREV_P2)
@@ -1437,6 +1568,9 @@ MACHINE_END
 
 static __init void qinara_init(void)
 {
+	if (system_rev < HWREV_P2)
+		set_emu_detection_resource("EMU_ID_EN_GPIO", 94);
+
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_CYTTSP3);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	if (system_rev >= HWREV_P2)
@@ -1500,6 +1634,9 @@ MACHINE_END
 
 static __init void becker_init(void)
 {
+	set_emu_detection_resource("EMU_MUX_CTRL0_GPIO", 96);
+	set_emu_detection_resource("EMU_MUX_CTRL1_GPIO", 107);
+
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_ATMEL);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
@@ -1520,6 +1657,9 @@ MACHINE_END
 
 static __init void asanti_init(void)
 {
+	set_emu_detection_resource("EMU_MUX_CTRL0_GPIO", 96);
+	set_emu_detection_resource("EMU_MUX_CTRL1_GPIO", 107);
+
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_ATMEL);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);

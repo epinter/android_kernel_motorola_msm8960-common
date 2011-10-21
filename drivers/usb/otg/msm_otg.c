@@ -519,6 +519,9 @@ static int msm_otg_reset(struct otg_transceiver *otg)
 
 	clk_disable(motg->clk);
 
+	if (pdata->otg_control == OTG_ACCY_CONTROL)
+		goto done;
+
 	val = readl_relaxed(USB_OTGSC);
 	if (pdata->mode == USB_OTG) {
 		ulpi_val = ULPI_INT_IDGRD | ULPI_INT_SESS_VALID;
@@ -553,6 +556,7 @@ static int msm_otg_set_suspend(struct otg_transceiver *otg, int suspend)
 			pm_runtime_resume(otg->dev);
 	}
 
+done:
 	return 0;
 }
 
@@ -1014,6 +1018,11 @@ static int msm_otg_set_peripheral(struct otg_transceiver *otg,
 	otg->gadget = gadget;
 	dev_dbg(otg->dev, "peripheral driver registered w/ tranceiver\n");
 
+	/* We rely on the accessory detection driver to trigger any state
+	 * changes */
+	if (motg->pdata->otg_control == OTG_ACCY_CONTROL)
+		goto done;
+
 	/*
 	 * Kick the state machine work, if host is not supported
 	 * or host is already registered with us.
@@ -1023,6 +1032,7 @@ static int msm_otg_set_peripheral(struct otg_transceiver *otg,
 		schedule_work(&motg->sm_work);
 	}
 
+done:
 	return 0;
 }
 
@@ -1563,6 +1573,12 @@ static void msm_otg_init_sm(struct msm_otg *motg)
 				set_bit(ID, &motg->inputs);
 				clear_bit(B_SESS_VLD, &motg->inputs);
 			}
+		} else if (pdata->otg_control == OTG_ACCY_CONTROL) {
+			/* start with nothing connected */
+			pr_info("%s: setting default inputs for ACCY mode\n",
+							__func__);
+			set_bit(ID, &motg->inputs);
+			clear_bit(B_SESS_VLD, &motg->inputs);
 		} else {
 			if (aca_enabled()) {
 				if (irq_read_line(motg->pdata->pmic_id_irq))
@@ -1754,6 +1770,7 @@ static irqreturn_t msm_otg_irq(int irq, void *data)
 	struct otg_transceiver *otg = &motg->otg;
 	u32 otgsc = 0, usbsts;
 
+
 	if (atomic_read(&motg->in_lpm)) {
 		disable_irq_nosync(irq);
 		motg->async_int = 1;
@@ -1761,7 +1778,11 @@ static irqreturn_t msm_otg_irq(int irq, void *data)
 		return IRQ_HANDLED;
 	}
 
+	if (motg->pdata->otg_control == OTG_ACCY_CONTROL)
+		return IRQ_NONE;
+
 	usbsts = readl(USB_USBSTS);
+
 	if ((usbsts & PHY_ALT_INT)) {
 		dev_dbg(otg->dev, "PHY_ALT interrupt\n");
 		writel(PHY_ALT_INT, USB_USBSTS);
@@ -1825,6 +1846,75 @@ static irqreturn_t msm_pmic_id_irq(int irq, void *data)
 		msm_otg_irq(motg->irq, motg);
 
 	return IRQ_HANDLED;
+}
+
+static int msm_otg_accy_notify(struct notifier_block *nb,
+			unsigned long event, void *ignore)
+{
+	struct msm_otg *motg;
+	struct otg_transceiver *otg;
+	enum usb_mode_type req_mode;
+
+	motg = container_of(nb, struct msm_otg, accy_nb);
+	otg = &motg->otg;
+
+	pr_info("%s called for %lu event\n", __func__, event);
+
+	if (event == USB_EVENT_ID)
+		req_mode = USB_HOST;
+	else if (event == USB_EVENT_VBUS || event == USB_EVENT_CHARGER)
+		req_mode = USB_PERIPHERAL;
+	else
+		req_mode = USB_NONE;
+
+	pr_info("%s: current state: %d\trequested mode: %d\n",
+					__func__, otg->state, req_mode);
+	switch (req_mode) {
+	case USB_NONE:
+		switch (otg->state) {
+		case OTG_STATE_A_HOST:
+		case OTG_STATE_B_PERIPHERAL:
+			set_bit(ID, &motg->inputs);
+			clear_bit(B_SESS_VLD, &motg->inputs);
+			break;
+		default:
+			goto out;
+		}
+		break;
+	case USB_PERIPHERAL:
+		switch (otg->state) {
+		case OTG_STATE_B_IDLE:
+		case OTG_STATE_A_HOST:
+			set_bit(ID, &motg->inputs);
+			set_bit(B_SESS_VLD, &motg->inputs);
+			motg->chg_state = USB_CHG_STATE_DETECTED;
+			if (event == USB_EVENT_VBUS)
+				motg->chg_type = USB_SDP_CHARGER;
+			else
+				motg->chg_type = USB_DCP_CHARGER;
+			break;
+		default:
+			goto out;
+		}
+		break;
+	case USB_HOST:
+		switch (otg->state) {
+		case OTG_STATE_B_IDLE:
+		case OTG_STATE_B_PERIPHERAL:
+			clear_bit(ID, &motg->inputs);
+			break;
+		default:
+			goto out;
+		}
+		break;
+	default:
+		goto out;
+	}
+
+	pm_runtime_get_sync(otg->dev);
+	schedule_work(&motg->sm_work);
+out:
+	return 0;
 }
 
 static int msm_otg_mode_show(struct seq_file *s, void *unused)
@@ -2350,14 +2440,37 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 						IRQF_TRIGGER_FALLING,
 						"msm_otg", motg);
 			if (ret) {
-				dev_err(&pdev->dev, "request irq failed for PMIC ID\n");
+				dev_err(&pdev->dev, "request irq failed"
+					" for PMIC ID\n");
 				goto remove_otg;
 			}
 		} else {
 			ret = -ENODEV;
-			dev_err(&pdev->dev, "PMIC IRQ for ID notifications doesn't exist\n");
+			dev_err(&pdev->dev, "PMIC IRQ for ID notifications"
+					" doesn't exist\n");
 			goto remove_otg;
 		}
+	} else if (motg->pdata->otg_control == OTG_ACCY_CONTROL) {
+		pr_info("%s: MSM OTG Driver will operate in ACCY CONTROL mode\n",
+					__func__);
+		/* register accy detection device */
+		ret = platform_device_register(motg->pdata->accy_pdev);
+		if (ret) {
+			dev_err(&pdev->dev, "%s: platform device"
+				" registration for accy det device failed,"
+				" ret %d\n", __func__, ret);
+			goto remove_otg;
+		}
+
+		/* set up notifier so that accy detect driver can notify otg
+		 * driver when switches between host/peripheral/suspend modes
+		 * are required */
+		ATOMIC_INIT_NOTIFIER_HEAD(&motg->otg.notifier);
+		motg->accy_nb.notifier_call = msm_otg_accy_notify;
+		otg_register_notifier(&motg->otg, &motg->accy_nb);
+
+		msm_otg_init_sm(motg);
+		motg->otg.state = OTG_STATE_B_IDLE;
 	}
 
 	msm_hsusb_mhl_switch_enable(motg, 1);

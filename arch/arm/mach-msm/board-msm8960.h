@@ -176,6 +176,8 @@ extern struct platform_device hdmi_msm_device;
 extern struct platform_device android_usb_device;
 extern struct platform_device msm_tsens_device;
 
+extern struct msm_otg_platform_data msm_otg_pdata;
+
 extern void msm8960_init_hdmi(struct platform_device *hdmi_dev,
 						struct msm_hdmi_platform_data *hdmi_data);
 

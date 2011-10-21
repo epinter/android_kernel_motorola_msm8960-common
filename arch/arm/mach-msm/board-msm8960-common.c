@@ -2263,13 +2263,13 @@ static struct platform_device msm_fb_device = {
 	.dev.platform_data = &msm_fb_pdata,
 };
 
-static struct msm_otg_platform_data msm_otg_pdata = {
-	.mode			= USB_OTG,
+struct msm_otg_platform_data msm_otg_pdata = {
+	.mode		= USB_OTG,
 	.otg_control	= OTG_PMIC_CONTROL,
-	.phy_type		= SNPS_28NM_INTEGRATED_PHY,
+	.phy_type	= SNPS_28NM_INTEGRATED_PHY,
 	.pclk_src_name	= "dfab_usb_hs_clk",
 	.pmic_id_irq	= PM8921_USB_ID_IN_IRQ(PM8921_IRQ_BASE),
-	.vbus_power		= NULL, /* msm_hsusb_vbus_power, */
+	.vbus_power	= NULL, /* msm_hsusb_vbus_power, */
 	.power_budget	= 750,
 };
 
