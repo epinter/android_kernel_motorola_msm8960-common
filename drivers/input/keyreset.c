@@ -112,7 +112,7 @@ static void keyreset_event(struct input_handle *handle, unsigned int type,
 		mod_timer(&state->timer, jiffies +
 			msecs_to_jiffies(state->delay));
 	} else
-		del_timer_sync(&state->timer);
+		del_timer(&state->timer);
 
 done:
 	spin_unlock_irqrestore(&state->lock, flags);
