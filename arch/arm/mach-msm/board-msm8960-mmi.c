@@ -1432,6 +1432,10 @@ static struct platform_device *mmi_devices[] __initdata = {
 	&pm8xxx_rgb_leds_device,
 };
 
+static struct msm_pm_boot_platform_data msm_pm_boot_pdata __initdata = {
+	.mode = MSM_PM_BOOT_CONFIG_TZ,
+};
+
 #ifdef CONFIG_I2C
 
 enum i2c_type {
@@ -1972,7 +1976,7 @@ static void __init msm8960_mmi_init(void)
 	mot_tcmd_export_gpio();
 
 	change_memory_power = &msm8960_change_memory_power;
-	BUG_ON(msm_pm_boot_init(MSM_PM_BOOT_CONFIG_TZ, NULL));
+	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
 }
 
 static int __init mot_parse_atag_baseband(const struct tag *tag)
