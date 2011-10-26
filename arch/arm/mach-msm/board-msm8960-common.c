@@ -2518,6 +2518,8 @@ struct platform_device *common_devices[] __initdata = {
 #endif
 	&msm_rpm_log_device,
 	&msm_rpm_stat_device,
+	&msm_device_tz_log,
+
 #ifdef CONFIG_MSM_QDSS
 	&msm_etb_device,
 	&msm_tpiu_device,
