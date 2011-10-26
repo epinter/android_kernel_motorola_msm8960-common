@@ -909,6 +909,9 @@ static void __init msm8960_init_cam(void)
 		msm_get_cam_resources(s_info);
 		platform_device_register(cam_dev[i]);
 	}
+
+	platform_device_register(&msm8960_device_csiphy0);
+	platform_device_register(&msm8960_device_csiphy1);
 }
 #endif
 
@@ -1298,7 +1301,7 @@ static void msm_hsusb_vbus_power(bool on)
 	}
 	regulator_disable(mvs_otg_switch);
 err_ldo_gpio_set_dir:
-	gpio_set_value(PM8921_GPIO_PM_TO_SYS(USB_5V_EN)), 0;
+	gpio_set_value(PM8921_GPIO_PM_TO_SYS(USB_5V_EN), 0);
 free_usb_5v_en:
 	gpio_free(PM8921_GPIO_PM_TO_SYS(USB_5V_EN));
 put_mvs_otg:
