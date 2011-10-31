@@ -257,6 +257,7 @@ struct pm8921_chg_chip {
 	struct wake_lock		eoc_wake_lock;
 	enum pm8921_chg_cold_thr	cold_thr;
 	enum pm8921_chg_hot_thr		hot_thr;
+	int 			factory_mode;
 };
 
 static int charging_disabled;
@@ -360,6 +361,9 @@ static int pm_chg_get_regulation_loop(struct pm8921_chg_chip *chip)
 #define CHG_USB_SUSPEND_BIT  BIT(2)
 static int pm_chg_usb_suspend_enable(struct pm8921_chg_chip *chip, int enable)
 {
+	if (chip->factory_mode)
+		return 0;
+
 	return pm_chg_masked_write(chip, CHG_CNTRL_3, CHG_USB_SUSPEND_BIT,
 			enable ? CHG_USB_SUSPEND_BIT : 0);
 }
@@ -367,6 +371,9 @@ static int pm_chg_usb_suspend_enable(struct pm8921_chg_chip *chip, int enable)
 #define CHG_EN_BIT	BIT(7)
 static int pm_chg_auto_enable(struct pm8921_chg_chip *chip, int enable)
 {
+	if (chip->factory_mode)
+		return 0;
+
 	return pm_chg_masked_write(chip, CHG_CNTRL_3, CHG_EN_BIT,
 				enable ? CHG_EN_BIT : 0);
 }
@@ -387,6 +394,9 @@ static int pm_chg_failed_clear(struct pm8921_chg_chip *chip, int clear)
 #define CHG_CHARGE_DIS_BIT	BIT(1)
 static int pm_chg_charge_dis(struct pm8921_chg_chip *chip, int disable)
 {
+	if (chip->factory_mode)
+		return 0;
+
 	return pm_chg_masked_write(chip, CHG_CNTRL, CHG_CHARGE_DIS_BIT,
 				disable ? CHG_CHARGE_DIS_BIT : 0);
 }
@@ -555,6 +565,9 @@ static int pm_chg_iterm_get(struct pm8921_chg_chip *chip, int *chg_current)
 static int pm_chg_iusbmax_set(struct pm8921_chg_chip *chip, int reg_val)
 {
 	u8 temp;
+
+	if (chip->factory_mode)
+		return 0;
 
 	if (reg_val < PM8921_CHG_IUSB_MIN || reg_val > PM8921_CHG_IUSB_MAX) {
 		pr_err("bad mA=%d asked to set\n", reg_val);
@@ -2641,6 +2654,7 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	chip->vin_min = pdata->vin_min;
 	chip->thermal_mitigation = pdata->thermal_mitigation;
 	chip->thermal_levels = pdata->thermal_levels;
+	chip->factory_mode = pdata->factory_mode;
 
 	chip->cold_thr = pdata->cold_thr;
 	chip->hot_thr = pdata->hot_thr;
