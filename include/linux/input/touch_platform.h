@@ -49,9 +49,10 @@ struct touch_platform_data {
 	uint8_t			addr[2];
 	uint16_t		flags;
 
-	int			(*hw_reset)(void);
-	int			(*hw_recov)(void);
-	int			(*irq_stat)(void);
+	int			gpio_enable;
+	int			gpio_reset;
+	int			gpio_interrupt;
+
 } __attribute__ ((packed));
 
 #endif /* _LINUX_TOUCH_PLATFORM_H */

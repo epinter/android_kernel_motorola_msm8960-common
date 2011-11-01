@@ -26,7 +26,7 @@
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/input/touch_platform.h>
-#include <linux/cyttsp3_core.h>
+#include <linux/input/cyttsp3_core.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -3459,57 +3459,6 @@ static uint8_t firmwr[] =
 	0x03, 0x04, 0x05, 0x06, 0x07
 };
 
-static int irq_status(void)
-{
-	int err = 0;
-
-	err = gpio_get_value(CYTT_GPIO_INTR);
-	if (err < 0) {
-		printk(KERN_ERR "%s: Failed to read irq level.\n",
-			__func__);
-	}
-
-	return err;
-
-}
-/*
-static int touch_recover(int mode)
-{
-	int retval = 0;
-	int int_pin = 0;
-	const char *int_name = "touch_panel_int";
-
-	int_pin = get_gpio_by_name(int_name);
-	if (int_pin >= 0) {
-		retval = gpio_direction_output(int_pin, 1);
-		if (retval < 0) {
-			pr_err("%s: Failed to switch irq to output.\n",
-				__func__);
-		}
-		gpio_set_value(int_pin, 0);
-		msleep(20);
-		gpio_set_value(int_pin, 1);
-		retval = gpio_direction_input(int_pin);
-		if (retval < 0) {
-			pr_err("%s: Failed to restore irq to input.\n",
-				__func__);
-		}
-	} else {
-		pr_err("%s: Cannot acquire irq pin.\n", __func__);
-	}
-
-	return retval;
-}
-*/
-
-static int touch_reset(void)
-{
-	gpio_set_value(CYTT_GPIO_RST, 0);
-	msleep(9);
-	gpio_set_value(CYTT_GPIO_RST, 1);
-
-	return 0;
-};
 
 /*
 static struct vkey touch_vkeys[] = {
@@ -3528,12 +3477,9 @@ static struct vkey touch_vkeys[] = {
 };
 */
 
-struct touch_platform_data ts_platform_data =
+struct touch_platform_data ts_platform_data_cyttsp3 =
 {
 	.addr			= { 0x3B, 0x3B },
-	.hw_reset		= touch_reset,
-	.hw_recov		= NULL,
-	.irq_stat		= irq_status,
 };
 
 /* center: x: home: 55, menu: 185, back: 305, search 425, y: 835 */
@@ -3590,7 +3536,7 @@ static struct attribute_group mot_properties_attr_group = {
 	.attrs = mot_properties_attrs,
 };
 
-void mot_setup_touch(void)
+void mot_setup_touch_cyttsp3(void)
 {
 	int ret = 0;
 	struct kobject *properties_kobj = NULL;
@@ -3607,34 +3553,17 @@ void mot_setup_touch(void)
 	if (!properties_kobj || ret)
 		pr_err("failed to create board_properties\n");
 
-	gpio_request(CYTT_GPIO_ENABLE,"touch_enable");
-	if ( (ret = gpio_direction_output(CYTT_GPIO_ENABLE, 1)))
-	{
-		pr_err("%s: Failed to setup ENABLE irq for output.\n",
-				__func__);
-		return;
-	}
-	gpio_request(CYTT_GPIO_RST,"touch_rst");
-	if ( (ret = gpio_direction_output(CYTT_GPIO_RST, 1)))
-	{
-		pr_err("%s: Failed to setup RST irq for output.\n",
-				__func__);
-		return;
-	}
-	gpio_request(CYTT_GPIO_INTR,"touch_intr");
-	if ( (ret = gpio_direction_input(CYTT_GPIO_INTR)))
-	{
-		pr_err("%s: Failed to setup INT irq for input.\n",
-				__func__);
-		return;
-	}
-
 	printk("%s: setting up platform data\n", __func__);
+	/* Setup GPIOs */
+	ts_platform_data_cyttsp3.gpio_enable = CYTT_GPIO_ENABLE;
+	ts_platform_data_cyttsp3.gpio_reset = CYTT_GPIO_RST;
+	ts_platform_data_cyttsp3.gpio_interrupt = CYTT_GPIO_INTR;
+
 	/* Setup settings */
-	ts_platform_data.sett[0] = &tsett_list;
-	ts_platform_data.sett[1] = &tsett1;
-	ts_platform_data.sett[2] = &tsett2;
-	ts_platform_data.sett[3] = &tsett3;
+	ts_platform_data_cyttsp3.sett[0] = &tsett_list;
+	ts_platform_data_cyttsp3.sett[1] = &tsett1;
+	ts_platform_data_cyttsp3.sett[2] = &tsett2;
+	ts_platform_data_cyttsp3.sett[3] = &tsett3;
 
 	/* set up firmware related stuff. We need a better way of doing it */
 	ts_firmware.img = firmwr;
@@ -3642,10 +3571,10 @@ void mot_setup_touch(void)
 	ts_firmware.ver = vrs;
 	ts_firmware.vsize = sizeof(vrs);
 
-	ts_platform_data.fw = &ts_firmware;
+	ts_platform_data_cyttsp3.fw = &ts_firmware;
 
 	/* set up framework side */
-	ts_platform_data.frmwrk = &fw;
+	ts_platform_data_cyttsp3.frmwrk = &fw;
 
 	/*
 	info->platform_data = &ts_platform_data;

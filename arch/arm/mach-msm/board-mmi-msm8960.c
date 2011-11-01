@@ -36,8 +36,11 @@
 #include <linux/android_pmem.h>
 #endif
 #include <linux/cyttsp.h>
+#ifdef CONFIG_TOUCHSCREEN_ATMXT
+#include <linux/input/atmxt.h>
+#endif
 #ifdef CONFIG_TOUCHSCREEN_CYTTSP3
-#include <linux/cyttsp3_core.h>
+#include <linux/input/cyttsp3_core.h>
 #endif
 #include <linux/melfas100_ts.h>
 #include <linux/dma-mapping.h>
@@ -118,8 +121,13 @@
 #endif
 
 #ifdef CONFIG_TOUCHSCREEN_CYTTSP3
-extern void mot_setup_touch(void);
-extern struct touch_platform_data ts_platform_data;
+extern void mot_setup_touch_cyttsp3(void);
+extern struct touch_platform_data ts_platform_data_cyttsp3;
+#endif
+
+#ifdef CONFIG_TOUCHSCREEN_ATMXT
+extern void mot_setup_touch_atmxt(void);
+extern struct touch_platform_data ts_platform_data_atmxt;
 #endif
 
 static struct platform_device msm_fm_platform_init = {
@@ -4308,8 +4316,14 @@ static struct platform_device msm8960_device_rpm_regulator __devinitdata = {
 };
 
 #ifdef CONFIG_TOUCHSCREEN_CYTTSP3
-static struct platform_device touch_device __devinitdata = {
+static struct platform_device touch_device_cyttsp3 __devinitdata = {
 	.name	= CYPRESS_TTSP3_NAME,
+	.id	= 100,
+};
+#endif
+#ifdef CONFIG_TOUCHSCREEN_ATMXT
+static struct platform_device touch_device_atmxt __devinitdata = {
+	.name	= ATMXT_I2C_NAME,
 	.id	= 100,
 };
 #endif
@@ -4398,8 +4412,11 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm_ptm_device,
 #endif
 	&msm_device_dspcrashd_8960,
+#ifdef CONFIG_TOUCHSCREEN_ATMXT
+	&touch_device_atmxt,
+#endif
 #ifdef CONFIG_TOUCHSCREEN_CYTTSP3
-	&touch_device,
+	&touch_device_cyttsp3,
 #endif
 };
 
@@ -4879,8 +4896,17 @@ static struct i2c_board_info i2c_bus3_melfas_ts_info[] __initdata = {
 static struct i2c_board_info cyttsp_i2c_boardinfo[] __initdata = {
 	{
 		I2C_BOARD_INFO(CYPRESS_TTSP3_NAME, 0x3B),
-		.platform_data = &ts_platform_data,
+		.platform_data = &ts_platform_data_cyttsp3,
 		.irq = MSM_GPIO_TO_INT(CYTT_GPIO_INTR),
+	},
+};
+#endif
+#ifdef CONFIG_TOUCHSCREEN_ATMXT
+static struct i2c_board_info atmxt_i2c_boardinfo[] __initdata = {
+	{
+		I2C_BOARD_INFO(ATMXT_I2C_NAME, 0x42),
+		.platform_data = &ts_platform_data_atmxt,
+		.irq = MSM_GPIO_TO_INT(ATMXT_GPIO_INTR),
 	},
 };
 #endif
@@ -4930,6 +4956,14 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		MSM_8960_GSBI3_QUP_I2C_BUS_ID,
 		i2c_bus3_melfas_ts_info,
 		ARRAY_SIZE(i2c_bus3_melfas_ts_info),
+	},
+#endif
+#ifdef CONFIG_TOUCHSCREEN_ATMXT
+	{
+		0,
+		MSM_8960_GSBI3_QUP_I2C_BUS_ID,
+		atmxt_i2c_boardinfo,
+		ARRAY_SIZE(atmxt_i2c_boardinfo),
 	},
 #endif
 #ifdef CONFIG_TOUCHSCREEN_CYTTSP3
@@ -5136,8 +5170,11 @@ static void __init msm8960_mmi_init(void)
 	if (boot_mode_is_factory())
 		pm8921_platform_data.charger_pdata->factory_mode = 1;
 
+#ifdef CONFIG_TOUCHSCREEN_ATMXT
+	mot_setup_touch_atmxt();
+#endif
 #ifdef CONFIG_TOUCHSCREEN_CYTTSP3
-	mot_setup_touch();
+	mot_setup_touch_cyttsp3();
 #endif
 #ifdef CONFIG_VIB_TIMED
 	mot_vibrator_init();

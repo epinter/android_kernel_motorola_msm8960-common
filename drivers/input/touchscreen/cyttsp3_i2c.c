@@ -27,7 +27,7 @@
  *
  */
 
-#include <linux/cyttsp3_core.h>
+#include <linux/input/cyttsp3_core.h>
 
 #include <linux/i2c.h>
 #include <linux/slab.h>

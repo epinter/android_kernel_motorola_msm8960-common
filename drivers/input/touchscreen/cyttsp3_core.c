@@ -34,7 +34,7 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/input/touch_platform.h>
-#include <linux/cyttsp3_core.h>
+#include <linux/input/cyttsp3_core.h>
 #include <linux/version.h>	/* Required for kernel version checking */
 #include <linux/firmware.h>	/* This enables firmware class loader code */
 
@@ -348,6 +348,20 @@ static const u8 bl_command[] = {
 
 static int _cyttsp_startup(struct cyttsp *ts);
 static int _cyttsp_wakeup(struct cyttsp *ts);
+
+static int	hw_reset(struct cyttsp *ts)
+{
+	gpio_set_value(ts->platform_data->gpio_reset, 0);
+	msleep(9);
+	gpio_set_value(ts->platform_data->gpio_reset, 1);
+	return(0);
+
+}
+
+static int	cyttsp3_irq_stat(struct cyttsp *ts)
+{
+	return(gpio_get_value(ts->platform_data->gpio_interrupt));
+}
 
 static void cyttsp_pr_state(struct cyttsp *ts)
 {
@@ -816,17 +830,10 @@ static int _cyttsp_hard_reset(struct cyttsp *ts)
 
 	_cyttsp_soft_reset(ts);  /* Does nothing if CY_USE_HW_RESET defined */
 
-	if (ts->platform_data->hw_reset) {
-		retval = ts->platform_data->hw_reset();
-		if (retval < 0) {
-			pr_err("%s: fail on hard reset (ret=%d)\n",
-				__func__, retval);
-			goto _cyttsp_hard_reset_exit;
-		}
-	} else {
-		pr_err("%s: no hardware reset function (ret=%d)\n",
+	retval = hw_reset(ts);
+	if (retval < 0) {
+		pr_err("%s: fail on hard reset (ret=%d)\n",
 			__func__, retval);
-		retval = -ENOSYS;
 		goto _cyttsp_hard_reset_exit;
 	}
 
@@ -1797,22 +1804,17 @@ static ssize_t cyttsp_ic_irqstat_show(struct device *dev,
 	int retval;
 	struct cyttsp *ts = dev_get_drvdata(dev);
 
-	if (ts->platform_data->irq_stat) {
-		retval = ts->platform_data->irq_stat();
-		switch (retval) {
-		case 0:
-			return snprintf(buf, CY_MAX_PRBUF_SIZE,
-				"Interrupt line is LOW.\n");
-		case 1:
-			return snprintf(buf, CY_MAX_PRBUF_SIZE,
-				"Interrupt line is HIGH.\n");
-		default:
-			return snprintf(buf, CY_MAX_PRBUF_SIZE,
-				"Function irq_stat() returned %d.\n", retval);
-		}
-	} else {
+	retval = cyttsp3_irq_stat(ts);
+	switch (retval) {
+	case 0:
 		return snprintf(buf, CY_MAX_PRBUF_SIZE,
-			"Function irq_stat() undefined.\n");
+			"Interrupt line is LOW.\n");
+	case 1:
+		return snprintf(buf, CY_MAX_PRBUF_SIZE,
+			"Interrupt line is HIGH.\n");
+	default:
+		return snprintf(buf, CY_MAX_PRBUF_SIZE,
+			"Function cyttsp3_irq_stat() returned %d.\n", retval);
 	}
 }
 static DEVICE_ATTR(hw_irqstat, S_IRUSR | S_IWUSR,
@@ -2683,6 +2685,32 @@ void *cyttsp_core_init(struct cyttsp_bus_ops *bus_ops,
 		goto error_init;
 	}
 
+	cyttsp_dbg(ts, CY_DBG_LVL_3,
+		"%s: Initialize GPIOs\n", __func__);
+
+	/* Initalize all GPIOs */
+	gpio_request(ts->platform_data->gpio_enable,"touch_enable");
+	if ( (retval = gpio_direction_output(
+			ts->platform_data->gpio_enable, 1))) {
+		pr_err("%s: Failed to setup ENABLE irq for output.\n",
+			__func__);
+		goto error_gpio;
+	}
+	gpio_request(ts->platform_data->gpio_reset,"touch_rst");
+	if ( (retval = gpio_direction_output(
+			ts->platform_data->gpio_reset, 1))) {
+		pr_err("%s: Failed to setup RST irq for output.\n",
+			__func__);
+		goto error_gpio;
+	}
+	gpio_request(ts->platform_data->gpio_interrupt,"touch_intr");
+	if ( (retval = gpio_direction_input(ts->platform_data->gpio_interrupt)))
+	{
+		pr_err("%s: Failed to setup INT irq for input.\n",
+			__func__);
+		goto error_gpio;
+	}
+
 	/* Create the input device and register it. */
 	input_device = input_allocate_device();
 	if (!input_device) {
@@ -2762,9 +2790,9 @@ void *cyttsp_core_init(struct cyttsp_bus_ops *bus_ops,
 	INIT_WORK(&ts->cyttsp_resume_startup_work, cyttsp_ts_work_func);
 
 	goto no_error;
-
 error_input_register_device:
 	input_free_device(input_device);
+error_gpio:
 error_input_allocate_device:
 
 error_init:
