@@ -1418,6 +1418,7 @@ static struct platform_device *mmi_devices[] __initdata = {
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL	/* HDMI support */
 	&hdmi_msm_device,
 #endif
+	&msm_compr_dsp,
 	&msm_pcm_hostless,
 	&msm_bus_apps_fabric,
 	&msm_bus_sys_fabric,
