@@ -34,7 +34,7 @@
 #include <asm/prom.h>
 #endif
 
-#define MAX_VIBS		2
+#define MAX_VIBS		1
 #define MAX_PWMS		8
 #define MAX_VOLT		4
 
@@ -154,7 +154,7 @@ struct vibrator {
 
 struct vibrator vibrators[MAX_VIBS]; /* dev_data */
 struct vib_timed vib_timeds[MAX_VIBS]; /* pdata */
-const char *vib_name[MAX_VIBS] = {"vibrator", "vibrator1"};
+const char *vib_name[MAX_VIBS] = {"vibrator"};
 
 static void vib_signal_print(struct vib_signal *vibs)
 {
