@@ -27,10 +27,11 @@
 #ifndef __BOARD_MSM8960_SENSORS_H
 #define __BOARD_MSM8960_SENSORS_H
 
-#include <linux/ct405.h>
+#include <linux/ct406.h>
 
-#ifdef CONFIG_INPUT_CT405
-extern struct ct405_platform_data mp_ct405_pdata;
+#ifdef CONFIG_INPUT_CT406
+#define CT406_IRQ_GPIO 49
+extern struct ct406_platform_data mp_ct406_pdata;
 #endif
 
 #ifdef CONFIG_BACKLIGHT_LM3532

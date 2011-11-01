@@ -9,8 +9,8 @@
  *
  */
 
-#ifdef CONFIG_INPUT_CT405
-#include <linux/ct405.h>
+#ifdef CONFIG_INPUT_CT406
+#include <linux/ct406.h>
 #endif
 #include <linux/delay.h>
 #include <linux/gpio.h>
@@ -28,12 +28,33 @@
 
 #include "board-msm8960-sensors.h"
 
-#ifdef CONFIG_INPUT_CT405
+#ifdef CONFIG_INPUT_CT406
 /*
- * CT405
+ * CT406
  */
 
-struct ct405_platform_data mp_ct405_pdata = {
+static struct gpiomux_setting ct406_reset_suspend_config = {
+                        .func = GPIOMUX_FUNC_GPIO,
+                        .drv = GPIOMUX_DRV_2MA,
+                        .pull = GPIOMUX_PULL_NONE,
+};
+
+static struct gpiomux_setting ct406_reset_active_config = {
+                        .func = GPIOMUX_FUNC_GPIO,
+                        .drv = GPIOMUX_DRV_2MA,
+                        .pull = GPIOMUX_PULL_NONE,
+                        .dir = GPIOMUX_IN,
+};
+
+static struct msm_gpiomux_config ct406_irq_gpio_config = {
+        .gpio = CT406_IRQ_GPIO,
+        .settings = {
+                [GPIOMUX_SUSPENDED] = &ct406_reset_suspend_config,
+                [GPIOMUX_ACTIVE] = &ct406_reset_active_config,
+        },
+};
+
+struct ct406_platform_data mp_ct406_pdata = {
 	.regulator_name = "",
 	.prox_samples_for_noise_floor = 0x05,
 	.prox_saturation_threshold = 0x0208,
@@ -43,31 +64,32 @@ struct ct405_platform_data mp_ct405_pdata = {
 	.als_lens_transmissivity = 20,
 };
 
-static int __init ct405_init(void)
+static int __init ct406_init(void)
 {
 	int ret = 0;
 
-	ret = gpio_request(CT405_IRQ_GPIO, "ct405 proximity int");
+        msm_gpiomux_install(&ct406_irq_gpio_config, 1);
+
+	ret = gpio_request(CT406_IRQ_GPIO, "ct406 proximity int");
 	if (ret) {
-		pr_err("ct405 gpio_request failed: %d\n", ret);
+		pr_err("ct406 gpio_request failed: %d\n", ret);
 		goto fail;
 	}
 
-	mp_ct405_pdata.irq = MSM_GPIO_TO_INT(CT405_IRQ_GPIO);
-	gpio_direction_input(CT405_IRQ_GPIO);
+	mp_ct406_pdata.irq = MSM_GPIO_TO_INT(CT406_IRQ_GPIO);
 
 	return 0;
 
 fail:
-    gpio_free(CT405_IRQ_GPIO);
+    gpio_free(CT406_IRQ_GPIO);
     return ret;
 }
 #else
-static int __init ct405_init(void)
+static int __init ct406_init(void)
 {
     return 0;
 }
-#endif //CONFIG_CT405
+#endif //CONFIG_CT406
 
 #ifdef CONFIG_BACKLIGHT_LM3532
 /*
@@ -206,5 +228,5 @@ struct lm3532_backlight_platform_data mp_lm3532_pdata = {
 
 void __init msm8960_sensors_init(void)
 {
-	ct405_init();
+	ct406_init();
 }

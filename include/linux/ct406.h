@@ -16,8 +16,8 @@
  * 02111-1307, USA
  */
 
-#ifndef _LINUX_CT405_H__
-#define _LINUX_CT405_H__
+#ifndef _LINUX_CT406_H__
+#define _LINUX_CT406_H__
 
 #include <linux/ioctl.h>
 
@@ -25,14 +25,13 @@
 
 #include <linux/types.h>
 
-#define LD_CT405_NAME "ct405"
+#define LD_CT406_NAME "ct406"
 
-#define CT405_REGULATOR_NAME_LENGTH 10
-#define CT405_IRQ_GPIO 49
+#define CT406_REGULATOR_NAME_LENGTH 10
 
-struct ct405_platform_data {
+struct ct406_platform_data {
 	u16	irq;
-	u8	regulator_name[CT405_REGULATOR_NAME_LENGTH];
+	u8	regulator_name[CT406_REGULATOR_NAME_LENGTH];
 	u8	prox_samples_for_noise_floor;
 	u16	prox_saturation_threshold;
 	u16	prox_covered_offset;
@@ -43,10 +42,10 @@ struct ct405_platform_data {
 
 #endif	/* __KERNEL__ */
 
-#define CT405_IOCTL_BASE		0xA4
-#define CT405_IOCTL_GET_PROX_ENABLE	_IOR(CT405_IOCTL_BASE, 0x00, char)
-#define CT405_IOCTL_SET_PROX_ENABLE	_IOW(CT405_IOCTL_BASE, 0x01, char)
-#define CT405_IOCTL_GET_LIGHT_ENABLE	_IOR(CT405_IOCTL_BASE, 0x02, char)
-#define CT405_IOCTL_SET_LIGHT_ENABLE	_IOW(CT405_IOCTL_BASE, 0x03, char)
+#define CT406_IOCTL_BASE		0xA4
+#define CT406_IOCTL_GET_PROX_ENABLE	_IOR(CT406_IOCTL_BASE, 0x00, char)
+#define CT406_IOCTL_SET_PROX_ENABLE	_IOW(CT406_IOCTL_BASE, 0x01, char)
+#define CT406_IOCTL_GET_LIGHT_ENABLE	_IOR(CT406_IOCTL_BASE, 0x02, char)
+#define CT406_IOCTL_SET_LIGHT_ENABLE	_IOW(CT406_IOCTL_BASE, 0x03, char)
 
-#endif	/* _LINUX_CT405_H__ */
+#endif	/* _LINUX_CT406_H__ */

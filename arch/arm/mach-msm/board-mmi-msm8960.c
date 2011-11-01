@@ -80,8 +80,8 @@
 #include <mach/msm_xo.h>
 #include <mach/restart.h>
 
-#ifdef CONFIG_INPUT_CT405
-#include <linux/ct405.h>
+#ifdef CONFIG_INPUT_CT406
+#include <linux/ct406.h>
 #endif
 #ifdef CONFIG_BACKLIGHT_LM3532
 #include <linux/i2c/lm3532.h>
@@ -4846,12 +4846,12 @@ static struct i2c_board_info msm_camera_boardinfo[] __initdata = {
 };
 #endif
 
-#ifdef CONFIG_INPUT_CT405
-static struct i2c_board_info ct405_i2c_boardinfo[] __initdata = {
+#ifdef CONFIG_INPUT_CT406
+static struct i2c_board_info ct406_i2c_boardinfo[] __initdata = {
 	{
-		I2C_BOARD_INFO("ct405", 0x39),
-		.platform_data = &mp_ct405_pdata,
-		.irq = MSM_GPIO_TO_INT(CT405_IRQ_GPIO),
+		I2C_BOARD_INFO("ct406", 0x39),
+		.platform_data = &mp_ct406_pdata,
+		.irq = MSM_GPIO_TO_INT(CT406_IRQ_GPIO),
 	},
 };
 #endif
@@ -4964,12 +4964,12 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		ARRAY_SIZE(cyttsp_info),
 	},
 #endif
-#ifdef CONFIG_INPUT_CT405
+#ifdef CONFIG_INPUT_CT406
 	{
 		0,
-		MSM_8960_GSBI4_QUP_I2C_BUS_ID,
-		ct405_i2c_boardinfo,
-		ARRAY_SIZE(ct405_i2c_boardinfo),
+		MSM_8960_GSBI10_QUP_I2C_BUS_ID,
+		ct406_i2c_boardinfo,
+		ARRAY_SIZE(ct406_i2c_boardinfo),
 	},
 #endif
 #ifdef CONFIG_BACKLIGHT_LM3532
