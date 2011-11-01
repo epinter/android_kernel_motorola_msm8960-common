@@ -13,13 +13,13 @@ comment "Camera Sensor Selection"
 config MT9T013
 	bool "Sensor mt9t013 (BAYER 3M)"
 	depends on MSM_CAMERA && !ARCH_MSM8X60 && !ARCH_MSM8960 && !MSM_CAMERA_V4L2
-	default y
+	default n
 	---help---
 	  MICRON 3M Bayer Sensor with AutoFocus
 config MT9D113
 	bool "Sensor mt9d113 (YUV 2M)"
 	depends on MSM_CAMERA && ARCH_MSM8X60 && !MSM_CAMERA_V4L2
-	default y
+	default n
 	---help---
 	  MICRON 2M YUV Sensor
 	  This sensor is the front camera on QT8660.
@@ -28,13 +28,13 @@ config MT9D113
 config MT9D112
 	bool "Sensor mt9d112 (YUV 2M)"
 	depends on MSM_CAMERA && !ARCH_MSM8X60 && !ARCH_MSM8960 && !MSM_CAMERA_V4L2
-	default y
+	default n
 	---help---
 	  MICRON 2M YUV Sensor
 config IMX074
 	bool "Sensor IMX074 (BAYER 13.5M)"
 	depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
-	default y
+	default n
 	---help---
 	SONY 13.5 MP Bayer Sensor
 config OV5640
@@ -49,6 +49,16 @@ config WEBCAM_OV7692_QRD
 	default n
 	---help---
 	  Omni Vision VGA YUV Sensor for QRD Devices
+config MOTSOC1
+    bool "Sensor MOTSOC1 (13MP)"
+    depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
+    default y
+config MT9M114
+    bool "Sensor MT9M114 (YUV 1.26M)"
+    depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
+    default y
+    ---help---
+    APTINA 1.26 MP yuv Sensor
 config WEBCAM_OV7692
 	bool "Sensor OV7692 (VGA YUV)"
 	depends on MSM_CAMERA && ARCH_MSM8X60 && !MSM_CAMERA_V4L2
@@ -116,21 +126,21 @@ config MT9E013
 config IMX074_ACT
 	bool "Actuator IMX074 (BAYER 13.5M)"
 	depends on MSM_CAMERA && ARCH_MSM8960
-	default y
+	default n
 	---help---
 	Actuator for SONY 13.5 MP Bayer Sensor
 
 config S5K3E2FX
 	bool "Sensor s5k3e2fx (Samsung 5M)"
 	depends on MSM_CAMERA && !ARCH_MSM8X60 && !MSM_CAMERA_V4L2
-	default y
+	default n
 	---help---
 	  Samsung 5M with Autofocus
 
 config QS_S5K4E1
 	bool "Sensor qs_s5k4e1 (Samsung 5M)"
 	depends on MSM_CAMERA && ARCH_MSM8X60 && !MSM_CAMERA_V4L2
-	default y
+	default n
 	---help---
 	  Samsung 5M with Autofocus
 
@@ -166,7 +176,7 @@ config IMX072
 config OV2720
 	bool "Sensor ov2720 (Omnivision 2MP)"
 	depends on MSM_CAMERA && ARCH_MSM8960
-	default y
+	default n
 
 config VB6801
 	bool "Sensor vb6801"
@@ -177,7 +187,7 @@ config VB6801
 config MSM_CAMERA_FLASH
 	bool "Qualcomm MSM camera flash support"
 	depends on MSM_CAMERA
-	default y
+	default n
 	---help---
 	  Enable support for LED flash for msm camera
 

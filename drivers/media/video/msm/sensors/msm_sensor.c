@@ -701,7 +701,10 @@ int32_t msm_sensor_probe(struct msm_sensor_ctrl_t *s_ctrl,
 	if (rc < 0)
 		goto probe_fail;
 
-	rc = msm_sensor_match_id(s_ctrl);
+	if (s_ctrl->func_tbl->sensor_match_id)
+		rc = s_ctrl->func_tbl->sensor_match_id(s_ctrl);
+	else
+		rc = msm_sensor_match_id(s_ctrl);
 	if (rc < 0)
 		goto probe_fail;
 

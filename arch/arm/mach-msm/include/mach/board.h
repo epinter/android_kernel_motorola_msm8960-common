@@ -198,6 +198,10 @@ struct msm_actuator_info {
 
 struct msm_camera_sensor_info {
 	const char *sensor_name;
+	int use_cam_vana;
+	int use_cam_vio;
+	int use_cam_vdig;
+	int use_cam_vaf;
 	int sensor_reset_enable;
 	int sensor_reset;
 	int sensor_pwd;

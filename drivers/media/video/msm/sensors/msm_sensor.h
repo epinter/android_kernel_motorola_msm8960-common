@@ -131,6 +131,7 @@ struct msm_sensor_fn_t {
 	int (*sensor_power_down)
 		(const struct msm_camera_sensor_info *);
 	int (*sensor_power_up) (const struct msm_camera_sensor_info *);
+	int32_t (*sensor_match_id) (struct msm_sensor_ctrl_t *);
 	int (*sensor_probe) (struct msm_sensor_ctrl_t *s_ctrl,
 			const struct msm_camera_sensor_info *info,
 			struct msm_sensor_ctrl *s);
