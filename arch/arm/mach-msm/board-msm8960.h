@@ -43,4 +43,24 @@ extern struct rpm_regulator_platform_data msm_rpm_regulator_pdata __devinitdata;
 
 // extern int __init melfas_ts_platform_init(void);
 
+/* as defined in the bootloader*/
+#define HWREV(x)		(((x)>>16) & 0xFFFF)
+#define INSTANCE(x)		((x) & 0xFFFF)
+#define _HWREV(x)		((x)<<16)
+#define HWREV_UNKNOWN	_HWREV(0x0000)
+#define HWREV_DEF		_HWREV(0xFF00)
+#define HWREV_S1		_HWREV(0x1100)
+#define HWREV_S2		_HWREV(0x1200)
+#define HWREV_S3		_HWREV(0x1300)
+#define HWREV_M1		_HWREV(0x2100)
+#define HWREV_M2		_HWREV(0x2200)
+#define HWREV_M3		_HWREV(0x2300)
+#define HWREV_P0		_HWREV(0x8000)
+#define HWREV_P1		_HWREV(0x8100)
+#define HWREV_P2		_HWREV(0x8200)
+#define HWREV_P3		_HWREV(0x8300)
+#define HWREV_P4		_HWREV(0x8400)
+#define HWREV_P5		_HWREV(0x8500)
+#define HWREV_P6		_HWREV(0x8600)
+
 #endif
