@@ -1311,7 +1311,8 @@ int mipi_dsi_cmd_dma_tx(struct dsi_buf *tp)
 	MIPI_OUTP(MIPI_DSI_BASE + 0x08c, 0x01);	/* trigger */
 	wmb();
 
-	wait_for_completion(&dsi_dma_comp);
+	if (wait_for_completion_timeout(&dsi_dma_comp,  msecs_to_jiffies(5000)) == 0)
+		pr_err("%s: timeout waiting for dsi dma completion\n", __func__);
 
 	dma_unmap_single(&dsi_dev, tp->dmap, len, DMA_TO_DEVICE);
 	tp->dmap = 0;
