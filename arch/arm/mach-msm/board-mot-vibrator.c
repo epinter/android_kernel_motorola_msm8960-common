@@ -62,7 +62,7 @@
 #define GPIO_STAGE_INACTIVE	2
 
 #define GPIO_VIB_ENABLE 47
-#define GPIO_VIB_DIRECTION 4
+#define GPIO_VIB_DIRECTION 79
 #define VIB_REGULATOR_NAME  "8921_l16"
 
 struct vib_pwm {
@@ -223,7 +223,7 @@ static int vib_ctrl_gpio_init(struct vib_signal *vibs)
 	struct vib_ctrl_gpio *gpioc = &vibs->gpioc;
 	struct vib_of_signal *of = &vibs->of;
 	int ret;
-	ret = gpio_request(of->gpio, "vib_ctrl");
+	ret = gpio_request(of->gpio, vibs->name);
 	if (ret) {
 		zfprintk("gpio request %d failed %d\n", of->gpio, ret);
 		return ret;

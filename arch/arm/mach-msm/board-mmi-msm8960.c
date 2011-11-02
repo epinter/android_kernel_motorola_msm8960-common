@@ -798,7 +798,7 @@ static struct gpiomux_setting vib_setting_active = {
 
 static struct msm_gpiomux_config msm8960_vib_configs[] = {
 	{
-		.gpio = 4,
+		.gpio = 79,
 		.settings = {
 			[GPIOMUX_ACTIVE]    = &vib_setting_active,
 			[GPIOMUX_SUSPENDED] = &vib_setting_suspended,
