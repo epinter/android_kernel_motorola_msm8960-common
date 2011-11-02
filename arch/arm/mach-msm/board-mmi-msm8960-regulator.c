@@ -230,7 +230,7 @@ VREG_CONSUMERS(EXT_L2) = {
 };
 VREG_CONSUMERS(EXT_3P3V) = {
 	REGULATOR_SUPPLY("ext_3p3v",		NULL),
-	REGULATOR_SUPPLY("vdd",			"3-005b"),
+	REGULATOR_SUPPLY("vdd_ana",		"3-005b"),
 	REGULATOR_SUPPLY("vdd_lvds_3p3v",	"mipi_dsi.1"),
 };
 VREG_CONSUMERS(EXT_OTG_SW) = {
