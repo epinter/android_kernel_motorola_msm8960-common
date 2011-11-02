@@ -190,6 +190,8 @@ extern void msm8960_init_hdmi(struct platform_device *hdmi_dev,
 extern void __init msm8960_init_usb(void (*vbus_power)(bool on));
 extern void __init msm8960_init_dsps(void);
 
+extern void __init msm8960_init_hsic(void);
+
 extern void __init msm8960_init_buses(void);
 extern int  __init gpiomux_init(void);
 

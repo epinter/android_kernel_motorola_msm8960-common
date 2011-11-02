@@ -1656,11 +1656,6 @@ int __init gpiomux_init(void)
 	msm_gpiomux_install(wcnss_5wire_interface,
 			ARRAY_SIZE(wcnss_5wire_interface));
 
-#ifdef CONFIG_USB_EHCI_MSM_HSIC
-	msm_gpiomux_install(msm8960_hsic_configs,
-			ARRAY_SIZE(msm8960_hsic_configs));
-#endif
-
 	return 0;
 }
 
@@ -2357,6 +2352,28 @@ void __init msm8960_init_dsps(void)
 	platform_device_register(&msm_dsps_device);
 #endif /* CONFIG_MSM_DSPS */
 }
+
+void __init msm8960_init_hsic(void)
+{
+#ifdef CONFIG_USB_EHCI_MSM_HSIC
+	uint32_t version = socinfo_get_version();
+
+	pr_info("%s: version:%d mtp:%d\n", __func__,
+			SOCINFO_VERSION_MAJOR(version),
+			machine_is_msm8960_mtp());
+
+	if ((SOCINFO_VERSION_MAJOR(version) == 1) ||
+			machine_is_msm8960_mtp() ||
+			machine_is_msm8960_fluid())
+		return;
+
+	msm_gpiomux_install(msm8960_hsic_configs,
+			ARRAY_SIZE(msm8960_hsic_configs));
+
+	platform_device_register(&msm_device_hsic_host);
+#endif
+}
+
 
 struct platform_device *common_devices[] __initdata = {
 	&msm8960_device_dmov,

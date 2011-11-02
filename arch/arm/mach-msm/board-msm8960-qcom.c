@@ -1322,7 +1322,6 @@ static struct platform_device *sim_devices[] __initdata = {
 	&msm8960_device_otg,
 	&msm8960_device_gadget_peripheral,
 	&msm_device_hsusb_host,
-	&msm_device_hsic_host,
 	&android_usb_device,
 	&msm_device_vidc,
 	&mipi_dsi_simulator_panel_device,
@@ -1941,6 +1940,7 @@ static void __init msm8960_cdp_init(void)
 							pm8921_mpps, ARRAY_SIZE(pm8921_mpps));
 	msm8960_init_usb(msm_hsusb_vbus_power);
 	platform_add_devices(cdp_devices, ARRAY_SIZE(cdp_devices));
+	msm8960_init_hsic();
 	msm8960_init_cam();
 	msm8960_init_mmc(26);
 	acpuclk_init(&acpuclk_8960_soc_data);
