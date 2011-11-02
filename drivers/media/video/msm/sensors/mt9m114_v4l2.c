@@ -1325,11 +1325,6 @@ static int mt9m114_sensor_open_init(const struct msm_camera_sensor_info *data)
 	return msm_sensor_open_init(&mt9m114_s_ctrl, data);
 }
 
-static int mt9m114_sensor_release(void)
-{
-	return msm_sensor_release(&mt9m114_s_ctrl);
-}
-
 static int32_t mt9m114_power_on(const struct msm_camera_sensor_info *data)
 {
 	int32_t rc = 0;
@@ -1405,6 +1400,12 @@ static int32_t mt9m114_power_off(const struct msm_camera_sensor_info *data)
 
 	mutex_unlock(&mt9m114_mut);
 	return 0;
+}
+
+static int mt9m114_sensor_release(void)
+{
+	CDBG("%s\n", __func__);
+	return mt9m114_power_off(mt9m114_s_ctrl.sensordata);
 }
 
 static int32_t mt9m114_match_id(struct msm_sensor_ctrl_t *s_ctrl)
