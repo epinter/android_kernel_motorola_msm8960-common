@@ -34,7 +34,7 @@ DEFINE_MUTEX(motsoc1_mutex);
 static int32_t config_csi;
 static int32_t config_sensor;
 
-static struct regulator *reg_l8, *reg_l12, *reg_l29;
+static struct regulator *reg_2p7, *reg_1p2, *reg_1p8;
 
 static struct v4l2_subdev_info motsoc1_subdev_info[] = {
 	{
@@ -348,6 +348,8 @@ static int32_t motsoc1_set_sensor_mode(int mode, int res)
 {
 	int32_t rc = 0;
 	printk("motsoc1_set_sensor_mode mode=%d res=%d\n",mode,res);
+	// FIXME: mode is coming in wrong, hardcode to preview for now
+	mode = SENSOR_PREVIEW_MODE;
 	switch (mode) {
 		case SENSOR_PREVIEW_MODE:
 			rc = motsoc1_video_config();
@@ -393,14 +395,17 @@ reg_on_done:
 static int32_t motsoc1_regulator_off(struct regulator *reg, char *regname)
 {
 	int32_t rc = 0;
-	printk("motsoc1_regulator_off: %s\n", regname);
 
-	rc = regulator_disable(reg);
-	if (rc) {
-		pr_err("motsoc1: failed to disable %s (%d)\n", regname, rc);
-		goto reg_off_done;
+	if (reg) {
+		printk("motsoc1_regulator_off: %s\n", regname);
+
+		rc = regulator_disable(reg);
+		if (rc) {
+			pr_err("motsoc1: failed to disable %s (%d)\n", regname, rc);
+			goto reg_off_done;
+		}
+		regulator_put(reg);
 	}
-	regulator_put(reg);
 reg_off_done:
 	return rc;
 }
@@ -409,26 +414,37 @@ static int32_t motsoc1_power_on(const struct msm_camera_sensor_info *data)
 {
 	int32_t rc = 0;
 	int use_l17 = 0;
+	int use_l29 = 0;
 
 	printk("motsoc1_power_on (%04x)\n", system_rev);
 	mutex_lock(&motsoc1_mutex);
 
-	if ((machine_is_teufel() && system_rev <= 0x8100) ||
-		(machine_is_qinara() && system_rev <= 0x8100)) {
-		printk("motsoc1: using l17\n");
+	// Teufel P1/P2, Qinara P1 use L17 instead of L8
+	if ((machine_is_teufel() && system_rev <= 0x8200) ||
+		(machine_is_qinara() && system_rev <= 0x8100))
 		use_l17 = 1;
-	}
+
+	// Teufel P1/P2, Qinara P1, Vanquish P1 use L29 instead of L4
+	if ((machine_is_teufel() && system_rev <= 0x8200) ||
+		(machine_is_qinara() && system_rev <= 0x8100) ||
+		(machine_is_vanquish() && system_rev <= 0x8100))
+		use_l29 = 1;
 
 	if (use_l17)
-		rc = motsoc1_regulator_on(&reg_l8, "8921_l17", 2700000);
+		rc = motsoc1_regulator_on(&reg_2p7, "8921_l17", 2700000);
 	else
-		rc = motsoc1_regulator_on(&reg_l8, "8921_l8", 2700000);
+		rc = motsoc1_regulator_on(&reg_2p7, "8921_l8", 2700000);
 	if (rc < 0)
 		goto power_on_done;
-	rc = motsoc1_regulator_on(&reg_l12, "8921_l12", 1200000);
+
+	rc = motsoc1_regulator_on(&reg_1p2, "8921_l12", 1200000);
 	if (rc < 0)
 		goto power_on_done;
-	rc = motsoc1_regulator_on(&reg_l29, "8921_l29", 1800000);
+
+	if (use_l29)
+		rc = motsoc1_regulator_on(&reg_1p8, "8921_l29", 1800000);
+	else
+		reg_1p8 = NULL; // 8921_l4 always on
 	if (rc < 0)
 		goto power_on_done;
 
@@ -496,10 +512,9 @@ static int32_t motsoc1_power_off(const struct msm_camera_sensor_info *data)
 	gpio_free(CAM1_REG_EN);
 	gpio_free(ISP_CORE_EN);
 
-	//motsoc1_regulator_off(reg_l8, "8921_l8");
-	motsoc1_regulator_off(reg_l8, "8921_l17");
-	motsoc1_regulator_off(reg_l12, "8921_l12");
-	motsoc1_regulator_off(reg_l29, "8921_l29");
+	motsoc1_regulator_off(reg_2p7, "2.7");
+	motsoc1_regulator_off(reg_1p2, "1.2");
+	motsoc1_regulator_off(reg_1p8, "1.8");
 
 	mutex_unlock(&motsoc1_mutex);
 	return 0;
