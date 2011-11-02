@@ -1652,6 +1652,14 @@ struct platform_device hdmi_msm_device = {
 };
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
 
+#ifdef CONFIG_FB_MSM_WRITEBACK_MSM_PANEL
+static struct platform_device wfd_panel_device = {
+	.name = "wfd_panel",
+	.id = 0,
+	.dev.platform_data = NULL,
+};
+#endif
+
 int __init gpiomux_init(void)
 {
 	int rc;
@@ -2463,6 +2471,9 @@ struct platform_device *common_devices[] __initdata = {
 #endif
 	&msm_device_dspcrashd_8960,
 	&msm8960_device_watchdog,
+#ifdef CONFIG_FB_MSM_WRITEBACK_MSM_PANEL
+	&wfd_panel_device,
+#endif
 };
 
 void __init msm8960_i2c_init(unsigned clk_freq)
