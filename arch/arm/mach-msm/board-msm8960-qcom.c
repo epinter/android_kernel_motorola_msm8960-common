@@ -1310,6 +1310,7 @@ put_mvs_otg:
 #endif
 
 #ifdef CONFIG_USB_EHCI_MSM_HSIC
+#define HSIC_HUB_RESET_GPIO	91
 static struct msm_hsic_host_platform_data msm_hsic_pdata = {
 	.strobe		= 150,
 	.data		= 151,
@@ -1903,6 +1904,12 @@ static void __init msm8960_cdp_init(void)
 	msm8960_init_regulators();
 	msm_clock_init(&msm8960_clock_init_data);
 
+#ifdef CONFIG_USB_EHCI_MSM_HSIC
+	if (machine_is_msm8960_liquid()) {
+		if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) >= 2)
+			msm_hsic_pdata.hub_reset = HSIC_HUB_RESET_GPIO;
+	}
+#endif
 	msm_device_hsic_host.dev.platform_data = &msm_hsic_pdata;
 
 	gpiomux_init();

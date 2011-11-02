@@ -529,6 +529,12 @@ static struct gpiomux_setting hsic_sus_cfg = {
 	.pull = GPIOMUX_PULL_DOWN,
 };
 
+static struct gpiomux_setting hsic_hub_act_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
 static struct msm_gpiomux_config msm8960_hsic_configs[] = {
 	{
 		.gpio = 150,               /*HSIC_STROBE */
@@ -541,6 +547,13 @@ static struct msm_gpiomux_config msm8960_hsic_configs[] = {
 		.gpio = 151,               /* HSIC_DATA */
 		.settings = {
 			[GPIOMUX_ACTIVE] = &hsic_act_cfg,
+			[GPIOMUX_SUSPENDED] = &hsic_sus_cfg,
+		},
+	},
+	{
+		.gpio = 91,               /* HSIC_HUB_RESET */
+		.settings = {
+			[GPIOMUX_ACTIVE] = &hsic_hub_act_cfg,
 			[GPIOMUX_SUSPENDED] = &hsic_sus_cfg,
 		},
 	},
