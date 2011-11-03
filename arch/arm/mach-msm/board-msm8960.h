@@ -159,6 +159,12 @@ struct pm8xxx_mpp_init {
 			PM_GPIO_STRENGTH_HIGH, \
 			_func, 0, 0)
 
+#define PM8XXX_GPIO_OUTPUT_VIN(_gpio, _val, _vin) \
+	PM8XXX_GPIO_INIT(_gpio, PM_GPIO_DIR_OUT, PM_GPIO_OUT_BUF_CMOS, _val, \
+			PM_GPIO_PULL_NO, _vin, \
+			PM_GPIO_STRENGTH_HIGH, \
+			PM_GPIO_FUNC_NORMAL, 0, 0)
+
 extern struct gpio_regulator_platform_data
 	msm_gpio_regulator_pdata[] __devinitdata;
 
