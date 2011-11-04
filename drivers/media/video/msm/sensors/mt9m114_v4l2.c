@@ -1018,14 +1018,16 @@ static struct msm_sensor_output_info_t mt9m114_dimensions[] = {
 		.y_output = 0x2D0,
 		.line_length_pclk = 0x500,
 		.frame_length_lines = 0x2D0,
-		.pixel_clk = 96000000,
+		.vt_pixel_clk = 96000000,
+		.op_pixel_clk = 96000000,
 	},
 	{
 		.x_output = 0x500,
 		.y_output = 0x2D0,
 		.line_length_pclk = 0x500,
 		.frame_length_lines = 0x2D0,
-		.pixel_clk = 96000000,
+		.vt_pixel_clk = 96000000,
+		.op_pixel_clk = 96000000,
 	},
 };
 
