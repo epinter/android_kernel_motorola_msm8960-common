@@ -1888,6 +1888,9 @@ static void __init msm8960_cdp_init(void)
 	msm8960_init_regulators();
 	msm_clock_init(&msm8960_clock_init_data);
 
+	if (machine_is_msm8960_liquid())
+		msm_otg_pdata.mhl_enable = true;
+
 #ifdef CONFIG_USB_EHCI_MSM_HSIC
 	if (machine_is_msm8960_liquid()) {
 		if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) >= 2)
