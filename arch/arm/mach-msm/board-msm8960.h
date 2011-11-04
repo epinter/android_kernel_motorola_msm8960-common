@@ -84,7 +84,6 @@ extern int msm_pm8921_regulator_pdata_len __devinitdata;
 
 #endif
 
-#define MSM_PMEM_KERNEL_EBI1_SIZE  0x110C000
 #define MSM_PMEM_ADSP_SIZE         0x3800000
 #define MSM_PMEM_AUDIO_SIZE        0x28B000
 #ifdef CONFIG_FB_MSM_HDMI_AS_PRIMARY
@@ -95,10 +94,12 @@ extern int msm_pm8921_regulator_pdata_len __devinitdata;
 #define MSM_RAM_CONSOLE_SIZE       128 * SZ_1K
 
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
-#define MSM_ION_EBI_SIZE	MSM_PMEM_SIZE
+#define MSM_PMEM_KERNEL_EBI1_SIZE  0xB0C000
+#define MSM_ION_EBI_SIZE	(MSM_PMEM_SIZE + 0x600000)
 #define MSM_ION_ADSP_SIZE	MSM_PMEM_ADSP_SIZE
 #define MSM_ION_HEAP_NUM	4
 #else
+#define MSM_PMEM_KERNEL_EBI1_SIZE  0x110C000
 #define MSM_ION_HEAP_NUM	2
 #endif
 
