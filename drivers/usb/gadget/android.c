@@ -66,6 +66,7 @@
 #include "f_rndis.c"
 #include "rndis.c"
 #include "u_ether.c"
+#include "f_usbnet.c"
 
 MODULE_AUTHOR("Mike Lockwood");
 MODULE_DESCRIPTION("Android Composite USB Driver");
@@ -910,6 +911,16 @@ static struct android_usb_function accessory_function = {
 	.ctrlrequest	= accessory_function_ctrlrequest,
 };
 
+static int usbnet_function_bind_config(struct android_usb_function *f, struct usb_configuration *c)
+{
+	return usbnet_bind_config(c);
+}
+
+static struct android_usb_function usbnet_function = {
+	.name		= "usbnet",
+	.bind_config	= usbnet_function_bind_config,
+};
+
 
 static struct android_usb_function *supported_functions[] = {
 	&rmnet_smd_function,
@@ -925,6 +936,7 @@ static struct android_usb_function *supported_functions[] = {
 	&rndis_function,
 	&mass_storage_function,
 	&accessory_function,
+	&usbnet_function,
 	NULL
 };
 

@@ -103,8 +103,8 @@ static struct usb_gadget_strings *usbnet_strings[] = {
 
 /* There is only one interface. */
 
-static struct usb_interface_descriptor intf_desc = {
-	.bLength = sizeof intf_desc,
+static struct usb_interface_descriptor usbnet_intf_desc = {
+	.bLength = sizeof usbnet_intf_desc,
 	.bDescriptorType = USB_DT_INTERFACE,
 
 	.bNumEndpoints = 3,
@@ -114,14 +114,14 @@ static struct usb_interface_descriptor intf_desc = {
 };
 
 
-static struct usb_endpoint_descriptor fs_bulk_in_desc = {
+static struct usb_endpoint_descriptor usbnet_fs_bulk_in_desc = {
 	.bLength = USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType = USB_DT_ENDPOINT,
 	.bEndpointAddress = USB_DIR_IN,
 	.bmAttributes = USB_ENDPOINT_XFER_BULK,
 };
 
-static struct usb_endpoint_descriptor fs_bulk_out_desc = {
+static struct usb_endpoint_descriptor usbnet_fs_bulk_out_desc = {
 	.bLength = USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType = USB_DT_ENDPOINT,
 	.bEndpointAddress = USB_DIR_OUT,
@@ -137,14 +137,14 @@ static struct usb_endpoint_descriptor fs_intr_out_desc = {
 };
 
 static struct usb_descriptor_header *fs_function[] = {
-	(struct usb_descriptor_header *) &intf_desc,
-	(struct usb_descriptor_header *) &fs_bulk_in_desc,
-	(struct usb_descriptor_header *) &fs_bulk_out_desc,
+	(struct usb_descriptor_header *) &usbnet_intf_desc,
+	(struct usb_descriptor_header *) &usbnet_fs_bulk_in_desc,
+	(struct usb_descriptor_header *) &usbnet_fs_bulk_out_desc,
 	(struct usb_descriptor_header *) &fs_intr_out_desc,
 	NULL,
 };
 
-static struct usb_endpoint_descriptor hs_bulk_in_desc = {
+static struct usb_endpoint_descriptor usbnet_hs_bulk_in_desc = {
 	.bLength = USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType = USB_DT_ENDPOINT,
 	.bEndpointAddress = USB_DIR_IN,
@@ -153,7 +153,7 @@ static struct usb_endpoint_descriptor hs_bulk_in_desc = {
 	.bInterval = 0,
 };
 
-static struct usb_endpoint_descriptor hs_bulk_out_desc = {
+static struct usb_endpoint_descriptor usbnet_hs_bulk_out_desc = {
 	.bLength = USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType = USB_DT_ENDPOINT,
 	.bEndpointAddress = USB_DIR_OUT,
@@ -172,9 +172,9 @@ static struct usb_endpoint_descriptor hs_intr_out_desc = {
 };
 
 static struct usb_descriptor_header *hs_function[] = {
-	(struct usb_descriptor_header *) &intf_desc,
-	(struct usb_descriptor_header *) &hs_bulk_in_desc,
-	(struct usb_descriptor_header *) &hs_bulk_out_desc,
+	(struct usb_descriptor_header *) &usbnet_intf_desc,
+	(struct usb_descriptor_header *) &usbnet_hs_bulk_in_desc,
+	(struct usb_descriptor_header *) &usbnet_hs_bulk_out_desc,
 	(struct usb_descriptor_header *) &hs_intr_out_desc,
 	NULL,
 };
@@ -198,7 +198,7 @@ static ssize_t usbnet_desc_show(struct device *dev,
 
 static DEVICE_ATTR(description, S_IRUGO, usbnet_desc_show, NULL);
 
-static inline struct usbnet_device *func_to_dev(struct usb_function *f)
+static inline struct usbnet_device *usbnet_func_to_dev(struct usb_function *f)
 {
 	return container_of(f, struct usbnet_device, function);
 }
@@ -384,7 +384,7 @@ static void usbnet_if_config(struct work_struct *work)
 	set_fs(saved_fs);
 }
 
-static const struct net_device_ops eth_netdev_ops = {
+static const struct net_device_ops usbnet_eth_netdev_ops = {
 	.ndo_open		= usb_ether_open,
 	.ndo_stop		= usb_ether_stop,
 	.ndo_start_xmit		= usb_ether_xmit,
@@ -400,7 +400,7 @@ static void usb_ether_setup(struct net_device *dev)
 	spin_lock_init(&context->lock);
 	context->dev = dev;
 
-	dev->netdev_ops = &eth_netdev_ops;
+	dev->netdev_ops = &usbnet_eth_netdev_ops;
 	dev->watchdog_timeo = 20;
 
 	ether_setup(dev);
@@ -422,7 +422,7 @@ static void usbnet_cleanup(struct usbnet_device *dev)
 
 static void usbnet_unbind(struct usb_configuration *c, struct usb_function *f)
 {
-	struct usbnet_device *dev = func_to_dev(f);
+	struct usbnet_device *dev = usbnet_func_to_dev(f);
 	struct usb_composite_dev *cdev = c->cdev;
 	struct usbnet_context *context = dev->net_ctxt;
 	struct usb_request *req;
@@ -502,7 +502,7 @@ static int usbnet_bind(struct usb_configuration *c,
 			struct usb_function *f)
 {
 	struct usb_composite_dev *cdev = c->cdev;
-	struct usbnet_device  *dev = func_to_dev(f);
+	struct usbnet_device  *dev = usbnet_func_to_dev(f);
 	struct usbnet_context *context = dev->net_ctxt;
 	int n, rc, id;
 	struct usb_ep *ep;
@@ -514,22 +514,22 @@ static int usbnet_bind(struct usb_configuration *c,
 	id = usb_interface_id(c, f);
 	if (id < 0)
 		return id;
-	intf_desc.bInterfaceNumber = id;
+	usbnet_intf_desc.bInterfaceNumber = id;
 	context->gadget = cdev->gadget;
 
 	/* Find all the endpoints we will use */
-	ep = usb_ep_autoconfig(cdev->gadget, &fs_bulk_in_desc);
+	ep = usb_ep_autoconfig(cdev->gadget, &usbnet_fs_bulk_in_desc);
 	if (!ep) {
-		USBNETDBG(context, "%s auto-configure hs_bulk_in_desc error\n",
+		USBNETDBG(context, "%s auto-configure usbnet_hs_bulk_in_desc error\n",
 			__func__);
 		goto autoconf_fail;
 	}
 	ep->driver_data = context;
 	context->bulk_in = ep;
 
-	ep = usb_ep_autoconfig(cdev->gadget, &fs_bulk_out_desc);
+	ep = usb_ep_autoconfig(cdev->gadget, &usbnet_fs_bulk_out_desc);
 	if (!ep) {
-		USBNETDBG(context, "%s auto-configure hs_bulk_out_desc error\n",
+		USBNETDBG(context, "%s auto-configure usbnet_hs_bulk_out_desc error\n",
 			__func__);
 		goto autoconf_fail;
 	}
@@ -549,10 +549,10 @@ static int usbnet_bind(struct usb_configuration *c,
 	if (gadget_is_dualspeed(cdev->gadget)) {
 
 		/* Assume endpoint addresses are the same for both speeds */
-		hs_bulk_in_desc.bEndpointAddress =
-		    fs_bulk_in_desc.bEndpointAddress;
-		hs_bulk_out_desc.bEndpointAddress =
-		    fs_bulk_out_desc.bEndpointAddress;
+		usbnet_hs_bulk_in_desc.bEndpointAddress =
+		    usbnet_fs_bulk_in_desc.bEndpointAddress;
+		usbnet_hs_bulk_out_desc.bEndpointAddress =
+		    usbnet_fs_bulk_out_desc.bEndpointAddress;
 		hs_intr_out_desc.bEndpointAddress =
 		    fs_intr_out_desc.bEndpointAddress;
 	}
@@ -600,7 +600,7 @@ autoconf_fail:
 
 static void do_set_config(struct usb_function *f, u16 new_config)
 {
-	struct usbnet_device  *dev = func_to_dev(f);
+	struct usbnet_device  *dev = usbnet_func_to_dev(f);
 	struct usbnet_context *context = dev->net_ctxt;
 	int result = 0;
 	struct usb_request *req;
@@ -618,10 +618,10 @@ static void do_set_config(struct usb_function *f, u16 new_config)
 
 		if (high_speed_flag)
 			result = usb_ep_enable(context->bulk_in,
-					  &hs_bulk_in_desc);
+					  &usbnet_hs_bulk_in_desc);
 		else
 			result = usb_ep_enable(context->bulk_in,
-					  &fs_bulk_in_desc);
+					  &usbnet_fs_bulk_in_desc);
 
 		if (result != 0) {
 			USBNETDBG(context,
@@ -633,10 +633,10 @@ static void do_set_config(struct usb_function *f, u16 new_config)
 
 		if (high_speed_flag)
 			result = usb_ep_enable(context->bulk_out,
-					  &hs_bulk_out_desc);
+					  &usbnet_hs_bulk_out_desc);
 		else
 			result = usb_ep_enable(context->bulk_out,
-					&fs_bulk_out_desc);
+					&usbnet_fs_bulk_out_desc);
 
 		if (result != 0) {
 			USBNETDBG(context,
@@ -683,7 +683,7 @@ static void do_set_config(struct usb_function *f, u16 new_config)
 static int usbnet_set_alt(struct usb_function *f,
 		unsigned intf, unsigned alt)
 {
-	struct usbnet_device  *dev = func_to_dev(f);
+	struct usbnet_device  *dev = usbnet_func_to_dev(f);
 	struct usbnet_context *context = dev->net_ctxt;
 	USBNETDBG(context, "usbnet_set_alt intf: %d alt: %d\n", intf, alt);
 	do_set_config(f, 1);
@@ -694,7 +694,7 @@ static int usbnet_setup(struct usb_function *f,
 			const struct usb_ctrlrequest *ctrl)
 {
 
-	struct usbnet_device  *dev = func_to_dev(f);
+	struct usbnet_device  *dev = usbnet_func_to_dev(f);
 	struct usbnet_context *context = dev->net_ctxt;
 	int rc = -EOPNOTSUPP;
 	int wIndex = le16_to_cpu(ctrl->wIndex);
@@ -744,7 +744,7 @@ static int usbnet_setup(struct usb_function *f,
 
 static void usbnet_disable(struct usb_function *f)
 {
-	struct usbnet_device  *dev = func_to_dev(f);
+	struct usbnet_device  *dev = usbnet_func_to_dev(f);
 	struct usbnet_context *context = dev->net_ctxt;
 	USBNETDBG(context, "%s\n", __func__);
 	do_set_config(f, 0);
@@ -752,17 +752,19 @@ static void usbnet_disable(struct usb_function *f)
 
 static void usbnet_suspend(struct usb_function *f)
 {
-	struct usbnet_device  *dev = func_to_dev(f);
+	struct usbnet_device  *dev = usbnet_func_to_dev(f);
 	struct usbnet_context *context = dev->net_ctxt;
 	USBNETDBG(context, "%s\n", __func__);
 }
 
 static void usbnet_resume(struct usb_function *f)
 {
-	struct usbnet_device  *dev = func_to_dev(f);
+	struct usbnet_device  *dev = usbnet_func_to_dev(f);
 	struct usbnet_context *context = dev->net_ctxt;
 	USBNETDBG(context, "%s\n", __func__);
 }
+
+struct usbnet_device *_usbnet_dev;
 
 int usbnet_bind_config(struct usb_configuration *c)
 {
@@ -770,8 +772,12 @@ int usbnet_bind_config(struct usb_configuration *c)
 	struct usbnet_context *context;
 	struct net_device *net_dev;
 	int ret, status;
+	static int usbnet_initialized = 0;
 
 	pr_debug("usbnet_bind_config\n");
+
+	if (usbnet_initialized)
+		goto bind_config;
 
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (!dev)
@@ -801,29 +807,33 @@ int usbnet_bind_config(struct usb_configuration *c)
 
 	context = netdev_priv(net_dev);
 	INIT_WORK(&context->usbnet_config_wq, usbnet_if_config);
-
-	status = usb_string_id(c->cdev);
-	if (status >= 0) {
-		usbnet_string_defs[STRING_INTERFACE].id = status;
-		intf_desc.iInterface = status;
-	}
+	usbnet_initialized = 1;
 
 	context->config = 0;
 	dev->net_ctxt = context;
-	dev->cdev = c->cdev;
-	dev->function.name = "usbnet";
-	dev->function.descriptors = fs_function;
-	dev->function.hs_descriptors = hs_function;
-	dev->function.bind = usbnet_bind;
-	dev->function.unbind = usbnet_unbind;
-	dev->function.set_alt = usbnet_set_alt;
-	dev->function.disable = usbnet_disable;
-	dev->function.setup = usbnet_setup;
-	dev->function.suspend = usbnet_suspend;
-	dev->function.resume = usbnet_resume;
-	dev->function.strings = usbnet_strings;
 
-	ret = usb_add_function(c, &dev->function);
+	_usbnet_dev = dev;
+bind_config:
+	status = usb_string_id(c->cdev);
+	if (status >= 0) {
+		usbnet_string_defs[STRING_INTERFACE].id = status;
+		usbnet_intf_desc.iInterface = status;
+	}
+
+	_usbnet_dev->cdev = c->cdev;
+	_usbnet_dev->function.name = "usbnet";
+	_usbnet_dev->function.descriptors = fs_function;
+	_usbnet_dev->function.hs_descriptors = hs_function;
+	_usbnet_dev->function.bind = usbnet_bind;
+	_usbnet_dev->function.unbind = usbnet_unbind;
+	_usbnet_dev->function.set_alt = usbnet_set_alt;
+	_usbnet_dev->function.disable = usbnet_disable;
+	_usbnet_dev->function.setup = usbnet_setup;
+	_usbnet_dev->function.suspend = usbnet_suspend;
+	_usbnet_dev->function.resume = usbnet_resume;
+	_usbnet_dev->function.strings = usbnet_strings;
+
+	ret = usb_add_function(c, &_usbnet_dev->function);
 	if (ret)
 		goto err1;
 
@@ -831,33 +841,7 @@ int usbnet_bind_config(struct usb_configuration *c)
 
 err1:
 	pr_err("usbnet gadget driver failed to initialize\n");
-	usbnet_cleanup(dev);
-	kfree(dev);
+	usbnet_cleanup(_usbnet_dev);
+	kfree(_usbnet_dev);
 	return ret;
 }
-
-static struct android_usb_function usbnet_function = {
-	.name = "usbnet",
-	.bind_config = usbnet_bind_config,
-};
-
-static int usbnet_probe(struct platform_device *pdev)
-{
-	pr_info("usbnet_probe\n");
-	/* do not register our function unless our platform device was registered */
-	android_register_function(&usbnet_function);
-	return 0;
-}
-
-static struct platform_driver usbnet_platform_driver = {
-	.driver = { .name = "usbnet", },
-	.probe = usbnet_probe,
-};
-
-static int __init init(void)
-{
-	pr_info("usbnet init\n");
-	platform_driver_register(&usbnet_platform_driver);
-	return 0;
-}
-module_init(init);
