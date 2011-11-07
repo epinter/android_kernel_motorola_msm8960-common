@@ -23,6 +23,7 @@
 #include <linux/i2c/sx150x.h>
 #include <linux/i2c/isl9519.h>
 #include <linux/gpio.h>
+#include <linux/leds-pwm-gpio.h>
 #include <linux/msm_ssbi.h>
 #include <linux/regulator/gpio-regulator.h>
 #include <linux/mfd/pm8xxx/pm8921.h>
@@ -199,7 +200,9 @@ static struct pm8xxx_gpio_init pm8921_gpios_teufel[] __initdata = {
 	PM8XXX_GPIO_DISABLE(6),				 /* Disable unused */
 	PM8XXX_GPIO_DISABLE(7),				 /* Disable NFC */
 	PM8XXX_GPIO_INPUT(16,	    PM_GPIO_PULL_UP_30), /* SD_CARD_WP */
-	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Bl: Off, PWM mode */
+	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Red LED */
+	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2),	 /* Green LED */
+	PM8XXX_GPIO_OUTPUT_FUNC(26, 0, PM_GPIO_FUNC_2),	 /* Blue LED */
 	PM8XXX_GPIO_INPUT(22,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
 	PM8XXX_GPIO_OUTPUT(43,	    0),			 /* DISP_RESET_N */
 };
@@ -213,7 +216,9 @@ static struct pm8xxx_gpio_init pm8921_gpios_vanquish[] __initdata = {
 	PM8XXX_GPIO_OUTPUT(17,	    0),			 /* DISP 3.3 V Boost */
 	PM8XXX_GPIO_OUTPUT(21,	    1),			 /* Backlight Enable */
 	PM8XXX_GPIO_DISABLE(22),			 /* Disable NFC */
-	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Bl: Off, PWM mode */
+	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Red LED */
+	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2),	 /* Green LED */
+	PM8XXX_GPIO_OUTPUT_FUNC(26, 0, PM_GPIO_FUNC_2),	 /* Blue LED */
 	PM8XXX_GPIO_INPUT(20,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
 	PM8XXX_GPIO_OUTPUT(43,	    PM_GPIO_PULL_UP_30), /* DISP_RESET_N */
 };
@@ -4347,6 +4352,49 @@ static struct platform_device msm_rpm_log_device = {
 	},
 };
 
+static struct led_pwm_gpio pm8xxx_pwm_gpio_leds[] = {
+	[0] = {
+		.name			= "red",
+		.default_trigger	= "none",
+		.pwm_id = 0,
+		.gpio = PM8921_GPIO_PM_TO_SYS(24),
+		.active_low = 0,
+		.retain_state_suspended = 1,
+		.default_state = 0,
+	},
+	[1] = {
+		.name			= "green",
+		.default_trigger	= "none",
+		.pwm_id = 1,
+		.gpio = PM8921_GPIO_PM_TO_SYS(25),
+		.active_low = 0,
+		.retain_state_suspended = 1,
+		.default_state = 0,
+	},
+	[2] = {
+		.name			= "blue",
+		.default_trigger	= "none",
+		.pwm_id = 2,
+		.gpio = PM8921_GPIO_PM_TO_SYS(26),
+		.active_low = 0,
+		.retain_state_suspended = 1,
+		.default_state = 0,
+	},
+};
+
+static struct led_pwm_gpio_platform_data pm8xxx_leds_pwm_gpio_pdata = {
+	.num_leds = ARRAY_SIZE(pm8xxx_pwm_gpio_leds),
+	.leds = pm8xxx_pwm_gpio_leds,
+};
+
+static struct platform_device pm8xxx_leds_pwm_gpio_device = {
+	.name	= "pwm_gpio_leds",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &pm8xxx_leds_pwm_gpio_pdata,
+	},
+};
+
 static struct platform_device *common_devices[] __initdata = {
 	&msm8960_device_dmov,
 	&msm_device_smd,
@@ -4418,6 +4466,7 @@ static struct platform_device *common_devices[] __initdata = {
 #ifdef CONFIG_TOUCHSCREEN_CYTTSP3
 	&touch_device_cyttsp3,
 #endif
+	&pm8xxx_leds_pwm_gpio_device,
 };
 
 static struct platform_device *mmi_devices[] __initdata = {

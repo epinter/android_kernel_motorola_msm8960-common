@@ -337,6 +337,12 @@ config LEDS_PWM
 	help
 	  This option enables support for pwm driven LEDs
 
+config LEDS_PWM_GPIO
+	tristate "Support for GPIO LED with PWM driven blinking"
+	depends on LEDS_CLASS
+	help
+	  This option enables support for GPIO leds with pwm driven blinking
+
 config LEDS_REGULATOR
 	tristate "REGULATOR driven LED support"
 	depends on LEDS_CLASS
