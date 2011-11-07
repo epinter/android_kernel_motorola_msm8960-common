@@ -930,16 +930,16 @@ static void ct406_report_prox(struct ct406_data *ct)
 		if (pdata < ct->prox_low_threshold)
 			ct406_enable_prox(ct);
 		if (pdata > ct->prox_high_threshold) {
-			input_report_abs(ct->dev, ABS_DISTANCE,
-					CT406_PROXIMITY_NEAR);
+			input_event(ct->dev, EV_MSC, MSC_RAW,
+				CT406_PROXIMITY_NEAR);
 			input_sync(ct->dev);
 			ct406_prox_mode_covered(ct);
 		}
 		break;
 	case CT406_PROX_MODE_COVERED:
 		if (pdata < ct->prox_low_threshold) {
-			input_report_abs(ct->dev, ABS_DISTANCE,
-					CT406_PROXIMITY_FAR);
+			input_event(ct->dev, EV_MSC, MSC_RAW,
+				CT406_PROXIMITY_FAR);
 			input_sync(ct->dev);
 			ct406_prox_mode_uncovered(ct);
 		}
@@ -1038,90 +1038,119 @@ static int ct406_misc_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static long ct406_misc_ioctl_locked(struct ct406_data *ct,
-				    unsigned int cmd,
-				    unsigned long arg)
+static int ct406_als_enable_param;
+
+static int ct406_set_als_enable_param(const char *char_value,
+        struct kernel_param *kp)
 {
-	void __user *argp = (void __user *)arg;
-	u8 enable;
+        unsigned long int_value;
+        int  ret;
 
-	if (ct406_debug & CT406_DBG_IOCTL)
-		pr_info("%s\n", __func__);
+        if (!char_value)
+                return -EINVAL;
 
-	switch (cmd) {
-	case CT406_IOCTL_SET_PROX_ENABLE:
-		if (copy_from_user(&enable, argp, 1))
-			return -EFAULT;
-		if (enable > 1)
-			return -EINVAL;
+        if (!ct406_misc_data)
+                return -EINVAL;
 
-	        pr_info("%s: Prox enable request %d\n", __func__, enable);
+        ret = strict_strtoul(char_value, (unsigned int)0, &int_value);
+        if (ret)
+                return ret;
 
-		ct->prox_requested = (enable != 0);
-		if (ct->prox_requested)
-			ct406_enable_prox(ct);
-		else
-			ct406_disable_prox(ct);
-
-		break;
-
-	case CT406_IOCTL_GET_PROX_ENABLE:
-		enable = ct->prox_requested;
-		if (copy_to_user(argp, &enable, 1))
-			return -EINVAL;
-
-		break;
-
-	case CT406_IOCTL_SET_LIGHT_ENABLE:
-		if (copy_from_user(&enable, argp, 1))
-			return -EFAULT;
-		if (enable > 1)
-			return -EINVAL;
-
-	        pr_info("%s: ALS enable request %d\n", __func__, enable);
-
-		ct->als_requested = (enable != 0);
-		if (ct->als_requested)
-			ct406_enable_als(ct);
-		else
-			ct406_disable_als(ct);
-
-		break;
-
-	case CT406_IOCTL_GET_LIGHT_ENABLE:
-		enable = ct->als_requested;
-		if (copy_to_user(argp, &enable, 1))
-			return -EINVAL;
-
-		break;
-
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-static long ct406_misc_ioctl(struct file *file, unsigned int cmd,
-			     unsigned long arg)
-{
-	struct ct406_data *ct = file->private_data;
-	int error;
-
-	if (ct406_debug & CT406_DBG_IOCTL)
-		pr_info("%s: cmd = 0x%08X\n", __func__, cmd);
+        *((int *)kp->arg) = int_value;
 
 	mutex_lock(&ct->mutex);
-	error = ct406_misc_ioctl_locked(ct, cmd, arg);
+
+	ct406_misc_data->als_requested = (int_value != 0);
+        if (ct406_misc_data->als_requested)
+                ret = ct406_enable_als(ct406_misc_data);
+        else
+                ret = ct406_disable_als(ct406_misc_data);
+
 	mutex_unlock(&ct->mutex);
 
-	return error;
+        return ret;
 }
+
+static int ct406_get_als_enable_param(char *buffer, struct kernel_param *kp)
+{
+        int num_chars;
+
+        if (!buffer)
+                return -EINVAL;
+
+        if (!ct406_misc_data) {
+                scnprintf(buffer, PAGE_SIZE, "0\n");
+                return 1;
+        }
+
+        num_chars = scnprintf(buffer, 2, "%d\n",
+                ct406_misc_data->als_requested);
+
+        return num_chars;
+}
+
+module_param_call(als_enable, ct406_set_als_enable_param, ct406_get_als_enable_param,
+        &ct406_als_enable_param, 0644);
+MODULE_PARM_DESC(als_enable, "Enable/disable the ALS.");
+
+static int ct406_prox_enable_param;
+
+static int ct406_set_prox_enable_param(const char *char_value,
+        struct kernel_param *kp)
+{
+        unsigned long int_value;
+        int  ret;
+
+        if (!char_value)
+                return -EINVAL;
+
+        if (!ct406_misc_data)
+                return -EINVAL;
+
+        ret = strict_strtoul(char_value, (unsigned int)0, &int_value);
+        if (ret)
+                return ret;
+
+        *((int *)kp->arg) = int_value;
+
+	mutex_lock(&ct->mutex);
+
+	ct406_misc_data->prox_requested = (int_value != 0);
+        if (ct406_misc_data->prox_requested)
+                ret = ct406_enable_prox(ct406_misc_data);
+        else
+                ret = ct406_disable_prox(ct406_misc_data);
+
+	mutex_unlock(&ct->mutex);
+
+        return ret;
+}
+
+static int ct406_get_prox_enable_param(char *buffer, struct kernel_param *kp)
+{
+        int num_chars;
+
+        if (!buffer)
+                return -EINVAL;
+
+        if (!ct406_misc_data) {
+                scnprintf(buffer, PAGE_SIZE, "0\n");
+                return 1;
+        }
+
+        num_chars = scnprintf(buffer, 2, "%d\n",
+                ct406_misc_data->prox_requested);
+
+        return num_chars;
+}
+
+module_param_call(prox_enable, ct406_set_prox_enable_param, ct406_get_prox_enable_param,
+        &ct406_prox_enable_param, 0644);
+MODULE_PARM_DESC(prox_enable, "Enable/disable the Prox.");
 
 static const struct file_operations ct406_misc_fops = {
 	.owner = THIS_MODULE,
 	.open = ct406_misc_open,
-	.unlocked_ioctl = ct406_misc_ioctl,
 };
 
 static ssize_t ct406_registers_show(struct device *dev,
@@ -1335,7 +1364,7 @@ static int ct406_probe(struct i2c_client *client,
 
 	ct->dev->name = "light-prox";
 	input_set_capability(ct->dev, EV_LED, LED_MISC);
-	input_set_capability(ct->dev, EV_ABS, ABS_DISTANCE);
+	input_set_capability(ct->dev, EV_MSC, MSC_RAW);
 
 	ct406_misc_data = ct;
 	ct->miscdevice.minor = MISC_DYNAMIC_MINOR;
