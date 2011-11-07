@@ -55,7 +55,7 @@
 #include <asm/setup.h>
 #include <asm/hardware/gic.h>
 #include <asm/mach/mmc.h>
-#include <linux/usb/android_composite.h>
+#include <linux/usb/android.h>
 
 #include <mach/board.h>
 #include <mach/msm_iomap.h>
@@ -3538,7 +3538,6 @@ struct dload_struct {
 	struct magic_num_struct magic_struct;
 };
 
-#if 0 /* XXX */
 static int usb_diag_update_pid_and_serial_num(uint32_t pid, const char *snum)
 {
 	struct dload_struct __iomem *dload = 0;
@@ -3571,13 +3570,19 @@ out:
 	return 0;
 }
 
-static struct usb_diag_platform_data usb_diag_pdata = {
-	.ch_name = DIAG_LEGACY,
+static struct android_usb_platform_data android_usb_pdata = {
 	.update_pid_and_serial_num = usb_diag_update_pid_and_serial_num,
-	.usb_diag_boot_selection = boot_mode_is_factory,
 };
-#endif
 
+static struct platform_device android_usb_device = {
+	.name	= "android_usb",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &android_usb_pdata,
+	}
+};
+
+#if 0
 static char *usb_functions_rndis[] = {
 #ifdef CONFIG_USB_ANDROID_RNDIS
 	"rndis",
@@ -3644,7 +3649,8 @@ static char *usb_functions_bptools_rndis_adb[] = {
 	"usbnet",
 	"adb",
 };
-
+#endif
+#if 0
 struct android_usb_product usb_products_default[] = {
 	{
 		.product_id	= 0x2e2c,
@@ -3742,8 +3748,7 @@ static struct android_usb_platform_data android_usb_pdata_bptools = {
 	.functions = usb_functions_bptools_rndis_adb,
 	.serial_number = "1234567890ABCDEF",
 };
-
-/* XXX
+#endif
 #ifdef CONFIG_USB_ANDROID_DIAG
 static struct platform_device msm8960_usb_diag_device = {
 	.name	= "usb_diag",
@@ -3753,15 +3758,6 @@ static struct platform_device msm8960_usb_diag_device = {
 	},
 };
 #endif
-*/
-
-static struct platform_device android_usb_device = {
-	.name	= "android_usb",
-	.id	= -1,
-	.dev	= {
-		.platform_data = &android_usb_pdata_default,
-	},
-};
 
 static struct platform_device usbnet_device = {
 	.name = "usbnet",
@@ -3793,14 +3789,11 @@ __setup("androidboot.serialno=", board_serialno_setup);
 
 static void msm8960_usb_init(void)
 {
-	struct android_usb_platform_data *platform_data;
-
 	platform_device_register(&msm8960_device_otg);
 	platform_device_register(&msm8960_device_gadget_peripheral);
 	platform_device_register(&msm_device_hsusb_host);
 
 	if (!strncmp(boot_mode, "bp-tools", BOOT_MODE_MAX_LEN)) {
-		platform_data = &android_usb_pdata_bptools;
 #ifdef CONFIG_USB_ANDROID_DIAG
 		platform_device_register(&msm8960_usb_diag_device);
 #endif
@@ -3811,18 +3804,14 @@ static void msm8960_usb_init(void)
 		platform_device_register(&usbnet_device);
 	}
 	else if(!strncmp(boot_mode, "factory", BOOT_MODE_MAX_LEN)) {
-		platform_data = &android_usb_pdata_factory;
 		platform_device_register(&usbnet_device);
 	}
 	else {
-		platform_data = &android_usb_pdata_default;
 		/* XXX platform_device_register(&rndis_device); */
 		/* MTP goes here */
 		platform_device_register(&usbnet_device);
 	}
 
-	platform_data->serial_number = usb_serial_num;
-	android_usb_device.dev.platform_data = platform_data;
 	platform_device_register(&android_usb_device);
 }
 
