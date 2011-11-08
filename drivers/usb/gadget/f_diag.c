@@ -130,7 +130,7 @@ struct diag_context {
 
 /* static strings, in UTF-8 */
 static struct usb_string diag_string_defs[] = {
-	[STRING_INTERFACE].s = "Motorola QC Diag Interface",
+	[STRING_INTERFACE].s = "QC Interface",
 	{  /* ZEROES END LIST */ },
 };
 
