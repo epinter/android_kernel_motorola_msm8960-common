@@ -1058,7 +1058,7 @@ static int ct406_set_als_enable_param(const char *char_value,
 
         *((int *)kp->arg) = int_value;
 
-	mutex_lock(&ct->mutex);
+	mutex_lock(&ct406_misc_data->mutex);
 
 	ct406_misc_data->als_requested = (int_value != 0);
         if (ct406_misc_data->als_requested)
@@ -1066,7 +1066,7 @@ static int ct406_set_als_enable_param(const char *char_value,
         else
                 ret = ct406_disable_als(ct406_misc_data);
 
-	mutex_unlock(&ct->mutex);
+	mutex_unlock(&ct406_misc_data->mutex);
 
         return ret;
 }
@@ -1113,7 +1113,7 @@ static int ct406_set_prox_enable_param(const char *char_value,
 
         *((int *)kp->arg) = int_value;
 
-	mutex_lock(&ct->mutex);
+	mutex_lock(&ct406_misc_data->mutex);
 
 	ct406_misc_data->prox_requested = (int_value != 0);
         if (ct406_misc_data->prox_requested)
@@ -1121,7 +1121,7 @@ static int ct406_set_prox_enable_param(const char *char_value,
         else
                 ret = ct406_disable_prox(ct406_misc_data);
 
-	mutex_unlock(&ct->mutex);
+	mutex_unlock(&ct406_misc_data->mutex);
 
         return ret;
 }
