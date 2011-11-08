@@ -1650,6 +1650,23 @@ static int writeback_offset(void)
 #define HDMI_PANEL_NAME	"hdmi_msm"
 #define TVOUT_PANEL_NAME	"tvout_msm"
 
+
+/* defaulting to qinara, atag parser will override */
+/* todo: finalize the names, move display related stuff to board-msm8960-panel.c */
+#if defined(CONFIG_FB_MSM_MIPI_MOT_CMD_HD_PT)
+#define DEFAULT_PANEL_NAME "mipi_mot_cmd_auo_hd_450"
+#elif defined(CONFIG_FB_MSM_MIPI_MOT_VIDEO_HD_PT)
+#define DEFAULT_PANEL_NAME "mipi_mot_video_smd_hd_465"
+#else
+#define DEFAULT_PANEL_NAME ""
+#endif
+static char panel_name[PANEL_NAME_MAX_LEN + 1] = DEFAULT_PANEL_NAME;
+
+static int is_smd(void) {
+	return !strncmp(panel_name, "mipi_mot_video_smd_hd_465",
+							PANEL_NAME_MAX_LEN);
+}
+
 static struct resource msm_fb_resources[] = {
 	{
 		.flags = IORESOURCE_DMA,
@@ -1702,6 +1719,15 @@ static int msm_fb_detect_panel(const char *name)
 				PANEL_NAME_MAX_LEN)))
 		return 0;
 
+#ifdef CONFIG_FB_MSM_MIPI_MOT_DETECT
+	if (!strncmp(name, panel_name, PANEL_NAME_MAX_LEN)) {
+		pr_info("%s: detected %s\n", __func__, name);
+		return 0;
+	}
+#endif
+
+
+
 	pr_warning("%s: not supported '%s'", __func__, name);
 	return -ENODEV;
 }
@@ -1709,39 +1735,6 @@ static int msm_fb_detect_panel(const char *name)
 static struct msm_fb_platform_data msm_fb_pdata = {
 	.detect_client = msm_fb_detect_panel,
 };
-
-/* defaulting to qinara, atag parser will override */
-/* todo: finalize the names, move display related stuff to board-msm8960-panel.c */
-#if defined(CONFIG_FB_MSM_MIPI_MOT_CMD_HD_PT)
-#define DEFAULT_PANEL_NAME "mipi_mot_cmd_auo_hd_450"
-#elif defined(CONFIG_FB_MSM_MIPI_MOT_VIDEO_HD_PT)
-#define DEFAULT_PANEL_NAME "mipi_mot_video_smd_hd_465"
-#else
-#define DEFAULT_PANEL_NAME ""
-#endif
-static char panel_name[PANEL_NAME_MAX_LEN + 1] = DEFAULT_PANEL_NAME;
-
-static int is_smd(void) {
-	return !strncmp(panel_name, "mipi_mot_video_smd_hd_465", PANEL_NAME_MAX_LEN);
-}
-
-/* XXX
-#ifdef CONFIG_FB_MSM_MIPI_MOT_DETECT
-static int mipi_dsi_mot_panel_detect(const char *name)
-{
-	if (!strncmp(name, panel_name, PANEL_NAME_MAX_LEN)) {
-		pr_info("%s: detected %s\n", __func__, name);
-		return 0;
-	}
-
-	return -EPERM;
-}
-
-static struct msm_fb_platform_data msm_fb_pdata = {
-	.detect_client = mipi_dsi_mot_panel_detect,
-};
-#endif
-*/
 
 static struct platform_device msm_fb_device = {
 	.name   = "msm_fb",
