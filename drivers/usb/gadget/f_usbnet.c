@@ -31,7 +31,6 @@
 #include <linux/workqueue.h>
 
 #include <linux/usb/ch9.h>
-#include <linux/usb/android_composite.h>
 #include <asm/cacheflush.h>
 
 
@@ -690,17 +689,15 @@ static int usbnet_set_alt(struct usb_function *f,
 	return 0;
 }
 
-static int usbnet_setup(struct usb_function *f,
+static int usbnet_ctrlrequest(struct usbnet_device *dev,
+			struct usb_composite_dev *cdev,
 			const struct usb_ctrlrequest *ctrl)
 {
-
-	struct usbnet_device  *dev = usbnet_func_to_dev(f);
 	struct usbnet_context *context = dev->net_ctxt;
 	int rc = -EOPNOTSUPP;
 	int wIndex = le16_to_cpu(ctrl->wIndex);
 	int wValue = le16_to_cpu(ctrl->wValue);
 	int wLength = le16_to_cpu(ctrl->wLength);
-	struct usb_composite_dev *cdev = f->config->cdev;
 	struct usb_request      *req = cdev->req;
 
 	if ((ctrl->bRequestType & USB_TYPE_MASK) == USB_TYPE_VENDOR) {
@@ -764,84 +761,31 @@ static void usbnet_resume(struct usb_function *f)
 	USBNETDBG(context, "%s\n", __func__);
 }
 
-struct usbnet_device *_usbnet_dev;
-
-int usbnet_bind_config(struct usb_configuration *c)
+int usbnet_bind_config(struct usbnet_device *dev, struct usb_configuration *c)
 {
-	struct usbnet_device *dev;
-	struct usbnet_context *context;
-	struct net_device *net_dev;
 	int ret, status;
-	static int usbnet_initialized = 0;
 
 	pr_debug("usbnet_bind_config\n");
 
-	if (usbnet_initialized)
-		goto bind_config;
-
-	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
-	if (!dev)
-		return -ENOMEM;
-
-	net_dev = alloc_netdev(sizeof(struct usbnet_context),
-			   "usb%d", usb_ether_setup);
-	if (!net_dev) {
-		pr_err("%s: alloc_netdev error\n", __func__);
-		return -EINVAL;
-	}
-
-	ret = register_netdev(net_dev);
-	if (ret) {
-		pr_err("%s: register_netdev error\n", __func__);
-		free_netdev(net_dev);
-		return -EINVAL;
-	}
-
-	ret = device_create_file(&net_dev->dev, &dev_attr_description);
-	if (ret < 0) {
-		pr_err("%s: sys file creation  error\n", __func__);
-		unregister_netdev(net_dev);
-		free_netdev(net_dev);
-		return -EINVAL;
-	}
-
-	context = netdev_priv(net_dev);
-	INIT_WORK(&context->usbnet_config_wq, usbnet_if_config);
-	usbnet_initialized = 1;
-
-	context->config = 0;
-	dev->net_ctxt = context;
-
-	_usbnet_dev = dev;
-bind_config:
 	status = usb_string_id(c->cdev);
 	if (status >= 0) {
 		usbnet_string_defs[STRING_INTERFACE].id = status;
 		usbnet_intf_desc.iInterface = status;
 	}
 
-	_usbnet_dev->cdev = c->cdev;
-	_usbnet_dev->function.name = "usbnet";
-	_usbnet_dev->function.descriptors = fs_function;
-	_usbnet_dev->function.hs_descriptors = hs_function;
-	_usbnet_dev->function.bind = usbnet_bind;
-	_usbnet_dev->function.unbind = usbnet_unbind;
-	_usbnet_dev->function.set_alt = usbnet_set_alt;
-	_usbnet_dev->function.disable = usbnet_disable;
-	_usbnet_dev->function.setup = usbnet_setup;
-	_usbnet_dev->function.suspend = usbnet_suspend;
-	_usbnet_dev->function.resume = usbnet_resume;
-	_usbnet_dev->function.strings = usbnet_strings;
+	dev->cdev = c->cdev;
+	dev->function.name = "usbnet";
+	dev->function.descriptors = fs_function;
+	dev->function.hs_descriptors = hs_function;
+	dev->function.bind = usbnet_bind;
+	dev->function.unbind = usbnet_unbind;
+	dev->function.set_alt = usbnet_set_alt;
+	dev->function.disable = usbnet_disable;
+	dev->function.suspend = usbnet_suspend;
+	dev->function.resume = usbnet_resume;
+	dev->function.strings = usbnet_strings;
 
-	ret = usb_add_function(c, &_usbnet_dev->function);
-	if (ret)
-		goto err1;
+	ret = usb_add_function(c, &dev->function);
 
-	return 0;
-
-err1:
-	pr_err("usbnet gadget driver failed to initialize\n");
-	usbnet_cleanup(_usbnet_dev);
-	kfree(_usbnet_dev);
 	return ret;
 }
