@@ -26,7 +26,7 @@
 #include <mach/gpio.h>
 #include <mach/gpiomux.h>
 
-#include "board-msm8960-sensors.h"
+#include "board-mmi.h"
 
 #ifdef CONFIG_INPUT_CT406
 /*

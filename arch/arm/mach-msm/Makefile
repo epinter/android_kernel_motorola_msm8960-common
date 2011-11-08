@@ -226,16 +226,25 @@ obj-$(CONFIG_ARCH_MSM8960) += footswitch-8x60.o
 obj-$(CONFIG_ARCH_MSM8960) += acpuclock-8960.o
 obj-$(CONFIG_ARCH_MSM8960) += memory_topology.o
 obj-$(CONFIG_ARCH_MSM8960) += saw-regulator.o rpm-regulator.o rpm-regulator-8960.o
-obj-$(CONFIG_TOUCHSCREEN_CYTTSP3) += board-mot-cyttsp3.o
-obj-$(CONFIG_TOUCHSCREEN_ATMXT) += board-mot-atmxt.o
-obj-$(CONFIG_MACH_MSM8960_SIM) += board-msm8960.o devices-8960.o board-msm8960-regulator.o
-obj-$(CONFIG_MACH_MSM8960_RUMI3) += board-msm8960.o devices-8960.o board-msm8960-regulator.o
-obj-$(CONFIG_MACH_MSM8960_CDP) += board-msm8960.o devices-8960.o board-msm8960-regulator.o
-obj-$(CONFIG_VIB_TIMED) += board-mot-vibrator.o
-obj-$(CONFIG_MACH_MSM8960_MTP) += board-msm8960.o devices-8960.o board-msm8960-regulator.o
-obj-$(CONFIG_MACH_MSM8960_FLUID) += board-msm8960.o devices-8960.o board-msm8960-regulator.o
-obj-$(CONFIG_MACH_MSM8960_MMI) += board-mmi-msm8960.o devices-8960.o board-mmi-msm8960-regulator.o board-msm8960-sensors.o
-obj-$(CONFIG_MACH_MSM8960_MMI) += board-mot-keypad.o
+
+obj-$(CONFIG_ARCH_MSM8960) += board-msm8960-common.o
+
+obj-$(CONFIG_MACH_MSM8960_MMI) += board-msm8960-mmi.o board-mmi-msm8960-regulator.o board-mmi-sensors.o board-mmi-keypad.o
+obj-$(CONFIG_MACH_MSM8960_MMI) += pm8921.o devices-8960.o
+
+obj-$(CONFIG_TOUCHSCREEN_CYTTSP3) += board-mmi-cyttsp3.o
+obj-$(CONFIG_VIB_TIMED) += board-mmi-vibrator.o
+
+ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
+obj-$(CONFIG_MACH_MSM8960_MMI) += board-mmi-melfas-touch.o
+endif
+
+obj-$(CONFIG_MACH_MSM8960_SIM) += board-msm8960-qcom.o pm8921.o devices-8960.o board-msm8960-regulator.o
+obj-$(CONFIG_MACH_MSM8960_RUMI3) += board-msm8960-qcom.o pm8921.o devices-8960.o board-msm8960-regulator.o
+obj-$(CONFIG_MACH_MSM8960_CDP) += board-msm8960-qcom.o pm8921.o devices-8960.o board-msm8960-regulator.o
+obj-$(CONFIG_MACH_MSM8960_MTP) += board-msm8960-qcom.o pm8921.o devices-8960.o board-msm8960-regulator.o
+obj-$(CONFIG_MACH_MSM8960_FLUID) += board-msm8960-qcom.o pm8921.o devices-8960.o board-msm8960-regulator.o
+
 obj-$(CONFIG_ARCH_MSM8960) += bms-batterydata.o
 obj-$(CONFIG_ARCH_APQ8064) += board-apq8064.o devices-8064.o board-apq8064-regulator.o
 obj-$(CONFIG_ARCH_MSM9615) += board-9615.o devices-9615.o board-9615-regulator.o
@@ -308,7 +317,3 @@ obj-$(CONFIG_ARCH_MSM7X27A) += board-msm7x27a-regulator.o
 endif
 
 obj-$(CONFIG_ARCH_MSM8960) += mdm2.o mdm_common.o
-
-ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
-obj-$(CONFIG_ARCH_MSM8960) += board-msm8960-melfas-touch.o
-endif

@@ -24,7 +24,7 @@
 #include <linux/input.h>
 
 #include <linux/melfas100_ts.h>
-#include "board-msm8960-melfas-touch.h"
+#include "board-mmi.h"
 
 struct melfas_ts_platform_data touch_pdata = {
 	.flags = TS_FLIP_X | TS_FLIP_Y,

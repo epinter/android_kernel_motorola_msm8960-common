@@ -27,7 +27,7 @@
 #include <mach/rpm-regulator.h>
 
 #include "board-msm8960.h"
-#include "board-mot.h"
+#include "board-mmi.h"
 
 
 static struct keyreset_platform_data mot_reset_keys_pdata = {
