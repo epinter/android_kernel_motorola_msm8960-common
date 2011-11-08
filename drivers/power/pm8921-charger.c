@@ -939,6 +939,7 @@ static enum power_supply_property msm_batt_power_props[] = {
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_TEMP,
+	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 	POWER_SUPPLY_PROP_ENERGY_FULL,
 };
 
@@ -1093,6 +1094,21 @@ static int get_prop_batt_temp(struct pm8921_chg_chip *chip)
 	return (int)result.physical;
 }
 
+static int get_prop_batt_charge_counter(struct pm8921_chg_chip *chip)
+{
+	int rc;
+	int64_t cc_mas;
+
+	rc = pm8921_bms_get_cc_mas(&cc_mas);
+
+	if (rc) {
+		pr_err("error reading cc_mas rc = %d\n", rc);
+		return rc;
+	}
+
+	return ((int)cc_mas) * 1000 / 3600;	/* mAs to uAh */
+}
+
 static int pm_batt_power_get_property(struct power_supply *psy,
 				       enum power_supply_property psp,
 				       union power_supply_propval *val)
@@ -1133,6 +1149,9 @@ static int pm_batt_power_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
 		val->intval = get_prop_batt_temp(chip);
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
+		val->intval = get_prop_batt_charge_counter(chip);
 		break;
 	case POWER_SUPPLY_PROP_ENERGY_FULL:
 		val->intval = get_prop_batt_fcc(chip);

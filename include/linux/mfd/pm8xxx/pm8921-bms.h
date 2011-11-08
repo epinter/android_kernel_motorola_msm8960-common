@@ -14,6 +14,7 @@
 #define __PM8XXX_BMS_H
 
 #include <linux/errno.h>
+#include <linux/types.h>
 
 #define PM8921_BMS_DEV_NAME	"pm8921-bms"
 
@@ -154,6 +155,17 @@ int pm8921_bms_get_percent_charge(void);
 int pm8921_bms_get_fcc(void);
 
 /**
+ * pm8921_bms_get_cc_mas - returns cc_mas in milli_ampere_seconds of
+			    the battery
+ *
+ * @result:	The pointer where the cc_mas will be updated.
+ *
+ * RETURNS:	Error code if there was a problem reading, Zero otherwise
+ *              The result won't be updated in case of an error.
+ */
+int pm8921_bms_get_cc_mas(int64_t *result);
+
+/**
  * pm8921_bms_charging_began - function to notify the bms driver that charging
  *				has started. Used by the bms driver to keep
  *				track of chargecycles
@@ -179,6 +191,10 @@ static inline int pm8921_bms_get_percent_charge(void)
 	return -ENXIO;
 }
 static inline int pm8921_bms_get_fcc(void)
+{
+	return -ENXIO;
+}
+static inline int pm8921_bms_get_cc_mas(int64_t *result)
 {
 	return -ENXIO;
 }
