@@ -217,6 +217,10 @@ static struct pm8xxx_led_platform_data pm8xxx_leds_pdata = {
 		.num_configs = ARRAY_SIZE(pm8921_led_configs),
 };
 
+static struct pm8xxx_ccadc_platform_data pm8xxx_ccadc_pdata = {
+	.r_sense		= 10,
+};
+
 static struct pm8921_adc_amux pm8921_adc_channels_data[] = {
 	{"vcoin", CHANNEL_VCOIN, CHAN_PATH_SCALING2, AMUX_RSV1,
 		ADC_DECIMATION_TYPE2, ADC_SCALE_DEFAULT},
@@ -280,6 +284,7 @@ struct pm8921_platform_data pm8921_platform_data __devinitdata = {
 	.bms_pdata		= &pm8921_bms_pdata,
 	.adc_pdata		= &pm8921_adc_pdata,
 	.leds_pdata		= &pm8xxx_leds_pdata,
+	.ccadc_pdata		= &pm8xxx_ccadc_pdata,
 };
 
 struct msm_ssbi_platform_data msm8960_ssbi_pm8921_pdata __devinitdata = {
