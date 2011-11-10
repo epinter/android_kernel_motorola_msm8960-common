@@ -58,8 +58,15 @@ extern struct touch_platform_data ts_platform_data_cyttsp3;
 extern void mot_setup_touch_cyttsp3(void);
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_ATMXT
+extern void mot_setup_touch_atmxt(void);
+extern struct touch_platform_data ts_platform_data_atmxt;
+#endif
+
 extern struct pm8xxx_keypad_platform_data mmi_keypad_data;
 extern struct pm8xxx_keypad_platform_data mmi_qwerty_keypad_data;
+
+extern struct pm8xxx_keypad_platform_data mot_keypad_data;
 
 void __init msm8960_sensors_init(void);
 void __init mmi_vibrator_init(void);

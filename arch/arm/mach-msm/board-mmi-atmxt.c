@@ -40,18 +40,17 @@ static uint16_t absVals[] = {
 		0x32, 0, 24, 0, 0,
 		0x39, 0, 9, 0, 0
 };
-static struct touch_framework	fw =
-{
+static struct touch_framework	fw = {
 	.abs = absVals,
 	.size = sizeof(absVals),
 	.enable_vkeys = true,
 };
 
-static int vkey_size_becker[4][4] =
-{	{75,1020,87,76},    // KEY_MENU
-	{195,102,87,76},    // KEY_HOME
-	{320,102,87,76},    // KEY_BACK
-	{217,102,87,76}  // KEY_SEARCH
+static int vkey_size_becker[4][4] = {
+	{75, 1020, 87, 76},    /* KEY_MENU */
+	{195, 102, 87, 76},    /* KEY_HOME */
+	{320, 102, 87, 76},    /* KEY_BACK */
+	{217, 102, 87, 76}     /* KEY_SEARCH */
 };
 
 
@@ -3335,8 +3334,7 @@ static	uint8_t firmwr[] = {
 	0x1A, 0x86, 0x00, 0x17, 0x67, 0xEF, 0xAF, 0x0B
 };
 
-struct touch_platform_data ts_platform_data_atmxt =
-{
+struct touch_platform_data ts_platform_data_atmxt = {
 	.addr			= { 0x4A, 0x24 },
 };
 
@@ -3391,12 +3389,12 @@ void mot_setup_touch_atmxt(void)
 {
 	int ret = 0;
 	struct kobject *properties_kobj = NULL;
-	printk("\n%s: Updating i2c_bus_board_info with correct setup for TS\n",
+	pr_info("\n%s: Updating i2c_bus_board_info with setup for TS\n",
 			__func__);
 	/*
-	* This is the information for the driver! Update platform_data field with
-	* the pointer to the correct data
-	 */
+	* This is the information for the driver! Update platform_data
+	* field with the pointer to the correct data
+	*/
 	strcpy(vkeyName, "virtualkeys.");
 	strcat(vkeyName, ATMXT_I2C_NAME);
 	properties_kobj = kobject_create_and_add("board_properties", NULL);
@@ -3412,7 +3410,7 @@ void mot_setup_touch_atmxt(void)
 	ts_platform_data_atmxt.gpio_interrupt = ATMXT_GPIO_INTR;
 
 
-	printk("%s: setting up platform data\n", __func__);
+	pr_info("%s: setting up platform data\n", __func__);
 	/* Setup settings */
 	ts_platform_data_atmxt.sett[0] = &setting_T7;
 	ts_platform_data_atmxt.sett[1] = &setting_T8;

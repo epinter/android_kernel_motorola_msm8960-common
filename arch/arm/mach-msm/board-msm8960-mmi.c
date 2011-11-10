@@ -37,6 +37,9 @@
 #ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
 #include <linux/melfas100_ts.h>
 #endif
+#ifdef CONFIG_TOUCHSCREEN_ATMXT
+#include <linux/input/atmxt.h>
+#endif
 
 #include <linux/dma-mapping.h>
 #include <linux/platform_data/qcom_crypto_device.h>
@@ -946,6 +949,15 @@ static struct i2c_board_info cyttsp_i2c_boardinfo[] __initdata = {
 	},
 };
 #endif
+#ifdef CONFIG_TOUCHSCREEN_ATMXT
+static struct i2c_board_info atmxt_i2c_boardinfo[] __initdata = {
+	{
+		I2C_BOARD_INFO(ATMXT_I2C_NAME, 0x42),
+		.platform_data = &ts_platform_data_atmxt,
+		.irq = MSM_GPIO_TO_INT(ATMXT_GPIO_INTR),
+	},
+};
+#endif
 
 static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 #ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
@@ -962,6 +974,14 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		MSM_8960_GSBI3_QUP_I2C_BUS_ID,
 		cyttsp_i2c_boardinfo,
 		ARRAY_SIZE(cyttsp_i2c_boardinfo),
+	},
+#endif
+#ifdef CONFIG_TOUCHSCREEN_ATMXT
+	[TOUCHSCREEN_ATMEL] = {
+		0,
+		MSM_8960_GSBI3_QUP_I2C_BUS_ID,
+		atmxt_i2c_boardinfo,
+		ARRAY_SIZE(atmxt_i2c_boardinfo),
 	},
 #endif
 #ifdef CONFIG_MSM_CAMERA
@@ -1254,6 +1274,9 @@ static void __init msm8960_mmi_init(void)
 
 #ifdef CONFIG_TOUCHSCREEN_CYTTSP3
 	mot_setup_touch_cyttsp3();
+#endif
+#ifdef CONFIG_TOUCHSCREEN_ATMXT
+	mot_setup_touch_atmxt();
 #endif
 #ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
 	melfas_ts_platform_init();

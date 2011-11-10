@@ -233,6 +233,7 @@ obj-$(CONFIG_MACH_MSM8960_MMI) += board-msm8960-mmi.o board-mmi-msm8960-regulato
 obj-$(CONFIG_MACH_MSM8960_MMI) += pm8921.o devices-8960.o
 
 obj-$(CONFIG_TOUCHSCREEN_CYTTSP3) += board-mmi-cyttsp3.o
+obj-$(CONFIG_TOUCHSCREEN_ATMXT) += board-mmi-atmxt.o
 obj-$(CONFIG_VIB_TIMED) += board-mmi-vibrator.o
 
 ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS

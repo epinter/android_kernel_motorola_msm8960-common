@@ -3480,7 +3480,7 @@ static struct vkey touch_vkeys[] = {
 struct touch_platform_data ts_platform_data_cyttsp3 =
 {
 	.addr			= { 0x3B, 0x3B },
-	.flags			= 0x02,  /* CY_USE_SLEEP */
+	.flags			= 0x02, /* CY_USE_SLEEP */
 };
 
 /* center: x: home: 55, menu: 185, back: 305, search 425, y: 835 */
