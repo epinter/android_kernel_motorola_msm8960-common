@@ -148,6 +148,8 @@ static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 
 static struct pm8xxx_gpio_init *pm8921_gpios = pm8921_gpios_vanquish;
 static unsigned pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_vanquish);
+static struct pm8xxx_keypad_platform_data *keypad_data = &mmi_keypad_data;
+static int keypad_mode = MMI_KEYPAD_RESET;
 
 /* defaulting to qinara, atag parser will override */
 /* todo: finalize the names, move display related stuff to board-msm8960-panel.c */
@@ -1015,32 +1017,6 @@ static void __init register_i2c_devices(void)
 #endif
 }
 
-static const unsigned int keymap[] = {
-	KEY(0, 0, KEY_VOLUMEUP),
-	KEY(0, 1, KEY_VOLUMEDOWN),
-	KEY(0, 2, KEY_CAMERA_SNAPSHOT),
-	KEY(0, 3, KEY_CAMERA_FOCUS),
-};
-
-static struct matrix_keymap_data keymap_data = {
-	.keymap_size    = ARRAY_SIZE(keymap),
-	.keymap         = keymap,
-};
-
-static struct pm8xxx_keypad_platform_data keypad_data = {
-	.input_name         = "keypad_8960",
-	.input_phys_device  = "keypad_8960/input0",
-	.num_rows           = 1,
-	.num_cols           = 5,
-	.rows_gpio_start	= PM8921_GPIO_PM_TO_SYS(9),
-	.cols_gpio_start	= PM8921_GPIO_PM_TO_SYS(1),
-	.debounce_ms        = 15,
-	.scan_delay_ms      = 32,
-	.row_hold_ns        = 91500,
-	.wakeup             = 1,
-	.keymap_data        = &keymap_data,
-};
-
 #ifdef CONFIG_USB_ANDROID_DIAG
 static struct platform_device msm8960_usb_diag_device = {
 	.name	= "usb_diag",
@@ -1267,7 +1243,7 @@ static void __init msm8960_mmi_init(void)
 	msm8960_init_hdmi(&hdmi_msm_device, &hdmi_msm_data);
 #endif
 
-	pm8921_init(&keypad_data, boot_mode_is_factory(), 0, 0);
+	pm8921_init(keypad_data, boot_mode_is_factory(), 0, 0);
 
 	/* Init the bus, but no devices at this time */
 	msm8960_spi_init(&msm8960_qup_spi_gsbi1_pdata, NULL, 0); 
@@ -1283,9 +1259,9 @@ static void __init msm8960_mmi_init(void)
 	melfas_ts_platform_init();
 #endif
 #ifdef CONFIG_VIB_TIMED
-	mot_vibrator_init();
+	mmi_vibrator_init();
 #endif
-	mot_keypad_init();
+	mmi_keypad_init(keypad_mode);
 
 	platform_add_devices(msm_footswitch_devices,
 		msm_num_footswitch_devices);
@@ -1360,6 +1336,7 @@ static __init void teufel_init(void)
 	ENABLE_I2C_DEVICE(ALS_CT406);
 	ENABLE_I2C_DEVICE(NFC_PN544);
 
+	keypad_mode = MMI_KEYPAD_RESET|MMI_KEYPAD_SLIDER;
 	msm8960_mmi_init();
 }
 
@@ -1462,7 +1439,8 @@ static __init void asanti_init(void)
 	ENABLE_I2C_DEVICE(ALS_CT406);
 	ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
 	ENABLE_I2C_DEVICE(NFC_PN544);
-
+	keypad_data = &mmi_qwerty_keypad_data;
+	keypad_mode = MMI_KEYPAD_RESET|MMI_KEYPAD_SLIDER;
 	msm8960_mmi_init();
 }
 

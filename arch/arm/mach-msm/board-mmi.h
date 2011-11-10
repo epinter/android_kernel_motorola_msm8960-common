@@ -58,9 +58,14 @@ extern struct touch_platform_data ts_platform_data_cyttsp3;
 extern void mot_setup_touch_cyttsp3(void);
 #endif
 
-extern struct pm8xxx_keypad_platform_data mot_keypad_data;
+extern struct pm8xxx_keypad_platform_data mmi_keypad_data;
+extern struct pm8xxx_keypad_platform_data mmi_qwerty_keypad_data;
 
 void __init msm8960_sensors_init(void);
-void __init mot_vibrator_init(void);
-int __init mot_keypad_init(void);
+void __init mmi_vibrator_init(void);
+
+#define  MMI_KEYPAD_RESET	0x1
+#define  MMI_KEYPAD_SLIDER	0x2
+
+int __init mmi_keypad_init(int mode);
 #endif

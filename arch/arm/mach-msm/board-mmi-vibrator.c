@@ -599,7 +599,7 @@ static struct platform_device vib_timed_dev = {
 	},
 };
 
-void __init mot_vibrator_init(void)
+void __init mmi_vibrator_init(void)
 {
 	int i, count;
 	struct vibrator *vib;
