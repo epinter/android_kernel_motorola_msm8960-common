@@ -182,11 +182,6 @@ static struct sx150x_platform_data sx150x_data[] = {
 	},
 };
 
-#endif
-#endif
-
-#if defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)
-
 static struct i2c_board_info cam_expander_i2c_info[] = {
 	{
 		I2C_BOARD_INFO("sx1508q", 0x22),
@@ -200,6 +195,7 @@ static struct msm_cam_expander_info cam_expander_info[] = {
 		MSM_8960_GSBI4_QUP_I2C_BUS_ID,
 	},
 };
+#endif
 #endif
 
 static bool dsi_power_on;
