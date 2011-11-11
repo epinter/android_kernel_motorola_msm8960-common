@@ -244,6 +244,9 @@ obj-$(CONFIG_MACH_MSM8960_RUMI3) += board-msm8960-qcom.o pm8921.o devices-8960.o
 obj-$(CONFIG_MACH_MSM8960_CDP) += board-msm8960-qcom.o pm8921.o devices-8960.o board-msm8960-regulator.o
 obj-$(CONFIG_MACH_MSM8960_MTP) += board-msm8960-qcom.o pm8921.o devices-8960.o board-msm8960-regulator.o
 obj-$(CONFIG_MACH_MSM8960_FLUID) += board-msm8960-qcom.o pm8921.o devices-8960.o board-msm8960-regulator.o
+obj-$(CONFIG_MACH_MSM8930_CDP) += board-msm8960-qcom.o pm8921.o devices-8960.o board-msm8960-regulator.o
+obj-$(CONFIG_MACH_MSM8930_MTP) += board-msm8960-qcom.o pm8921.o devices-8960.o board-msm8960-regulator.o
+obj-$(CONFIG_MACH_MSM8930_FLUID) += board-msm8960-qcom.o pm8921.o devices-8960.o board-msm8960-regulator.o
 
 obj-$(CONFIG_ARCH_MSM8960) += bms-batterydata.o
 obj-$(CONFIG_ARCH_APQ8064) += board-apq8064.o devices-8064.o board-apq8064-regulator.o
