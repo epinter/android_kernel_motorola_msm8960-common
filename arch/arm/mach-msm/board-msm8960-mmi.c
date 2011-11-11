@@ -1210,7 +1210,9 @@ static int mot_tcmd_export_gpio(void)
 		pr_err("request Factory Kill Disable failed, rc=%d\n", rc);
 		return -ENODEV;
 	}
-	rc = gpio_direction_output(75, 0);
+	/* Set Factory Kill Disable to OUTPUT/HIGH to enable device power down
+	on Factory Cable Removal */
+	rc = gpio_direction_output(75, 1);
 	if (rc) {
 		pr_err("set output Factory Kill Disable failed, rc=%d\n", rc);
 		return -ENODEV;
