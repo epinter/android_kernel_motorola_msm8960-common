@@ -19,6 +19,7 @@
 #include <linux/mfd/pm8xxx/pm8921.h>
 #include <linux/spi/spi.h>
 #include <mach/board.h>
+#include <linux/leds.h>
 
 /* Macros assume PMIC GPIOs and MPPs start at 1 */
 #define PM8921_GPIO_BASE		NR_GPIO_IRQS
@@ -215,5 +216,6 @@ extern void msm8930_map_io(void);
 
 extern void msm8960_init_irq(void);
 
+extern int pm8xxx_set_led_info(unsigned index, struct led_info *linfo);
 
 #endif

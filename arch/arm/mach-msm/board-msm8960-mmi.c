@@ -1243,6 +1243,11 @@ static struct msm_spi_platform_data msm8960_qup_spi_gsbi1_pdata = {
 	.max_clock_speed = 15060000,
 };
 
+static struct led_info msm8960_mmi_button_backlight = {
+	.name = "button-backlight",
+	.default_trigger = "none",
+};
+
 static void __init msm8960_mmi_init(void)
 {
 	if (meminfo_init(SYS_MEMORY, SZ_256M) < 0)
@@ -1271,6 +1276,9 @@ static void __init msm8960_mmi_init(void)
 	msm8960_gfx_init();
 	msm8960_spm_init();
 	msm8960_init_buses();
+
+	/* Setup correct button backlight LED name */
+	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
 
 #ifdef CONFIG_TOUCHSCREEN_CYTTSP3
 	mot_setup_touch_cyttsp3();

@@ -211,6 +211,12 @@ static struct pm8xxx_led_config pm8921_led_configs[] = {
 	},
 };
 
+static struct pm8xxx_led_platform_data pm8xxx_leds_pdata = {
+		.led_core = &pm8921_led_core_pdata,
+		.configs = pm8921_led_configs,
+		.num_configs = ARRAY_SIZE(pm8921_led_configs),
+};
+
 static struct pm8921_adc_amux pm8921_adc_channels_data[] = {
 	{"vcoin", CHANNEL_VCOIN, CHAN_PATH_SCALING2, AMUX_RSV1,
 		ADC_DECIMATION_TYPE2, ADC_SCALE_DEFAULT},
@@ -257,12 +263,6 @@ static struct pm8921_adc_platform_data pm8921_adc_pdata = {
 	.adc_num_board_channel	= ARRAY_SIZE(pm8921_adc_channels_data),
 	.adc_prop		= &pm8921_adc_data,
 	.adc_mpp_base		= PM8921_MPP_PM_TO_SYS(1),
-};
-
-static struct pm8xxx_led_platform_data pm8xxx_leds_pdata = {
-		.led_core = &pm8921_led_core_pdata,
-		.configs = pm8921_led_configs,
-		.num_configs = ARRAY_SIZE(pm8921_led_configs),
 };
 
 struct pm8921_platform_data pm8921_platform_data __devinitdata = {
@@ -348,6 +348,20 @@ struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR * 2] = {
 		.suspend_enabled = 0,
 	},
 };
+
+int pm8xxx_set_led_info(unsigned index, struct led_info *linfo)
+{
+	if (index >= ARRAY_SIZE(pm8921_led_info)) {
+		pr_err("%s: index %d out of bounds\n", __func__, index);
+		return -EINVAL;
+	}
+	if (!linfo) {
+		pr_err("%s: invalid led_info pointer\n", __func__);
+		return -EINVAL;
+	}
+	memcpy(&pm8921_led_info[index], linfo, sizeof(struct led_info));
+	return 0;
+}
 
 void __init pm8921_gpio_mpp_init(struct pm8xxx_gpio_init *pm8921_gpios,
 									unsigned gpio_size,

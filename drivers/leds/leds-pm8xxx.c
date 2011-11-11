@@ -217,6 +217,7 @@ static void pm8xxx_led_set(struct led_classdev *led_cdev,
 		return;
 	}
 
+	pr_info("%s %d\n", led->cdev.name, value);
 	led->cdev.brightness = value;
 	schedule_work(&led->work);
 }
