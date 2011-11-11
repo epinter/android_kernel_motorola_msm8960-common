@@ -91,6 +91,10 @@
 #include "smd_private.h"
 #include "pm-boot.h"
 
+#ifdef CONFIG_MSM_RPM_STATS_LOG
+#include "rpm_stats.h"
+#endif
+
 static struct platform_device msm_fm_platform_init = {
 	.name = "iris_fm",
 	.id   = -1,
@@ -2232,6 +2236,21 @@ static struct platform_device msm_rpm_log_device = {
 	},
 };
 
+#ifdef CONFIG_MSM_RPM_STATS_LOG
+static struct msm_rpmstats_platform_data msm_rpm_stat_pdata = {
+       .phys_addr_base = 0x0010d204,
+       .phys_size = SZ_8K,
+};
+
+struct platform_device msm_rpm_stat_device = {
+       .name = "msm_rpm_stat",
+       .id = -1,
+       .dev = {
+               .platform_data = &msm_rpm_stat_pdata,
+       },
+};
+#endif
+
 static struct msm_fb_platform_data msm_fb_pdata = {
 	.detect_client = NULL, /* msm_fb_detect_panel, */
 };
@@ -2367,6 +2386,10 @@ struct platform_device *common_devices[] __initdata = {
 	&ion_dev,
 #endif
 	&msm_rpm_log_device,
+#ifdef CONFIG_MSM_RPM_STATS_LOG
+       &msm_rpm_stat_device,
+#endif
+
 #ifdef CONFIG_MSM_QDSS
 	&msm_etb_device,
 	&msm_tpiu_device,
