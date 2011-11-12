@@ -89,7 +89,7 @@ extern int msm_pm8921_regulator_pdata_len __devinitdata;
 #ifdef CONFIG_FB_MSM_HDMI_AS_PRIMARY
 #define MSM_PMEM_SIZE 0x4000000 /* 64 Mbytes */
 #else
-#define MSM_PMEM_SIZE 0x1800000 /* 24 Mbytes */
+#define MSM_PMEM_SIZE 0x1C00000 /* 28 Mbytes */
 #endif
 #define MSM_RAM_CONSOLE_SIZE       128 * SZ_1K
 
