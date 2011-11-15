@@ -1220,13 +1220,14 @@ static struct msm_gpiomux_config msm8960_vib_configs[] = {
 };
 #endif
 
-static void __init mot_gpiomux_init(void)
+static void __init mot_gpiomux_init(unsigned kp_mode)
 {
 	msm_gpiomux_install(msm8960_mdp_5v_en_configs,
 			ARRAY_SIZE(msm8960_mdp_5v_en_configs));
 #ifdef CONFIG_INPUT_GPIO
-	msm_gpiomux_install(mot_slide_detect_configs,
-			ARRAY_SIZE(mot_slide_detect_configs));
+	if (kp_mode & MMI_KEYPAD_SLIDER)
+		msm_gpiomux_install(mot_slide_detect_configs,
+				ARRAY_SIZE(mot_slide_detect_configs));
 #endif
 #ifdef CONFIG_VIB_TIMED
 	msm_gpiomux_install(msm8960_vib_configs,
@@ -1313,7 +1314,7 @@ static void __init msm8960_mmi_init(void)
 	msm_clock_init(&msm8960_clock_init_data);
 
 	gpiomux_init();
-	mot_gpiomux_init();
+	mot_gpiomux_init(keypad_mode);
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 	msm8960_init_hdmi(&hdmi_msm_device, &hdmi_msm_data);
 #endif
@@ -1331,13 +1332,16 @@ static void __init msm8960_mmi_init(void)
 	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
 
 #ifdef CONFIG_TOUCHSCREEN_CYTTSP3
-	mot_setup_touch_cyttsp3();
+	if (msm8960_i2c_devices[TOUCHSCREEN_CYTTSP3].enabled)
+		mot_setup_touch_cyttsp3();
 #endif
 #ifdef CONFIG_TOUCHSCREEN_ATMXT
-	mot_setup_touch_atmxt();
+	if (msm8960_i2c_devices[TOUCHSCREEN_ATMEL].enabled)
+		mot_setup_touch_atmxt();
 #endif
 #ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
-	melfas_ts_platform_init();
+	if (msm8960_i2c_devices[TOUCHSCREEN_MELFAS100_TS].enabled)
+		melfas_ts_platform_init();
 #endif
 #ifdef CONFIG_VIB_TIMED
 	mmi_vibrator_init();
@@ -1399,9 +1403,8 @@ __tagtable(ATAG_DISPLAY, mot_parse_atag_display);
 
 static __init void teufel_init(void)
 {
-	if (system_rev <= HWREV_P1) {
+	if (system_rev <= HWREV_P1)
 		sdc_detect_gpio = 22;
-	}
 
 	pm8921_gpios = pm8921_gpios_teufel;
 	pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_teufel);
@@ -1414,7 +1417,8 @@ static __init void teufel_init(void)
 	}
 
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
-	ENABLE_I2C_DEVICE(ALS_CT406);
+	if (system_rev >= HWREV_P2)
+		ENABLE_I2C_DEVICE(ALS_CT406);
 	ENABLE_I2C_DEVICE(NFC_PN544);
 
 	keypad_mode = MMI_KEYPAD_RESET|MMI_KEYPAD_SLIDER;
@@ -1435,7 +1439,8 @@ static __init void qinara_init(void)
 {
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_CYTTSP3);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
-	ENABLE_I2C_DEVICE(ALS_CT406);
+	if (system_rev >= HWREV_P2)
+		ENABLE_I2C_DEVICE(ALS_CT406);
 	ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
 	ENABLE_I2C_DEVICE(NFC_PN544);
 
