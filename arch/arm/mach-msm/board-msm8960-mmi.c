@@ -51,6 +51,8 @@
 #include <linux/msm_tsens.h>
 #include <linux/ks8851.h>
 #include <linux/gpio_event.h>
+#include <linux/of_fdt.h>
+#include <linux/of.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -176,6 +178,8 @@ static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 	PM8XXX_MPP_INIT(11, D_BI_DIR, PM8921_MPP_DIG_LEVEL_S4, BI_PULLUP_1KOHM),
 	PM8XXX_MPP_INIT(12, D_BI_DIR, PM8921_MPP_DIG_LEVEL_L17, BI_PULLUP_OPEN),
 };
+
+static u32 fdt_start_address; /* flattened device tree address */
 
 static struct pm8xxx_gpio_init *pm8921_gpios = pm8921_gpios_vanquish;
 static unsigned pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_vanquish);
@@ -1709,6 +1713,35 @@ static void __init set_emu_detection_resource(const char *res_name, int value)
 		pr_err("cannot set resource (%s)\n", res_name);
 }
 
+/* process flat device tree for hardware configuration */
+static int __init parse_tag_flat_dev_tree_address(const struct tag *tag)
+{
+	struct tag_flat_dev_tree_address *fdt_addr =
+		(struct tag_flat_dev_tree_address *)&tag->u.fdt_addr;
+
+	if (fdt_addr->size)
+		fdt_start_address = (u32)phys_to_virt(fdt_addr->address);
+
+	pr_info("flat_dev_tree_address=0x%08x, flat_dev_tree_size == 0x%08X\n",
+			fdt_addr->address, fdt_addr->size);
+
+	return 0;
+}
+__tagtable(ATAG_FLAT_DEV_TREE_ADDRESS, parse_tag_flat_dev_tree_address);
+
+static void __init mmi_init_early(void)
+{
+	msm8960_allocate_memory_regions();
+
+	if (fdt_start_address) {
+		pr_info("Unflattening device tree: 0x%08x\n",
+				fdt_start_address);
+		initial_boot_params =
+			(struct boot_param_header *)fdt_start_address;
+		unflatten_device_tree();
+	}
+}
+
 static __init void teufel_init(void)
 {
 	if (system_rev <= HWREV_P1)
@@ -1750,7 +1783,7 @@ MACHINE_START(TEUFEL, "Teufel")
 	.init_irq = msm8960_init_irq,
 	.timer = &msm_timer,
 	.init_machine = teufel_init,
-	.init_early = msm8960_allocate_memory_regions,
+	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
 MACHINE_END
 
@@ -1781,7 +1814,7 @@ MACHINE_START(QINARA, "Qinara")
 	.init_irq = msm8960_init_irq,
 	.timer = &msm_timer,
 	.init_machine = qinara_init,
-	.init_early = msm8960_allocate_memory_regions,
+	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
 MACHINE_END
 
@@ -1810,7 +1843,7 @@ MACHINE_START(VANQUISH, "Vanquish")
 	.init_irq = msm8960_init_irq,
 	.timer = &msm_timer,
 	.init_machine = vanquish_init,
-	.init_early = msm8960_allocate_memory_regions,
+	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
 MACHINE_END
 
@@ -1833,7 +1866,7 @@ MACHINE_START(VOLTA, "Volta")
     .init_irq = msm8960_init_irq,
     .timer = &msm_timer,
     .init_machine = volta_init,
-    .init_early = msm8960_allocate_memory_regions,
+	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
 MACHINE_END
 
@@ -1860,7 +1893,7 @@ MACHINE_START(BECKER, "Becker")
     .init_irq = msm8960_init_irq,
     .timer = &msm_timer,
     .init_machine = becker_init,
-    .init_early = msm8960_allocate_memory_regions,
+	.init_early = mmi_init_early,
     .init_very_early = msm8960_early_memory,
 MACHINE_END
 
@@ -1892,6 +1925,6 @@ MACHINE_START(ASANTI, "Asanti")
 	.init_irq = msm8960_init_irq,
 	.timer = &msm_timer,
 	.init_machine = asanti_init,
-	.init_early = msm8960_allocate_memory_regions,
+	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
 MACHINE_END

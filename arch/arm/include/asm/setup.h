@@ -180,6 +180,13 @@ struct tag_mbm_version {
 	uint32_t mbm_version;
 };
 
+/* Flat device tree address */
+#define ATAG_FLAT_DEV_TREE_ADDRESS 0xf100040A
+struct tag_flat_dev_tree_address {
+	u32 address;
+	u32 size;
+};
+
 /* Battery status at boot */
 #define ATAG_BATTERY_STATUS_AT_BOOT 0xf100040E
 struct tag_battery_status_at_boot {
@@ -224,6 +231,7 @@ struct tag {
 		struct tag_baseband	baseband;
 		struct tag_display	display;
 		struct tag_mbm_protocol_version  mbm_protocol_version;
+		struct tag_flat_dev_tree_address	fdt_addr;
 #ifdef CONFIG_BOOTINFO
 		struct tag_powerup_reason	       powerup_reason;
 		struct tag_mbm_version                 mbm_version;
