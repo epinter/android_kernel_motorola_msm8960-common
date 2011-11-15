@@ -445,8 +445,6 @@ static int pn544_probe(struct i2c_client *client,
 	pn544_disable_irq(pn544_dev);
 	i2c_set_clientdata(client, pn544_dev);
 
-    dev_set_drvdata (pn544_dev->pn544_control_device, pn544_dev);
-
 	return 0;
 
 err_request_irq_failed:
