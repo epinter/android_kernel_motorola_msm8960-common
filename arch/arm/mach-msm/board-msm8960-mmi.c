@@ -1544,7 +1544,7 @@ static __init void qinara_init(void)
 {
 #ifdef CONFIG_EMU_DETECTION
 	if (system_rev < HWREV_P2)
-		set_emu_detection_resource("EMU_ID_EN_GPIO", 94);
+		otg_control_data = NULL;
 #endif
 
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_CYTTSP3);
