@@ -1610,6 +1610,75 @@ static struct platform_device qcedev_device = {
 };
 #endif
 
+static struct gpiomux_setting ap2mdm_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_DOWN,
+};
+
+static struct gpiomux_setting mdm2ap_status_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct gpiomux_setting mdm2ap_errfatal_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_16MA,
+	.pull = GPIOMUX_PULL_DOWN,
+};
+
+static struct gpiomux_setting ap2mdm_kpdpwr_n_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct msm_gpiomux_config mdm_configs[] __initdata = {
+	/* AP2MDM_STATUS */
+	{
+		.gpio = AP2MDM_STATUS,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ap2mdm_cfg,
+		}
+	},
+	/* MDM2AP_STATUS */
+	{
+		.gpio = MDM2AP_STATUS,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &mdm2ap_status_cfg,
+		}
+	},
+	/* MDM2AP_ERRFATAL */
+	{
+		.gpio = MDM2AP_ERRFATAL,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &mdm2ap_errfatal_cfg,
+		}
+	},
+	/* AP2MDM_ERRFATAL */
+	{
+		.gpio = AP2MDM_ERRFATAL,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ap2mdm_cfg,
+		}
+	},
+	/* AP2MDM_KPDPWR_N */
+	{
+		.gpio = AP2MDM_KPDPWR_N,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ap2mdm_kpdpwr_n_cfg,
+		}
+	},
+	/* AP2MDM_PMIC_RESET_N */
+	{
+		.gpio = AP2MDM_PMIC_RESET_N,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ap2mdm_kpdpwr_n_cfg,
+		}
+	}
+};
+
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 
 static struct gpiomux_setting hdmi_suspend_cfg = {
@@ -1748,6 +1817,11 @@ int __init gpiomux_init(bool use_mdp_vsync)
 		machine_is_msm8960_liquid() || machine_is_msm8960_cdp())
 		msm_gpiomux_install(hap_lvl_shft_config,
 			ARRAY_SIZE(hap_lvl_shft_config));
+
+	if (PLATFORM_IS_CHARM25())
+		msm_gpiomux_install(mdm_configs,
+			ARRAY_SIZE(mdm_configs));
+
 	return 0;
 }
 

@@ -524,6 +524,70 @@ static struct platform_device mipi_dsi2lvds_bridge_device = {
 	.dev.platform_data = &mipi_dsi2lvds_pdata,
 };
 
+#define MDM2AP_ERRFATAL			70
+#define AP2MDM_ERRFATAL			95
+#define MDM2AP_STATUS			69
+#define AP2MDM_STATUS			94
+#define AP2MDM_PMIC_RESET_N		80
+#define AP2MDM_KPDPWR_N			81
+
+static struct resource mdm_resources[] = {
+	{
+		.start	= MDM2AP_ERRFATAL,
+		.end	= MDM2AP_ERRFATAL,
+		.name	= "MDM2AP_ERRFATAL",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2MDM_ERRFATAL,
+		.end	= AP2MDM_ERRFATAL,
+		.name	= "AP2MDM_ERRFATAL",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= MDM2AP_STATUS,
+		.end	= MDM2AP_STATUS,
+		.name	= "MDM2AP_STATUS",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2MDM_STATUS,
+		.end	= AP2MDM_STATUS,
+		.name	= "AP2MDM_STATUS",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2MDM_PMIC_RESET_N,
+		.end	= AP2MDM_PMIC_RESET_N,
+		.name	= "AP2MDM_PMIC_RESET_N",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2MDM_KPDPWR_N,
+		.end	= AP2MDM_KPDPWR_N,
+		.name	= "AP2MDM_KPDPWR_N",
+		.flags	= IORESOURCE_IO,
+	},
+};
+
+static struct mdm_platform_data mdm_platform_data = {
+	.mdm_version = "2.5",
+};
+
+struct platform_device mdm_device = {
+	.name		= "mdm2_modem",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(mdm_resources),
+	.resource	= mdm_resources,
+	.dev		= {
+		.platform_data = &mdm_platform_data,
+	},
+};
+
+static struct platform_device *mdm_devices[] __initdata = {
+	&mdm_device,
+};
+
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 
 static int hdmi_enable_5v(int on);
@@ -2044,6 +2108,9 @@ static void __init msm8960_cdp_init(void)
 	msm8960_pm_init(RPM_APCC_CPU0_WAKE_UP_IRQ);
 	change_memory_power = &msm8960_change_memory_power;
 	BUG_ON(msm_pm_boot_init(MSM_PM_BOOT_CONFIG_TZ, NULL));
+
+	if (PLATFORM_IS_CHARM25())
+		platform_add_devices(mdm_devices, ARRAY_SIZE(mdm_devices));
 }
 
 MACHINE_START(MSM8960_SIM, "QCT MSM8960 SIMULATOR")

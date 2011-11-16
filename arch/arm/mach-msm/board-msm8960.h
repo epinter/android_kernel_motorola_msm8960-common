@@ -20,6 +20,7 @@
 #include <linux/spi/spi.h>
 #include <mach/board.h>
 #include <linux/leds.h>
+#include <mach/mdm2.h>
 
 /* Macros assume PMIC GPIOs and MPPs start at 1 */
 #define PM8921_GPIO_BASE		NR_GPIO_IRQS
@@ -233,5 +234,10 @@ extern void msm8930_map_io(void);
 extern void msm8960_init_irq(void);
 
 extern int pm8xxx_set_led_info(unsigned index, struct led_info *linfo);
+
+#define PLATFORM_IS_CHARM25() \
+	(machine_is_msm8960_cdp() && \
+		(socinfo_get_platform_subtype() == 1) \
+	)
 
 #endif
