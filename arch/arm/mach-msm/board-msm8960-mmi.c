@@ -101,6 +101,10 @@
 #include <linux/mfd/wcd9310/pdata.h>
 #endif
 
+#ifdef CONFIG_LEDS_LM3559
+#include <linux/leds-lm3559.h>
+#endif
+
 #include <linux/ion.h>
 #include <mach/ion.h>
 
@@ -783,6 +787,45 @@ error:
 }
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
 
+#ifdef CONFIG_LEDS_LM3559
+static struct lm3559_platform_data camera_flash_3559;
+static unsigned short flash_hw_enable;
+
+static struct lm3559_platform_data camera_flash_3559 = {
+	.flags = (LM3559_PRIVACY | LM3559_TORCH |
+			LM3559_FLASH | LM3559_FLASH_LIGHT |
+			LM3559_MSG_IND | LM3559_ERROR_CHECK),
+	.enable_reg_def = 0x00,
+	.gpio_reg_def = 0x00,
+	.adc_delay_reg_def = 0xc0,
+	.vin_monitor_def = 0xff,
+	.torch_brightness_def = 0x5b,
+	.flash_brightness_def = 0xaa,
+	.flash_duration_def = 0x0f,
+	.flag_reg_def = 0x00,
+	.config_reg_1_def = 0x6a,
+	.config_reg_2_def = 0x00,
+	.privacy_reg_def = 0x10,
+	.msg_ind_reg_def = 0x00,
+	.msg_ind_blink_reg_def = 0x1f,
+	.pwm_reg_def = 0x00,
+	.torch_enable_val = 0x1a,
+	.flash_enable_val = 0x1b,
+	.privacy_enable_val = 0x19,
+	.pwm_val = 0x02,
+	.msg_ind_val = 0xa0,
+	.msg_ind_blink_val = 0x1f,
+	.hw_enable = 0,
+};
+
+static struct i2c_board_info msm_camera_flash_boardinfo[] __initdata = {
+	{
+	I2C_BOARD_INFO("lm3559_led", 0x53),
+	.platform_data = &camera_flash_3559,
+	},
+};
+#endif /* CONFIG_LEDS_LM3559 */
+
 #ifdef CONFIG_MSM_CAMERA
 
 static struct i2c_board_info msm_camera_boardinfo[] __initdata = {
@@ -887,6 +930,15 @@ static void __init msm8960_init_cam(void)
 	platform_device_register(&msm8960_device_vpe);
 }
 #endif
+
+static void __init msm8960_init_cam_flash(unsigned short hw_enable)
+{
+#ifdef CONFIG_LEDS_LM3559
+	if (hw_enable) {
+		camera_flash_3559.hw_enable = hw_enable;
+	}
+#endif /* CONFIG_LEDS_LM3559 */
+}
 
 static int msm_fb_detect_panel(const char *name)
 {
@@ -1055,7 +1107,8 @@ enum i2c_type {
 	CAMERA_MSM,
 	ALS_CT406,
 	BACKLIGHT_LM3532,
-	NFC_PN544
+	NFC_PN544,
+	CAMERA_FLASH_MSM
 };
 
 struct i2c_registry {
@@ -1168,6 +1221,14 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		MSM_8960_GSBI4_QUP_I2C_BUS_ID,
 		msm_camera_boardinfo,
 		ARRAY_SIZE(msm_camera_boardinfo),
+	},
+#endif
+#ifdef CONFIG_LEDS_LM3559
+	[CAMERA_FLASH_MSM] = {
+		0,
+		MSM_8960_GSBI4_QUP_I2C_BUS_ID,
+		msm_camera_flash_boardinfo,
+		ARRAY_SIZE(msm_camera_flash_boardinfo),
 	},
 #endif
 #ifdef CONFIG_INPUT_CT406
@@ -1460,6 +1521,7 @@ static void __init msm8960_mmi_init(void)
 #ifdef CONFIG_MSM_CAMERA
 	msm8960_init_cam();
 #endif
+	msm8960_init_cam_flash(flash_hw_enable);
 	msm8960_init_mmc(sdc_detect_gpio);
 	acpuclk_init(&acpuclk_8960_soc_data);
 	register_i2c_devices();
@@ -1527,6 +1589,8 @@ static __init void teufel_init(void)
 	if (system_rev <= HWREV_P1)
 		sdc_detect_gpio = 22;
 
+	flash_hw_enable = 2;
+
 	pm8921_gpios = pm8921_gpios_teufel;
 	pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_teufel);
 
@@ -1549,6 +1613,7 @@ static __init void teufel_init(void)
 #ifdef CONFIG_PN544
 	ENABLE_I2C_DEVICE(NFC_PN544);
 #endif
+	ENABLE_I2C_DEVICE(CAMERA_FLASH_MSM);
 
 	keypad_mode = MMI_KEYPAD_RESET|MMI_KEYPAD_SLIDER;
 	msm8960_mmi_init();
@@ -1570,10 +1635,13 @@ static __init void qinara_init(void)
 	if (system_rev < HWREV_P2)
 		otg_control_data = NULL;
 #endif
+	flash_hw_enable = 2;
+
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_CYTTSP3);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	if (system_rev >= HWREV_P2)
 		ENABLE_I2C_DEVICE(ALS_CT406);
+	ENABLE_I2C_DEVICE(CAMERA_FLASH_MSM);
 	ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
 #ifdef CONFIG_PN544
 	ENABLE_I2C_DEVICE(NFC_PN544);
@@ -1598,8 +1666,11 @@ static __init void vanquish_init(void)
 	if (system_rev < HWREV_P1B2)
 		otg_control_data = NULL;
 #endif
+	flash_hw_enable = 2;
+
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_MELFAS100_TS);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
+	ENABLE_I2C_DEVICE(CAMERA_FLASH_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
 #ifdef CONFIG_PN544
 	ENABLE_I2C_DEVICE(NFC_PN544);

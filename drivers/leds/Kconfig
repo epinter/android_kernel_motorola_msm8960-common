@@ -171,6 +171,16 @@ config LEDS_PCA9532_GPIO
 	  To use a pin as gpio pca9532_type in pca9532_platform data needs to
 	  set to PCA9532_TYPE_GPIO.
 
+config LEDS_LM3559
+	tristate "LM3559 driver"
+	depends on LEDS_CLASS && I2C
+	help
+	  This option enables support for the LM3559 LED controller. LM3559 is
+	  a synchronous Boost flash driver, can be used as Camera Flash, Torch,
+	  Privacy Indicate and Message Indicator.
+	  This Driver provides direct control via LED class and interface for
+          programming the controller.
+
 config LEDS_GPIO
 	tristate "LED Support for GPIO connected LEDs"
 	depends on LEDS_CLASS
