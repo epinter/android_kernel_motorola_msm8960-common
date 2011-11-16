@@ -227,27 +227,14 @@ static struct platform_device emu_det_device __initdata = {
 	.resource	= resources_emu_det,
 };
 
-static int regulator_init;
+static struct msm_otg_platform_data *otg_control_data = &msm_otg_pdata;
 
-static __init void mot_init_emu_detection(int reg_init)
+static __init void mot_init_emu_detection(struct msm_otg_platform_data *ctrl_data)
 {
-	msm_otg_pdata.otg_control = OTG_ACCY_CONTROL;
-	msm_otg_pdata.pmic_id_irq = 0;
-	msm_otg_pdata.accy_pdev = &emu_det_device;
-
-	if (reg_init) {
-		struct regulator *vdd;
-		int rc;
-		vdd = regulator_get(NULL, "8921_l7");
-		if (!IS_ERR(vdd)) {
-			rc = regulator_set_voltage(vdd,
-					2700000, 2700000);
-			if (!rc)
-				rc = regulator_enable(vdd);
-			if (rc)
-				pr_err("unable to set 8921_l7 to 2.7V\n");
-
-		}
+	if (ctrl_data) {
+		ctrl_data->otg_control = OTG_ACCY_CONTROL;
+		ctrl_data->pmic_id_irq = 0;
+		ctrl_data->accy_pdev = &emu_det_device;
 	}
 }
 #endif
@@ -1455,7 +1442,7 @@ static void __init msm8960_mmi_init(void)
 	mot_init_usb();
 
 #ifdef CONFIG_EMU_DETECTION
-	mot_init_emu_detection(regulator_init);
+	mot_init_emu_detection(otg_control_data);
 #endif
 
 	platform_add_devices(mmi_devices, ARRAY_SIZE(mmi_devices));
@@ -1530,24 +1517,8 @@ static __init void teufel_init(void)
 	}
 
 #ifdef CONFIG_EMU_DETECTION
-	if (system_rev < HWREV_P3) {
-		struct rpm_regulator_init_data  *init_data =
-				msm_rpm_regulator_pdata.init_data;
-		struct regulator_init_data *id;
-		int i;
-		for (i = 0; i < msm_rpm_regulator_pdata.num_regulators; i++) {
-			if (init_data->id == PM8921_VREG_ID_L7) {
-				id = &init_data->init_data;
-				id->constraints.min_uV = 2700000;
-				id->constraints.max_uV = 2700000;
-				pr_info("L7(%d) regulator set to 2.7V\n", i);
-				break;
-			}
-			init_data++;
-		}
-		set_emu_detection_resource("EMU_ID_EN_GPIO", 94);
-		regulator_init = 1;
-	}
+	if (system_rev <= HWREV_P2)
+		otg_control_data = NULL;
 #endif
 
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
@@ -1571,8 +1542,10 @@ MACHINE_END
 
 static __init void qinara_init(void)
 {
+#ifdef CONFIG_EMU_DETECTION
 	if (system_rev < HWREV_P2)
 		set_emu_detection_resource("EMU_ID_EN_GPIO", 94);
+#endif
 
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_CYTTSP3);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
@@ -1637,8 +1610,10 @@ MACHINE_END
 
 static __init void becker_init(void)
 {
+#ifdef CONFIG_EMU_DETECTION
 	set_emu_detection_resource("EMU_MUX_CTRL0_GPIO", 96);
 	set_emu_detection_resource("EMU_MUX_CTRL1_GPIO", 107);
+#endif
 
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_ATMEL);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
@@ -1660,8 +1635,10 @@ MACHINE_END
 
 static __init void asanti_init(void)
 {
+#ifdef CONFIG_EMU_DETECTION
 	set_emu_detection_resource("EMU_MUX_CTRL0_GPIO", 96);
 	set_emu_detection_resource("EMU_MUX_CTRL1_GPIO", 107);
+#endif
 
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_ATMEL);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
