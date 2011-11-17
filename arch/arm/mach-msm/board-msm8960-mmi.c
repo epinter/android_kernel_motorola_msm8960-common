@@ -328,7 +328,7 @@ static int mipi_dsi_panel_power(int on)
 			return -EINVAL;
 		}
 		if (is_smd() && system_rev >= HWREV_P1) {
-			rc = regulator_set_voltage(reg_vci, 2800000, 3000000);
+			rc = regulator_set_voltage(reg_vci, 3100000, 3100000);
 			if (rc) {
 				pr_err("set_voltage vci failed, rc=%d\n", rc);
 				return -EINVAL;
