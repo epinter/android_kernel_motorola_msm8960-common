@@ -1488,7 +1488,9 @@ static __init void teufel_init(void)
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	if (system_rev >= HWREV_P2)
 		ENABLE_I2C_DEVICE(ALS_CT406);
+#ifdef CONFIG_PN544
 	ENABLE_I2C_DEVICE(NFC_PN544);
+#endif
 
 	keypad_mode = MMI_KEYPAD_RESET|MMI_KEYPAD_SLIDER;
 	msm8960_mmi_init();
@@ -1515,7 +1517,9 @@ static __init void qinara_init(void)
 	if (system_rev >= HWREV_P2)
 		ENABLE_I2C_DEVICE(ALS_CT406);
 	ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
+#ifdef CONFIG_PN544
 	ENABLE_I2C_DEVICE(NFC_PN544);
+#endif
 
 	msm8960_mmi_init();
 }
@@ -1539,7 +1543,9 @@ static __init void vanquish_init(void)
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_MELFAS100_TS);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
+#ifdef CONFIG_PN544
 	ENABLE_I2C_DEVICE(NFC_PN544);
+#endif
 
 	msm8960_mmi_init();
 }
@@ -1560,7 +1566,9 @@ static __init void volta_init(void)
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
 	ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
+#ifdef CONFIG_PN544
 	ENABLE_I2C_DEVICE(NFC_PN544);
+#endif
 
 	msm8960_mmi_init();
 }
@@ -1585,7 +1593,9 @@ static __init void becker_init(void)
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
 	ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
+#ifdef CONFIG_PN544
 	ENABLE_I2C_DEVICE(NFC_PN544);
+#endif
 
 	msm8960_mmi_init();
 }
@@ -1613,7 +1623,9 @@ static __init void asanti_init(void)
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
 	ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
+#ifdef CONFIG_PN544
 	ENABLE_I2C_DEVICE(NFC_PN544);
+#endif
 	keypad_data = &mmi_qwerty_keypad_data;
 	keypad_mode = MMI_KEYPAD_RESET|MMI_KEYPAD_SLIDER;
 	msm8960_mmi_init();
