@@ -22,16 +22,21 @@ void diag_process_hdlc(void *data, unsigned len);
 void __diag_smd_send_req(void);
 void __diag_smd_qdsp_send_req(void);
 void __diag_smd_wcnss_send_req(void);
-void diag_usb_legacy_notifier(void *, unsigned, struct diag_request *);
+void diag_legacy_notifier(void *, unsigned, struct diag_request *);
 long diagchar_ioctl(struct file *, unsigned int, unsigned long);
 int diag_device_write(void *, int, struct diag_request *);
 int mask_request_validate(unsigned char mask_buf[]);
 void diag_clear_reg(int);
 int chk_apps_only(void);
 /* State for diag forwarding */
-#ifdef CONFIG_DIAG_OVER_USB
+#if defined(CONFIG_DIAG_OVER_USB) || defined(CONFIG_DIAG_INTERNAL)
 int diagfwd_connect(void);
 int diagfwd_disconnect(void);
+struct legacy_diag_ch *channel_diag_open(const char *name, void *priv,
+		void (*notify)(void *, unsigned, struct diag_request *));
+void channel_diag_close(struct legacy_diag_ch *ch);
+int channel_diag_read(struct legacy_diag_ch *ch, struct diag_request *d_req);
+int channel_diag_write(struct legacy_diag_ch *ch, struct diag_request *d_req);
 #endif
 extern int diag_debug_buf_idx;
 extern unsigned char diag_debug_buf[1024];

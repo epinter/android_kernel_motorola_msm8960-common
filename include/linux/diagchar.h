@@ -19,10 +19,38 @@
 #define PKT_TYPE			8
 #define DEINIT_TYPE			16
 #define USER_SPACE_LOG_TYPE		32
+
 #define USB_MODE			1
 #define MEMORY_DEVICE_MODE		2
 #define NO_LOGGING_MODE			3
 #define UART_MODE			4
+#define INTERNAL_MODE			5
+#define USB_MODE_NAME			"usb"
+#define MEMORY_DEVICE_MODE_NAME		"memory"
+#define NO_LOGGING_MODE_NAME		"none"
+#define UART_MODE_NAME			"uart"
+#define INTERNAL_MODE_NAME		"internal"
+
+#define CHANNEL_DIAG_CONNECT		0
+#define CHANNEL_DIAG_DISCONNECT		1
+#define CHANNEL_DIAG_WRITE_DONE		2
+#define CHANNEL_DIAG_READ_DONE		3
+
+struct diag_request {
+	char *buf;
+	int length;
+	int actual;
+	int status;
+	void *context;
+};
+
+struct legacy_diag_ch {
+	const char *name;
+	struct list_head list;
+	void (*notify)(void *priv, unsigned event, struct diag_request *d_req);
+	void *priv;
+	void *priv_channel;
+};
 
 /* different values that go in for diag_data_type */
 #define DATA_TYPE_EVENT         	0
