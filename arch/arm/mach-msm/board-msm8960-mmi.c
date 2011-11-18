@@ -146,6 +146,18 @@ static struct pm8xxx_gpio_init pm8921_gpios_vanquish[] = {
 	PM8XXX_GPIO_OUTPUT(43,	    PM_GPIO_PULL_UP_30), /* DISP_RESET_N */
 };
 
+static struct pm8xxx_gpio_init pm8921_gpios_asanti[] = {
+	PM8XXX_GPIO_DISABLE(6),				 /* Disable unused */
+	PM8XXX_GPIO_DISABLE(7),				 /* Disable NFC */
+	PM8XXX_GPIO_INPUT(16,	    PM_GPIO_PULL_UP_30), /* SD_CARD_WP */
+	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Red LED */
+	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2),	 /* Green LED */
+	PM8XXX_GPIO_OUTPUT_FUNC(26, 0, PM_GPIO_FUNC_2),	 /* Blue LED */
+	PM8XXX_GPIO_INPUT(22,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
+	PM8XXX_GPIO_OUTPUT(43,	    0),			 /* DISP_RESET_N */
+	PM8XXX_GPIO_INPUT(33,	    PM_GPIO_PULL_UP_30), /* Volume Down key */
+};
+
 /* Initial PM8921 MPP configurations */
 static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 	/* External 5V regulator enable; shared by HDMI and USB_OTG switches. */
@@ -1640,6 +1652,10 @@ static __init void asanti_init(void)
 	set_emu_detection_resource("EMU_MUX_CTRL1_GPIO", 107);
 #endif
 
+	otg_control_data = NULL;
+	pm8921_gpios = pm8921_gpios_asanti;
+	pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_asanti);
+
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_ATMEL);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
@@ -1657,4 +1673,5 @@ MACHINE_START(ASANTI, "Asanti")
 	.timer = &msm_timer,
 	.init_machine = asanti_init,
 	.init_early = msm8960_allocate_memory_regions,
+	.init_very_early = msm8960_early_memory,
 MACHINE_END
