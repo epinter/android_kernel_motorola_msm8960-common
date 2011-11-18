@@ -1581,6 +1581,10 @@ MACHINE_END
 
 static __init void vanquish_init(void)
 {
+#ifdef CONFIG_EMU_DETECTION
+	if (system_rev < HWREV_P1B2)
+		otg_control_data = NULL;
+#endif
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_MELFAS100_TS);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
