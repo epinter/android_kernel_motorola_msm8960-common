@@ -19,13 +19,14 @@
 #include <linux/platform_device.h>
 #include <linux/input.h>
 #include <linux/keyreset.h>
-#include <linux/gpio_event.h>
 #include <linux/gpio.h>
 #include <asm/mach-types.h>
 #include <linux/regulator/pm8921-regulator.h>
 #include <linux/regulator/gpio-regulator.h>
 #include <mach/rpm-regulator.h>
-
+#ifdef CONFIG_KEYBOARD_GPIO
+#include <linux/gpio_keys.h>
+#endif
 #include "board-msm8960.h"
 #include "board-mmi.h"
 
@@ -172,61 +173,35 @@ struct pm8xxx_keypad_platform_data mmi_qwerty_keypad_data = {
 };
 
 
-#ifdef CONFIG_INPUT_GPIO
+#ifdef CONFIG_KEYBOARD_GPIO
 
-static struct gpio_event_direct_entry mmi_asanti_keypad_map[] = {
-	{ PM8921_GPIO_PM_TO_SYS(33), KEY_VOLUMEDOWN },
+static struct gpio_keys_button mmi_gpio_keys_table[] = {
+	{KEY_VOLUMEDOWN, PM8921_GPIO_PM_TO_SYS(33), 1,
+			"VOLUME_DOWN", EV_KEY, 1, 20},
+	{SW_LID, 11, 0, "SLIDE", EV_SW,  1, 20},
 };
 
-
-static struct gpio_event_input_info mmi_asanti_keypad_info = {
-	.info.func = gpio_event_input_func,
-	.flags = 0,
-	.type = EV_KEY,
-	.keymap = mmi_asanti_keypad_map,
-	.keymap_size = ARRAY_SIZE(mmi_asanti_keypad_map)
+static struct gpio_keys_platform_data mmi_gpio_keys_data = {
+	.buttons	= mmi_gpio_keys_table,
+	.nbuttons	= ARRAY_SIZE(mmi_gpio_keys_table),
+	.rep		= false,
 };
 
-static struct gpio_event_direct_entry mmi_switch_map[] = {
-	{ 11, SW_LID }
-};
-
-static struct gpio_event_input_info mmi_switch_info = {
-	.info.func = gpio_event_input_func,
-	.flags = 0,
-	.type = EV_SW,
-	.keymap = mmi_switch_map,
-	.keymap_size = ARRAY_SIZE(mmi_switch_map)
-};
-
-static struct gpio_event_info *mmi_slide_detect_info[] = {
-	&mmi_asanti_keypad_info.info,
-	&mmi_switch_info.info,
-};
-
-static struct gpio_event_platform_data mmi_slide_detect_data = {
-	.name = "slide_detect",
-	.info = mmi_slide_detect_info,
-	.info_count = ARRAY_SIZE(mmi_slide_detect_info)
-};
-
-static struct platform_device mmi_slide_detect_device = {
-	.name = GPIO_EVENT_DEV_NAME,
-	.id = 0,
+static struct platform_device mmi_gpiokeys_device = {
+	.name		= "gpio-keys",
+	.id		= -1,
 	.dev = {
-		.platform_data = &mmi_slide_detect_data,
+		.platform_data = &mmi_gpio_keys_data,
 	},
 };
 #endif
-
-
 int __init mmi_keypad_init(int mode)
 {
 	if (mode & MMI_KEYPAD_RESET)
 		platform_device_register(&mmi_keyreset_device);
-#ifdef CONFIG_INPUT_GPIO
+#ifdef CONFIG_KEYBOARD_GPIO
 	if (mode & MMI_KEYPAD_SLIDER)
-		platform_device_register(&mmi_slide_detect_device);
+		platform_device_register(&mmi_gpiokeys_device);
 #endif
 	return 0;
 }
