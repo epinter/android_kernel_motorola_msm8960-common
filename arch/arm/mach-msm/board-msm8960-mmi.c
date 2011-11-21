@@ -1308,9 +1308,11 @@ static int mot_tcmd_export_gpio(void)
 		pr_err("request Factory Kill Disable failed, rc=%d\n", rc);
 		return -ENODEV;
 	}
-	/* Set Factory Kill Disable to OUTPUT/HIGH to enable device power down
-	on Factory Cable Removal */
-	rc = gpio_direction_output(75, 1);
+	/* Set Factory Kill Disable to OUTPUT/LOW to disable the circuitry that
+	 * powers down upon factory cable removal.  This should be re-added with
+	 * condition based on hardware/product revision.
+	 */
+	rc = gpio_direction_output(75, 0);
 	if (rc) {
 		pr_err("set output Factory Kill Disable failed, rc=%d\n", rc);
 		return -ENODEV;
