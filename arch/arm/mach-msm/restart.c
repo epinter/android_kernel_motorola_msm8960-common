@@ -213,6 +213,8 @@ void arch_reset(char mode, const char *cmd)
 			unsigned long code;
 			code = simple_strtoul(cmd + 4, NULL, 16) & 0xff;
 			__raw_writel(0x6f656d00 | code, restart_reason);
+		} else if (!strncmp(cmd, "mbm_proto_ver_mismatch", 22)) {
+			__raw_writel(0x77665503, restart_reason);
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}

@@ -160,6 +160,11 @@ struct tag_display {
 	char display[1];
 };
 
+#define ATAG_MBM_PROTOCOL_VERSION 0xf1000414
+struct tag_mbm_protocol_version {
+	uint32_t value;
+};
+
 struct tag {
 	struct tag_header hdr;
 	union {
@@ -188,6 +193,7 @@ struct tag {
 		 */
 		struct tag_baseband	baseband;
 		struct tag_display	display;
+		struct tag_mbm_protocol_version  mbm_protocol_version;
 	} u;
 };
 

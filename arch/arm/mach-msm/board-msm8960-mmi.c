@@ -82,6 +82,7 @@
 #include <mach/msm_dsps.h>
 #include <mach/msm_xo.h>
 #include <mach/restart.h>
+#include <mach/system.h>
 
 #ifdef CONFIG_INPUT_CT406
 #include <linux/ct406.h>
@@ -1345,8 +1346,17 @@ static struct led_info msm8960_mmi_button_backlight = {
 	.default_trigger = "none",
 };
 
+#define EXPECTED_MBM_PROTOCOL_VERSION 1
+static uint32_t mbm_protocol_version;
+
 static void __init msm8960_mmi_init(void)
 {
+	if (mbm_protocol_version == 0)
+		pr_err("ERROR: ATAG MBM_PROTOCOL_VERSION is not present."
+			" Bootloader update is required\n");
+	else if (EXPECTED_MBM_PROTOCOL_VERSION != mbm_protocol_version)
+		arch_reset(0, "mbm_proto_ver_mismatch");
+
 	if (meminfo_init(SYS_MEMORY, SZ_256M) < 0)
 		pr_err("meminfo_init() failed!\n");
 
@@ -1449,6 +1459,16 @@ static int __init mot_parse_atag_display(const struct tag *tag)
 	return 0;
 }
 __tagtable(ATAG_DISPLAY, mot_parse_atag_display);
+
+static int __init mot_parse_atag_mbm_protocol_version(const struct tag *tag)
+{
+	const struct tag_mbm_protocol_version *mbm_protocol_version_tag =
+		&tag->u.mbm_protocol_version;
+	pr_info("%s: 0x%x\n", __func__, mbm_protocol_version_tag->value);
+	mbm_protocol_version = mbm_protocol_version_tag->value;
+	return 0;
+}
+__tagtable(ATAG_MBM_PROTOCOL_VERSION, mot_parse_atag_mbm_protocol_version);
 
 static void __init set_emu_detection_resource(const char *res_name, int value)
 {
