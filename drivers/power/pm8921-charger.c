@@ -28,6 +28,7 @@
 #include <linux/workqueue.h>
 #include <linux/debugfs.h>
 #include <linux/slab.h>
+#include <linux/reboot.h>
 
 #include <mach/msm_xo.h>
 #include <mach/msm_hsusb.h>
@@ -266,6 +267,12 @@ static int thermal_mitigation;
 static struct pm8921_chg_chip *the_chip;
 
 static struct pm8921_adc_arb_btm_param btm_config;
+
+static int pm8921_charging_reboot(struct notifier_block *, unsigned long,
+				  void *);
+static struct notifier_block pm8921_charging_reboot_notifier = {
+	.notifier_call = pm8921_charging_reboot,
+};
 
 static int pm_chg_masked_write(struct pm8921_chg_chip *chip, u16 addr,
 							u8 mask, u8 val)
@@ -2440,6 +2447,47 @@ static int __devinit pm8921_chg_hw_init(struct pm8921_chg_chip *chip)
 	return 0;
 }
 
+static int pm8921_charging_reboot(struct notifier_block *nb,
+				  unsigned long event, void *unused)
+{
+	struct pm8921_adc_chan_result res;
+#define VBUS_OFF_THRESHOLD 2000
+	/*
+	 * Hack to power down when both VBUS and BPLUS are present.
+	 * This targets factory environment, where we need to power down
+	 * units with non-removable batteries between stations so that we
+	 * do not drain batteries to death.
+	 * Poll for VBUS to got away (controlled by external supply)
+	 * before proceeding with shutdown.
+	 */
+	switch (event) {
+	case SYS_POWER_OFF:
+		if (!the_chip) {
+			pr_err("called before pm8921 charging init\n");
+			break;
+		}
+
+		if (!the_chip->factory_mode)
+			break;
+
+		res.physical = 0;
+		do {
+			if (pm8921_adc_read(CHANNEL_USBIN, &res)) {
+				pr_err("VBUS ADC read error\n");
+				break;
+			} else
+				pr_info("VBUS:= %lld mV\n", res.physical);
+			msleep(100);
+		} while (res.physical > VBUS_OFF_THRESHOLD);
+
+		break;
+	default:
+		break;
+	}
+
+	return NOTIFY_DONE;
+}
+
 static int get_rt_status(void *data, u64 * val)
 {
 	int i = (int)data;
@@ -2732,6 +2780,10 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 		}
 	}
 
+	rc = register_reboot_notifier(&pm8921_charging_reboot_notifier);
+	if (rc)
+		pr_err("%s can't register reboot notifier\n", __func__);
+
 	create_debugfs_entries(chip);
 
 	INIT_WORK(&chip->bms_notify.work, bms_notify);
@@ -2766,6 +2818,7 @@ static int __devexit pm8921_charger_remove(struct platform_device *pdev)
 {
 	struct pm8921_chg_chip *chip = platform_get_drvdata(pdev);
 
+	unregister_reboot_notifier(&pm8921_charging_reboot_notifier);
 	free_irqs(chip);
 	platform_set_drvdata(pdev, NULL);
 	the_chip = NULL;
