@@ -20,7 +20,6 @@
 #define __EMU_ACCY_H__
 
 #include <linux/ioctl.h>
-#include <linux/notifier.h>
 
 enum emu_accy {
 	EMU_ACCY_USB,		/* USB Host connected */
@@ -61,7 +60,5 @@ struct cpcap_whisper_request {
 
 #define CPCAP_IOCTL_ACCY_WHISPER \
 	_IOW(0, CPCAP_IOCTL_NUM_ACCY_WHISPER, struct cpcap_whisper_request*)
-
-extern void emu_det_register_notify(struct notifier_block *nb);
 
 #endif  /* __EMU_ACCY_H__ */

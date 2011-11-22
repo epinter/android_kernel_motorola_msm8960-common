@@ -135,8 +135,6 @@ static struct pm8xxx_gpio_init pm8921_gpios_vanquish[] = {
 	PM8XXX_GPIO_DISABLE(6),				 			/* Disable unused */
 	PM8XXX_GPIO_DISABLE(7),				 			/* Disable NFC */
 	PM8XXX_GPIO_INPUT(16,	    PM_GPIO_PULL_UP_30), /* SD_CARD_WP */
-    /* External regulator shared by display and touchscreen on LiQUID */
-	PM8XXX_GPIO_OUTPUT(17,	    0),			 		/* DISP 3.3 V Boost */
 	PM8XXX_GPIO_OUTPUT(21,	    1),			 		/* Backlight Enable */
 	PM8XXX_GPIO_DISABLE(22),			 			/* Disable NFC */
 	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Red LED */
@@ -176,7 +174,7 @@ static int keypad_mode = MMI_KEYPAD_RESET;
 #define MSM8960_HSUSB_PHYS		0x12500000
 #define MSM8960_HSUSB_SIZE		SZ_4K
 
-static struct resource resources_emu_det[] __initdata = {
+static struct resource resources_emu_det[] = {
 	{
 		.start	= MSM8960_HSUSB_PHYS,
 		.end	= MSM8960_HSUSB_PHYS + MSM8960_HSUSB_SIZE,
@@ -232,7 +230,7 @@ static struct resource resources_emu_det[] __initdata = {
 	},
 };
 
-static struct platform_device emu_det_device __initdata = {
+static struct platform_device emu_det_device = {
 	.name		= "emu_det",
 	.id		= -1,
 	.num_resources	= ARRAY_SIZE(resources_emu_det),
@@ -1487,7 +1485,6 @@ static __init void teufel_init(void)
 	if (system_rev <= HWREV_P2)
 		otg_control_data = NULL;
 #endif
-
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	if (system_rev >= HWREV_P2)
 		ENABLE_I2C_DEVICE(ALS_CT406);
@@ -1513,7 +1510,6 @@ static __init void qinara_init(void)
 	if (system_rev < HWREV_P2)
 		otg_control_data = NULL;
 #endif
-
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_CYTTSP3);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	if (system_rev >= HWREV_P2)
@@ -1585,7 +1581,6 @@ static __init void becker_init(void)
 	set_emu_detection_resource("EMU_MUX_CTRL0_GPIO", 96);
 	set_emu_detection_resource("EMU_MUX_CTRL1_GPIO", 107);
 #endif
-
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_ATMEL);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
@@ -1610,7 +1605,6 @@ static __init void asanti_init(void)
 	set_emu_detection_resource("EMU_MUX_CTRL0_GPIO", 96);
 	set_emu_detection_resource("EMU_MUX_CTRL1_GPIO", 107);
 #endif
-
 	otg_control_data = NULL;
 	pm8921_gpios = pm8921_gpios_asanti;
 	pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_asanti);

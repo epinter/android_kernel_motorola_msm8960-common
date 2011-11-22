@@ -2453,15 +2453,6 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	} else if (motg->pdata->otg_control == OTG_ACCY_CONTROL) {
 		pr_info("%s: MSM OTG Driver will operate in ACCY CONTROL mode\n",
 					__func__);
-		/* register accy detection device */
-		ret = platform_device_register(motg->pdata->accy_pdev);
-		if (ret) {
-			dev_err(&pdev->dev, "%s: platform device"
-				" registration for accy det device failed,"
-				" ret %d\n", __func__, ret);
-			goto remove_otg;
-		}
-
 		/* set up notifier so that accy detect driver can notify otg
 		 * driver when switches between host/peripheral/suspend modes
 		 * are required */
@@ -2471,6 +2462,15 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 
 		msm_otg_init_sm(motg);
 		motg->otg.state = OTG_STATE_B_IDLE;
+
+		/* register accy detection device */
+		ret = platform_device_register(motg->pdata->accy_pdev);
+		if (ret) {
+			dev_err(&pdev->dev, "%s: platform device"
+				" registration for accy det device failed,"
+				" ret %d\n", __func__, ret);
+			goto remove_otg;
+		}
 	}
 
 	msm_hsusb_mhl_switch_enable(motg, 1);
