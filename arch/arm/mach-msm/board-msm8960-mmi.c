@@ -1626,6 +1626,7 @@ MACHINE_START(BECKER, "Becker")
     .timer = &msm_timer,
     .init_machine = becker_init,
     .init_early = msm8960_allocate_memory_regions,
+    .init_very_early = msm8960_early_memory,
 MACHINE_END
 
 static __init void asanti_init(void)
