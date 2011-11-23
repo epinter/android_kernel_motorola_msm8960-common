@@ -1939,7 +1939,7 @@ static void __init msm8960_sim_init(void)
 	/* Simulator supports a QWERTY keypad */
 	pm8921_init(&keypad_data_sim, 0, 10, 40);
 
-	gpiomux_init();
+	gpiomux_init(MDP_VSYNC_ENABLED);
 	msm_gpiomux_install(msm8960_gpiomux_configs,
 			ARRAY_SIZE(msm8960_gpiomux_configs));
 #ifdef CONFIG_TOUCHSCREEN_CY8C_TS
@@ -1977,7 +1977,7 @@ static void __init msm8960_rumi3_init(void)
 	msm8960_init_regulators();
 	msm_clock_init(&msm8960_dummy_clock_init_data);
 
-	gpiomux_init();
+	gpiomux_init(MDP_VSYNC_ENABLED);
 	msm_gpiomux_install(msm8960_gpiomux_configs,
 			ARRAY_SIZE(msm8960_gpiomux_configs));
 #ifdef CONFIG_TOUCHSCREEN_CY8C_TS
@@ -2031,7 +2031,7 @@ static void __init msm8960_cdp_init(void)
 #endif
 	msm_device_hsic_host.dev.platform_data = &msm_hsic_pdata;
 
-	gpiomux_init();
+	gpiomux_init(MDP_VSYNC_ENABLED);
 	msm_gpiomux_install(msm8960_gpiomux_configs,
 			ARRAY_SIZE(msm8960_gpiomux_configs));
 #ifdef CONFIG_TOUCHSCREEN_CY8C_TS

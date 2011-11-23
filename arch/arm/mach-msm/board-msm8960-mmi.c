@@ -271,6 +271,7 @@ static int is_smd(void) {
 }
 
 static bool dsi_power_on;
+static bool use_mdp_vsync = MDP_VSYNC_ENABLED;
 
 static int mipi_dsi_panel_power(int on)
 {
@@ -1358,7 +1359,7 @@ static void __init msm8960_mmi_init(void)
 	msm8960_init_regulators();
 	msm_clock_init(&msm8960_clock_init_data);
 
-	gpiomux_init();
+	gpiomux_init(use_mdp_vsync);
 	mot_gpiomux_init(keypad_mode);
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 	msm8960_init_hdmi(&hdmi_msm_device, &hdmi_msm_data);
@@ -1544,7 +1545,7 @@ static __init void vanquish_init(void)
 #ifdef CONFIG_PN544
 	ENABLE_I2C_DEVICE(NFC_PN544);
 #endif
-
+	use_mdp_vsync = MDP_VSYNC_DISABLED;
 	msm8960_mmi_init();
 }
 

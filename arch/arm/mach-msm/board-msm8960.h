@@ -39,6 +39,9 @@ extern int msm_pm8921_regulator_pdata_len __devinitdata;
 
 #define MDP_VSYNC_GPIO 0
 
+#define MDP_VSYNC_ENABLED	true
+#define MDP_VSYNC_DISABLED	false
+
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MSM_FB_PRIM_BUF_SIZE (1280 * 720 * 4 * 3) /* 4 bpp x 3 pages */
 #else
@@ -193,7 +196,7 @@ extern void __init msm8960_init_dsps(void);
 extern void __init msm8960_init_hsic(void);
 
 extern void __init msm8960_init_buses(void);
-extern int  __init gpiomux_init(void);
+extern int  __init gpiomux_init(bool use_mdp_vsync);
 
 extern void __init msm8960_init_rpm(void);
 extern void __init msm8960_init_regulators(void);

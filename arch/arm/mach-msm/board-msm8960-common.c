@@ -1684,7 +1684,7 @@ static struct platform_device wfd_panel_device = {
 };
 #endif
 
-int __init gpiomux_init(void)
+int __init gpiomux_init(bool use_mdp_vsync)
 {
 	int rc;
 
@@ -1716,8 +1716,9 @@ int __init gpiomux_init(void)
 	msm_gpiomux_install(msm8960_audio_auxpcm_configs,
 			ARRAY_SIZE(msm8960_audio_auxpcm_configs));
 
-	msm_gpiomux_install(msm8960_mdp_vsync_configs,
-			ARRAY_SIZE(msm8960_mdp_vsync_configs));
+	if (use_mdp_vsync)
+		msm_gpiomux_install(msm8960_mdp_vsync_configs,
+				ARRAY_SIZE(msm8960_mdp_vsync_configs));
 
 	msm_gpiomux_install(wcnss_5wire_interface,
 			ARRAY_SIZE(wcnss_5wire_interface));
