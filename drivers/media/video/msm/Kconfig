@@ -37,16 +37,6 @@ config IMX074
 	default n
 	---help---
 	SONY 13.5 MP Bayer Sensor
-config MOTSOC1
-    bool "Sensor MOTSOC1 (13MP)"
-    depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
-    default n
-config MT9M114
-    bool "Sensor MT9M114 (YUV 1.26M)"
-    depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
-    default n
-    ---help---
-    APTINA 1.26 MP yuv Sensor
 config OV5640
 	bool "Sensor OV5640 (YUV 5M)"
 	depends on MSM_CAMERA && !MSM_CAMERA_V4L2
@@ -62,11 +52,11 @@ config WEBCAM_OV7692_QRD
 config MOTSOC1
     bool "Sensor MOTSOC1 (13MP)"
     depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
-    default y
+    default n
 config MT9M114
     bool "Sensor MT9M114 (YUV 1.26M)"
     depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
-    default y
+    default n
     ---help---
     APTINA 1.26 MP yuv Sensor
 config WEBCAM_OV7692

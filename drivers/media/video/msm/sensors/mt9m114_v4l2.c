@@ -12,6 +12,8 @@
  */
 
 #include "msm_sensor.h"
+#include "msm.h"
+#include "msm_ispif.h"
 #define SENSOR_NAME "mt9m114"
 #define PLATFORM_DRIVER_NAME "msm_camera_mt9m114"
 #define mt9m114_obj mt9m114_##obj
@@ -1215,8 +1217,13 @@ static int32_t mt9m114_sensor_setting(struct msm_sensor_ctrl_t *s_ctrl,
 {
 	int32_t rc = 0;
 	unsigned short data;
+
+	v4l2_subdev_notify(s_ctrl->sensor_v4l2_subdev,
+		NOTIFY_ISPIF_STREAM, (void *)ISPIF_STREAM(
+		PIX0, ISPIF_OFF_IMMEDIATELY));
 	s_ctrl->func_tbl->sensor_stop_stream(s_ctrl);
 	msleep(30);
+
 	if (update_type == MSM_SENSOR_REG_INIT) {
 		s_ctrl->curr_csi_params = NULL;
 		msm_sensor_enable_debugfs(s_ctrl);
@@ -1274,16 +1281,25 @@ static int32_t mt9m114_sensor_setting(struct msm_sensor_ctrl_t *s_ctrl,
 	} else if (update_type == MSM_SENSOR_UPDATE_PERIODIC) {
 		if (s_ctrl->curr_csi_params != s_ctrl->csi_params[res]) {
 			s_ctrl->curr_csi_params = s_ctrl->csi_params[res];
-			rc = msm_camio_csid_config(
+			v4l2_subdev_notify(s_ctrl->sensor_v4l2_subdev,
+				NOTIFY_CSID_CFG,
 				&s_ctrl->curr_csi_params->csid_params);
 			v4l2_subdev_notify(s_ctrl->sensor_v4l2_subdev,
 						NOTIFY_CID_CHANGE, NULL);
 			mb();
-			rc = msm_camio_csiphy_config(
+			v4l2_subdev_notify(s_ctrl->sensor_v4l2_subdev,
+				NOTIFY_CSIPHY_CFG,
 				&s_ctrl->curr_csi_params->csiphy_params);
 			mb();
 			msleep(20);
 		}
+
+		v4l2_subdev_notify(s_ctrl->sensor_v4l2_subdev,
+			NOTIFY_PCLK_CHANGE, &s_ctrl->msm_sensor_reg->
+			output_settings[res].op_pixel_clk);
+		v4l2_subdev_notify(s_ctrl->sensor_v4l2_subdev,
+			NOTIFY_ISPIF_STREAM, (void *)ISPIF_STREAM(
+			PIX0, ISPIF_ON_FRAME_BOUNDARY));
 		s_ctrl->func_tbl->sensor_start_stream(s_ctrl);
 		msleep(30);
 		rc = mt9m114_sensor_ERROR_IF(s_ctrl, COMMAND_REGISTER, HOST_COMMAND_1,

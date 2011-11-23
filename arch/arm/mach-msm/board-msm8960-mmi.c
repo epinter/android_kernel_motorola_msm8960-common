@@ -773,7 +773,7 @@ static struct msm_camera_sensor_flash_data flash_motsoc1 = {
 };
 
 static struct msm_camera_sensor_platform_info sensor_board_info_motsoc1 = {
-	.mount_angle  = 0,
+	.mount_angle  = 90,
 	.sensor_reset = 0,
 	.sensor_pwd   = 0,
 	.vcm_pwd      = 0,
@@ -803,7 +803,7 @@ static struct msm_camera_sensor_flash_data flash_mt9m114 = {
 };
 
 static struct msm_camera_sensor_platform_info sensor_board_info_mt9m114 = {
-	.mount_angle    = 0,
+	.mount_angle    = 270,
 	.sensor_reset   = 0,
 	.sensor_pwd     = 0,
 	.vcm_pwd        = 0,
@@ -846,6 +846,14 @@ static void __init msm8960_init_cam(void)
 		msm_get_cam_resources(s_info);
 		platform_device_register(cam_dev[i]);
 	}
+
+	platform_device_register(&msm8960_device_csiphy0);
+	platform_device_register(&msm8960_device_csiphy1);
+	platform_device_register(&msm8960_device_csid0);
+	platform_device_register(&msm8960_device_csid1);
+	platform_device_register(&msm8960_device_ispif);
+	platform_device_register(&msm8960_device_vfe);
+	platform_device_register(&msm8960_device_vpe);
 }
 #endif
 
