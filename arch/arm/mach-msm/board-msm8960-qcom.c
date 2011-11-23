@@ -39,7 +39,7 @@
 #include <linux/i2c/atmel_mxt_ts.h>
 #include <linux/msm_tsens.h>
 #include <linux/ks8851.h>
-#include <linus/i2c/isa1200.h>
+#include <linux/i2c/isa1200.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
