@@ -32,5 +32,6 @@
 
 int mipi_mot_video_device_register(struct msm_panel_info *pinfo,
 					u32 channel, u32 panel);
+#define NUMBER_BRIGHTNESS_LEVELS 24
 
 #endif  /* MIPI_MOT_H */

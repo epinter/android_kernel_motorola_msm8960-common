@@ -67,8 +67,8 @@ static int __init mipi_video_mot_hd_pt_init(void)
 	pinfo.lcdc.border_clr = 0x0;
 	pinfo.lcdc.underflow_clr = 0xff;
 	pinfo.lcdc.hsync_skew = 0;
-	pinfo.bl_max = 15;
-	pinfo.bl_min = 1;
+	pinfo.bl_max = NUMBER_BRIGHTNESS_LEVELS - 1;
+	pinfo.bl_min = 0;
 	pinfo.fb_num = 2;
 
 	pinfo.mipi.mode = DSI_VIDEO_MODE;
