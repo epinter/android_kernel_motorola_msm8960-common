@@ -1136,7 +1136,7 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 #ifdef CONFIG_INPUT_CT406
 	[ALS_CT406] = {
 		0,
-		MSM_8960_GSBI4_QUP_I2C_BUS_ID,
+		MSM_8960_GSBI10_QUP_I2C_BUS_ID,
 		ct406_i2c_boardinfo,
 		ARRAY_SIZE(ct406_i2c_boardinfo),
 	},
@@ -1486,8 +1486,10 @@ static __init void teufel_init(void)
 		otg_control_data = NULL;
 #endif
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
+#ifdef CONFIG_INPUT_CT406
 	if (system_rev >= HWREV_P2)
 		ENABLE_I2C_DEVICE(ALS_CT406);
+#endif
 #ifdef CONFIG_PN544
 	ENABLE_I2C_DEVICE(NFC_PN544);
 #endif
