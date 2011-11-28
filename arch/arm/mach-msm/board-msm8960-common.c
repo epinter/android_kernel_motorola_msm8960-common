@@ -581,8 +581,6 @@ static struct msm_gpiomux_config msm8960_hsic_configs[] = {
 };
 #endif
 
-#define HAP_SHIFT_LVL_OE_GPIO	47
-
 static struct gpiomux_setting hap_lvl_shft_suspended_config = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,

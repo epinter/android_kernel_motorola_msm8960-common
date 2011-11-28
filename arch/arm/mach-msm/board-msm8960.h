@@ -39,6 +39,8 @@ extern int msm_pm8921_regulator_pdata_len __devinitdata;
 
 #define MDP_VSYNC_GPIO 0
 
+#define HAP_SHIFT_LVL_OE_GPIO	47
+
 #define MDP_VSYNC_ENABLED	true
 #define MDP_VSYNC_DISABLED	false
 
