@@ -107,6 +107,7 @@
 
 #include <linux/ion.h>
 #include <mach/ion.h>
+#include <linux/w1-gpio.h>
 
 #include "timer.h"
 #include "devices.h"
@@ -170,6 +171,8 @@ static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 	PM8XXX_MPP_INIT(7, D_INPUT, PM8921_MPP_DIG_LEVEL_VPH, DIN_TO_INT),
 	PM8XXX_MPP_INIT(PM8921_AMUX_MPP_8, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH8,
 								DOUT_CTRL_LOW),
+	PM8XXX_MPP_INIT(11, D_BI_DIR, PM8921_MPP_DIG_LEVEL_S4, BI_PULLUP_1KOHM),
+	PM8XXX_MPP_INIT(12, D_BI_DIR, PM8921_MPP_DIG_LEVEL_L17, BI_PULLUP_OPEN),
 };
 
 static struct pm8xxx_gpio_init *pm8921_gpios = pm8921_gpios_vanquish;
@@ -1066,7 +1069,66 @@ static struct platform_device pm8xxx_leds_pwm_gpio_device = {
 	},
 };
 
+static void w1_gpio_enable_regulators(int enable);
+
+#define BATT_EPROM_GPIO 93
+
+static struct w1_gpio_platform_data msm8960_w1_gpio_device_pdata = {
+	.pin = BATT_EPROM_GPIO,
+	.is_open_drain = 0,
+	.enable_external_pullup = w1_gpio_enable_regulators,
+};
+
+static struct platform_device msm8960_w1_gpio_device = {
+	.name	= "w1-gpio",
+	.dev	= {
+		.platform_data = &msm8960_w1_gpio_device_pdata,
+	},
+};
+
+static void w1_gpio_enable_regulators(int enable)
+{
+	static struct regulator *vdd1;
+	static struct regulator *vdd2;
+	int rc;
+
+	if (!vdd1)
+		vdd1 = regulator_get(&msm8960_w1_gpio_device.dev, "8921_l7");
+
+	if (!vdd2)
+		vdd2 = regulator_get(&msm8960_w1_gpio_device.dev, "8921_l17");
+
+	if (enable) {
+		if (!IS_ERR_OR_NULL(vdd1)) {
+			rc = regulator_set_voltage(vdd1, 2700000, 2700000);
+			if (!rc)
+				rc = regulator_enable(vdd1);
+			if (rc)
+				pr_err("w1_gpio Failed 8921_l7 to 2.7V\n");
+		}
+		if (!IS_ERR_OR_NULL(vdd2)) {
+			rc = regulator_set_voltage(vdd2, 2700000, 2700000);
+			if (!rc)
+				rc = regulator_enable(vdd2);
+			if (rc)
+				pr_err("w1_gpio Failed 8921_l17 to 2.7V\n");
+		}
+	} else {
+		if (!IS_ERR_OR_NULL(vdd1)) {
+			rc = regulator_disable(vdd1);
+			if (rc)
+				pr_err("w1_gpio unable to disable 8921_l7\n");
+		}
+		if (!IS_ERR_OR_NULL(vdd2)) {
+			rc = regulator_disable(vdd2);
+			if (rc)
+				pr_err("w1_gpio unable to disable 8921_l17\n");
+		}
+	}
+}
+
 static struct platform_device *mmi_devices[] __initdata = {
+	&msm8960_w1_gpio_device,
 	&msm8960_device_otg,
 	&msm8960_device_gadget_peripheral,
 	&msm_device_hsusb_host,
@@ -1365,6 +1427,28 @@ static struct msm_gpiomux_config msm8960_vib_configs[] = {
 };
 #endif
 
+static struct gpiomux_setting batt_eprom_setting_suspended = {
+		.func = GPIOMUX_FUNC_GPIO, /*suspend*/
+		.drv = GPIOMUX_DRV_2MA,
+		.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct gpiomux_setting batt_eprom_setting_active = {
+		.func = GPIOMUX_FUNC_GPIO, /*active*/
+		.drv = GPIOMUX_DRV_2MA,
+		.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct msm_gpiomux_config msm8960_batt_eprom_configs[] = {
+	{
+		.gpio = BATT_EPROM_GPIO,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &batt_eprom_setting_active,
+			[GPIOMUX_SUSPENDED] = &batt_eprom_setting_suspended,
+		},
+	},
+};
+
 static void __init mot_gpiomux_init(unsigned kp_mode)
 {
 	msm_gpiomux_install(msm8960_mdp_5v_en_configs,
@@ -1378,6 +1462,8 @@ static void __init mot_gpiomux_init(unsigned kp_mode)
 	msm_gpiomux_install(msm8960_vib_configs,
 			ARRAY_SIZE(msm8960_vib_configs));
 #endif
+	msm_gpiomux_install(msm8960_batt_eprom_configs,
+			ARRAY_SIZE(msm8960_batt_eprom_configs));
 }
 
 static int mot_tcmd_export_gpio(void)
@@ -1445,6 +1531,7 @@ static struct led_info msm8960_mmi_button_backlight = {
 	.name = "button-backlight",
 	.default_trigger = "none",
 };
+
 
 #define EXPECTED_MBM_PROTOCOL_VERSION 1
 static uint32_t mbm_protocol_version;
