@@ -434,14 +434,14 @@ static int32_t motsoc1_power_on(const struct msm_camera_sensor_info *data)
 	mutex_lock(&motsoc1_mutex);
 
 	// Teufel P1/P2, Qinara P1 use L17 instead of L8
-	if ((machine_is_teufel() && system_rev <= 0x8200) ||
-		(machine_is_qinara() && system_rev <= 0x8100))
+	if ((machine_is_teufel() && system_rev < 0x8300) ||
+		(machine_is_qinara() && system_rev < 0x8200))
 		use_l17 = 1;
 
 	// Teufel P1/P2, Qinara P1, Vanquish P1 use L29 instead of L4
-	if ((machine_is_teufel() && system_rev <= 0x8200) ||
-		(machine_is_qinara() && system_rev <= 0x8100) ||
-		(machine_is_vanquish() && system_rev <= 0x8100))
+	if ((machine_is_teufel() && system_rev < 0x8300) ||
+		(machine_is_qinara() && system_rev < 0x8200) ||
+		(machine_is_vanquish() && system_rev < 0x8200))
 		use_l29 = 1;
 
 	if (use_l17)
