@@ -10,7 +10,6 @@
  * GNU General Public License for more details.
  *
  */
-
 #include "msm_fb.h"
 #include "mipi_dsi.h"
 #include "mipi_mot_video.h"
@@ -291,7 +290,7 @@ static struct dsi_cmd_desc mot_set_brightness_cmds[] = {
 		sizeof(gamma_settings_nit[0]), gamma_settings_nit[0]},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 0,
 		sizeof(gamma_set_update), gamma_set_update},
-	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
+	{DTYPE_DCS_LWRITE, 1, 0, 0, 0,
 		sizeof(elvss_set[0]), elvss_set[0]}
 };
 
@@ -330,7 +329,6 @@ static struct dsi_cmd_desc mot_video_on_cmds3[] = {
 		sizeof(display_on), display_on},
 };
 
-
 static struct dsi_cmd_desc mot_display_off_cmds[] = {
 	{DTYPE_DCS_WRITE, 1, 0, 0, 10,
 		sizeof(display_off), display_off},
@@ -341,7 +339,7 @@ static struct dsi_cmd_desc mot_display_off_cmds[] = {
 static char manufacture_id[2] = {0xda}; /* DTYPE_DCS_READ */
 
 static struct dsi_cmd_desc mot_manufacture_id_cmd = {
-	DTYPE_DCS_READ, 1, 0, 1, 5, sizeof(manufacture_id), manufacture_id};
+	DTYPE_DCS_READ, 1, 0, 1, 0, sizeof(manufacture_id), manufacture_id};
 
 static uint32 mipi_mot_manufacture_id(struct msm_fb_data_type *mfd)
 {
@@ -358,7 +356,7 @@ static uint32 mipi_mot_manufacture_id(struct msm_fb_data_type *mfd)
 	mipi_dsi_cmds_rx(mfd, tp, rp, cmd, 1);
 
 	lp = (uint32 *)rp->data;
-	pr_info("%s: manufacture_id[%x]=%2x %2x %2x %2x (total %d)", __func__, (unsigned int)manufacture_id[0], (unsigned int)rp->data[0], (unsigned int)rp->data[1], (unsigned int)rp->data[2], (unsigned int)rp->data[3], (int)rp->len);
+	pr_info("%s: manufacture_id[%x]=%2x", __func__, (unsigned int)manufacture_id[0], (unsigned int)rp->data[0]);
 	return *lp;
 }
 
@@ -393,6 +391,8 @@ static int mipi_mot_lcd_on(struct platform_device *pdev)
 	msleep(120);
 
 	mipi_mot_manufacture_id_ex(mfd, 0xda);
+	mipi_mot_manufacture_id_ex(mfd, 0xdb);
+	mipi_mot_manufacture_id_ex(mfd, 0xdc);
 
 	mipi_dsi_cmds_tx(mfd, &mot_tx_buf, mot_video_on_cmds3, ARRAY_SIZE(mot_video_on_cmds3));
 
@@ -432,6 +432,9 @@ static void mipi_mot_set_backlight(struct msm_fb_data_type *mfd)
 
 	pr_debug("%s(%d)\n", __func__, (s32)mfd->bl_level);
 	mipi  = &mfd->panel_info.mipi;
+
+	if (!mfd->panel_power_on)
+		return;
 
 	if (bl_level_old == mfd->bl_level)
 		return;
