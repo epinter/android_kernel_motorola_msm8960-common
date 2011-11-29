@@ -243,12 +243,43 @@ static struct platform_device emu_det_device = {
 
 static struct msm_otg_platform_data *otg_control_data = &msm_otg_pdata;
 
+static __init void emu_mux_ctrl_config_pin(const char *res_name, int value)
+{
+	int rc;
+	struct resource *res;
+
+	res = platform_get_resource_byname(&emu_det_device,
+		IORESOURCE_IO, res_name);
+	if (!res) {
+		pr_err("Resource %s cannot be configured\n", res_name);
+		return;
+	}
+	rc = gpio_request(res->start, res_name);
+	if (rc) {
+		pr_err("Could not request %s for GPIO %d\n", res_name,
+			res->start);
+		return;
+	}
+	rc = gpio_direction_output(res->start, value);
+	if (rc) {
+		pr_err("Could not set %s for GPIO %d\n", res_name, res->start);
+		gpio_free(res->start);
+		return;
+	}
+}
+
 static __init void mot_init_emu_detection(struct msm_otg_platform_data *ctrl_data)
 {
 	if (ctrl_data) {
 		ctrl_data->otg_control = OTG_ACCY_CONTROL;
 		ctrl_data->pmic_id_irq = 0;
 		ctrl_data->accy_pdev = &emu_det_device;
+	} else {
+		/* If platform data is not set, safely drive the MUX
+		 * CTRL pins to the USB configuration.
+		 */
+		emu_mux_ctrl_config_pin("EMU_MUX_CTRL0_GPIO", 1);
+		emu_mux_ctrl_config_pin("EMU_MUX_CTRL1_GPIO", 0);
 	}
 }
 #endif
@@ -1386,7 +1417,7 @@ static void __init msm8960_mmi_init(void)
 	pm8921_init(keypad_data, boot_mode_is_factory(), 0, 0);
 
 	/* Init the bus, but no devices at this time */
-	msm8960_spi_init(&msm8960_qup_spi_gsbi1_pdata, NULL, 0); 
+	msm8960_spi_init(&msm8960_qup_spi_gsbi1_pdata, NULL, 0);
 	msm8960_i2c_init(400000);
 	msm8960_gfx_init();
 	msm8960_spm_init();
