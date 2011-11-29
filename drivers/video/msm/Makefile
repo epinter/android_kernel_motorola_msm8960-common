@@ -74,8 +74,7 @@ obj-$(CONFIG_FB_MSM_MIPI_DSI_NOVATEK) += mipi_novatek.o
 obj-$(CONFIG_FB_MSM_MIPI_DSI_RENESAS) += mipi_renesas.o
 obj-$(CONFIG_FB_MSM_MIPI_DSI_TRULY) += mipi_truly.o
 obj-$(CONFIG_FB_MSM_MIPI_DSI_SIMULATOR) += mipi_simulator.o
-obj-$(CONFIG_FB_MSM_MIPI_MOT_CMD_HD_PT) += mipi_mot.o
-obj-$(CONFIG_FB_MSM_MIPI_MOT_VIDEO_HD_PT) += mipi_mot_video.o
+obj-$(CONFIG_FB_MSM_MIPI_DSI_MOT) += mipi_mot.o
 
 # MIPI Bridge
 obj-$(CONFIG_FB_MSM_MIPI_DSI_TC358764_DSI2LVDS) += mipi_tc358764_dsi2lvds.o
@@ -127,8 +126,9 @@ obj-$(CONFIG_FB_MSM_MIPI_RENESAS_CMD_FWVGA_PT) += mipi_renesas_cmd_fwvga_pt.o
 obj-$(CONFIG_FB_MSM_MIPI_TRULY_VIDEO_WVGA_PT) += mipi_truly_video_wvga_pt.o
 obj-$(CONFIG_FB_MSM_MIPI_SIMULATOR_VIDEO) += mipi_simulator_video.o
 obj-$(CONFIG_FB_MSM_MIPI_CHIMEI_WXGA) += mipi_chimei_wxga_pt.o
-obj-$(CONFIG_FB_MSM_MIPI_MOT_CMD_HD_PT) += mipi_mot_cmd_auo_hd_450.o
-obj-$(CONFIG_FB_MSM_MIPI_MOT_VIDEO_HD_PT) += mipi_mot_video_smd_hd_465_pt.o
+obj-$(CONFIG_FB_MSM_MIPI_DSI_MOT) += mipi_mot_common.o
+obj-$(CONFIG_FB_MSM_MIPI_DSI_MOT) += mipi_mot_cmd_auo_hd_450.o
+obj-$(CONFIG_FB_MSM_MIPI_DSI_MOT) += mipi_mot_video_smd_hd_465.o
 endif
 
 obj-$(CONFIG_FB_MSM_LCDC_PANEL) += lcdc_panel.o

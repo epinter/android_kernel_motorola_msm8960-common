@@ -1,4 +1,5 @@
 /* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011, Motorola Mobility, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -12,110 +13,73 @@
  */
 #include "msm_fb.h"
 #include "mipi_dsi.h"
-#include "mipi_mot_video.h"
+#include "mipi_mot.h"
 #include "mdp4.h"
 
-static struct mipi_dsi_panel_platform_data *mipi_mot_pdata;
+#define NUMBER_BRIGHTNESS_LEVELS 24
 
-static struct dsi_buf mot_tx_buf;
-static struct dsi_buf mot_rx_buf;
+static struct mipi_mot_panel *mot_panel;
 
-static char enter_sleep[2] = {0x10, 0x00}; /* DTYPE_DCS_WRITE */
-static char exit_sleep[2] = {0x11, 0x00}; /* DTYPE_DCS_WRITE */
+static struct mipi_dsi_phy_ctrl dsi_video_mode_phy_db = {
+	/* regulator */
+	{0x03, 0x0a, 0x04, 0x00, 0x20},
+	/* timing */
+	{0x80, 0x31, 0x13, 0x0, 0x42, 0x46, 0x18,
+	0x35, 0x20, 0x03, 0x04, 0x0},
+	/* phy ctrl */
+	{0x5f, 0x00, 0x00, 0x10},
+	/* strength */
+	{0xff, 0x00, 0x06, 0x00},
+	/* pll control */
+	{0x0, 0xC2, 0x1, 0x1A, 0x00, 0x50, 0x48, 0x63,
+	0x41, 0x0f, 0x03,
+	0x00, 0x14, 0x03, 0x00, 0x02, 0x00, 0x20, 0x00, 0x01 },
+};
 
-static char display_off[2] = {0x28, 0x00}; /* DTYPE_DCS_WRITE */
-static char display_on[2] = {0x29, 0x00}; /* DTYPE_DCS_WRITE */
+static char enter_sleep[2] = {DCS_CMD_ENTER_SLEEP_MODE, 0x00};
+static char exit_sleep[2] = {DCS_CMD_EXIT_SLEEP_MODE, 0x00};
 
-static char MTP_key_enable_1[3] = {0xf0, 0x5a, 0x5a}; /* DTYPE_DCS_WRITE */
-static char MTP_key_enable_2[3] = {0xf1, 0x5a, 0x5a}; /* DTYPE_DCS_WRITE */
+static char display_off[2] = {DCS_CMD_SET_DISPLAY_OFF, 0x00};
+static char display_on[2] = {DCS_CMD_SET_DISPLAY_ON, 0x00};
+
+static char MTP_key_enable_1[3] = {0xf0, 0x5a, 0x5a};
+static char MTP_key_enable_2[3] = {0xf1, 0x5a, 0x5a};
 
 static char  panel_condition_set[39] = {
-	0xf8,
-	0x01,
-	0x30,
-	0x00,
-	0x00,
-	0x00,
-	0x97,
-	0x00,
-	0x41,
-	0x77,
-	0x10,
-	0x28,
-	0x00,
-	0x00,
-	0x00,
-	0x00,
-	0x00,
-	0x20,
-	0x02,
-	0x00,
-	0x00,
-	0x00,
-	0x00,
-	0x00,
-	0x02,
-	0x08,
-	0x08,
-	0x20,
-	0x20,
-	0xc0,
-	0xc1,
-	0x01,
-	0x81,
-	0xc1,
-	0x00,
-	0xc8,
-	0xc1,
-	0xd3,
-	0x01}; /* DTYPE_DCS_LWRITE */
+	0xf8, 0x01, 0x30, 0x00, 0x00,
+	0x00, 0x97, 0x00, 0x41, 0x77,
+	0x10, 0x28, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x20, 0x02, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x02,
+	0x08, 0x08, 0x20, 0x20, 0xc0,
+	0xc1, 0x01, 0x81, 0xc1, 0x00,
+	0xc8, 0xc1, 0xd3, 0x01
+}; /* DTYPE_DCS_LWRITE */
 
-static char display_condition_set[4] = {0xf2, 0x80, 0x03, 0x0d}; /* DTYPE_DCS_LWRITE */
+/* DTYPE_DCS_LWRITE */
+static char display_condition_set[4] = {0xf2, 0x80, 0x03, 0x0d};
 
-static char gamma_ltps_set_update[2] = {0xf7, 0x03}; /* DTYPE_DCS_WRITE1 */
+static char gamma_ltps_set_update[2] = {0xf7, 0x03};
 
 static char gamma_set_update[2] = {0xf7, 0x01}; /* DTYPE_DCS_WRITE1 */
 
-static char etc_condition_set_source_control[4] = {0xf6, 0x00, 0x02, 0x00}; /* DTYPE_DCS_LWRITE */
+static char etc_condition_set_source_control[4] = {0xf6, 0x00, 0x02, 0x00};
 
 static char etc_condition_set_pentile_control[10] = {
-	0xb6,
-	0x0c,
-	0x02,
-	0x03,
-	0x32,
-	0xff,
-	0x44,
-	0x44,
-	0xc0,
-	0x00}; /* DTYPE_DCS_LWRITE */
+	0xb6, 0x0c, 0x02, 0x03, 0x32,
+	0xff, 0x44, 0x44, 0xc0, 0x00
+}; /* DTYPE_DCS_LWRITE */
 
 static char etc_condition_set_nvm_setting[15] = {
-	0xd9,
-	0x14,
-	0x40,
-	0x0c,
-	0xcb,
-	0xce,
-	0x6e,
-	0xc4,
-	0x07,
-	0x40,
-	0x41,
-	0xd0,
-	0x00,
-	0x60,
-	0x19}; /* DTYPE_DCS_LWRITE */
+	0xd9, 0x14, 0x40, 0x0c, 0xcb,
+	0xce, 0x6e, 0xc4, 0x07, 0x40,
+	0x41, 0xd0, 0x00, 0x60, 0x19
+}; /* DTYPE_DCS_LWRITE */
 
 static char etc_condition_set_power_control[8] = {
-	0xf4,
-	0xcf,
-	0x0a,
-	0x12,
-	0x10,
-	0x1e,
-	0x33,
-	0x02}; /* DTYPE_DCS_LWRITE */
+	0xf4, 0xcf, 0x0a, 0x12, 0x10,
+	0x1e, 0x33, 0x02
+}; /* DTYPE_DCS_LWRITE */
 
 static char gamma_settings_nit[NUMBER_BRIGHTNESS_LEVELS][26] = {
 	{
@@ -283,6 +247,7 @@ static int getElvssForGamma(int gammaIdx)
 	return 0;
 }
 
+
 #define DEFAULT_DELAY 1
 
 static struct dsi_cmd_desc mot_set_brightness_cmds[] = {
@@ -294,13 +259,14 @@ static struct dsi_cmd_desc mot_set_brightness_cmds[] = {
 		sizeof(elvss_set[0]), elvss_set[0]}
 };
 
+
 static struct dsi_cmd_desc mot_video_on_cmds1[] = {
 	{DTYPE_DCS_WRITE, 1, 0, 0, DEFAULT_DELAY,
-		sizeof(MTP_key_enable_1), MTP_key_enable_1},
+			sizeof(MTP_key_enable_1), MTP_key_enable_1},
 	{DTYPE_DCS_WRITE, 1, 0, 0, DEFAULT_DELAY,
-		sizeof(MTP_key_enable_2), MTP_key_enable_2},
+			sizeof(MTP_key_enable_2), MTP_key_enable_2},
 	{DTYPE_DCS_WRITE, 1, 0, 0, DEFAULT_DELAY,
-		sizeof(exit_sleep), exit_sleep},
+			sizeof(exit_sleep), exit_sleep},
 };
 
 static struct dsi_cmd_desc mot_video_on_cmds2[] = {
@@ -313,15 +279,20 @@ static struct dsi_cmd_desc mot_video_on_cmds2[] = {
 	{DTYPE_DCS_WRITE1, 1, 0, 0, DEFAULT_DELAY,
 		sizeof(gamma_ltps_set_update), gamma_ltps_set_update},
 	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
-		sizeof(etc_condition_set_source_control), etc_condition_set_source_control},
+		sizeof(etc_condition_set_source_control),
+			etc_condition_set_source_control},
 	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
-		sizeof(etc_condition_set_pentile_control), etc_condition_set_pentile_control},
+		sizeof(etc_condition_set_pentile_control),
+			etc_condition_set_pentile_control},
 	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
-		sizeof(etc_condition_set_nvm_setting), etc_condition_set_nvm_setting},
+		sizeof(etc_condition_set_nvm_setting),
+			etc_condition_set_nvm_setting},
 	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
-		sizeof(etc_condition_set_power_control), etc_condition_set_power_control},
+		sizeof(etc_condition_set_power_control),
+			etc_condition_set_power_control},
 	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
 		sizeof(elvss_set[0]), elvss_set[0]},
+
 };
 
 static struct dsi_cmd_desc mot_video_on_cmds3[] = {
@@ -336,102 +307,69 @@ static struct dsi_cmd_desc mot_display_off_cmds[] = {
 		sizeof(enter_sleep), enter_sleep}
 };
 
-static char manufacture_id[2] = {0xda}; /* DTYPE_DCS_READ */
-
-static struct dsi_cmd_desc mot_manufacture_id_cmd = {
-	DTYPE_DCS_READ, 1, 0, 1, 0, sizeof(manufacture_id), manufacture_id};
-
-static uint32 mipi_mot_manufacture_id(struct msm_fb_data_type *mfd)
+static int panel_enable(struct msm_fb_data_type *mfd)
 {
-	struct dsi_buf *rp, *tp;
-	struct dsi_cmd_desc *cmd;
-	uint32 *lp;
-
-	tp = &mot_tx_buf;
-	rp = &mot_rx_buf;
-	mipi_dsi_buf_init(rp);
-	mipi_dsi_buf_init(tp);
-
-	cmd = &mot_manufacture_id_cmd;
-	mipi_dsi_cmds_rx(mfd, tp, rp, cmd, 1);
-
-	lp = (uint32 *)rp->data;
-	pr_info("%s: manufacture_id[%x]=%2x", __func__, (unsigned int)manufacture_id[0], (unsigned int)rp->data[0]);
-	return *lp;
-}
-
-static uint32 mipi_mot_manufacture_id_ex(struct msm_fb_data_type *mfd, char reg)
-{
-	manufacture_id[0] = reg;
-	return mipi_mot_manufacture_id(mfd);
-}
-
-static int mipi_mot_lcd_on(struct platform_device *pdev)
-{
-	struct msm_fb_data_type *mfd;
-	struct mipi_panel_info *mipi;
-	struct msm_panel_info *pinfo;
+	struct dsi_buf *dsi_tx_buf;
 
 	pr_info("%s\n", __func__);
 
-	mfd = platform_get_drvdata(pdev);
-	if (!mfd)
-		return -ENODEV;
-	if (mfd->key != MFD_KEY)
-		return -EINVAL;
+	if (mot_panel == NULL) {
+		pr_err("%s: Invalid mot_panel\n", __func__);
+		return -1;
+	}
 
-	pinfo = &mfd->panel_info;
-	mipi  = &mfd->panel_info.mipi;
+	dsi_tx_buf = mot_panel->mot_tx_buf;
 
-	mipi_dsi_cmds_tx(mfd, &mot_tx_buf, mot_video_on_cmds1, ARRAY_SIZE(mot_video_on_cmds1));
+	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_video_on_cmds1,
+					ARRAY_SIZE(mot_video_on_cmds1));
 
-	msleep(5);
+	usleep(5000);
 
-	mipi_dsi_cmds_tx(mfd, &mot_tx_buf, mot_video_on_cmds2, ARRAY_SIZE(mot_video_on_cmds2));
+	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_video_on_cmds2,
+					ARRAY_SIZE(mot_video_on_cmds2));
 	msleep(120);
 
-	mipi_mot_manufacture_id_ex(mfd, 0xda);
-	mipi_mot_manufacture_id_ex(mfd, 0xdb);
-	mipi_mot_manufacture_id_ex(mfd, 0xdc);
+	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_video_on_cmds3,
+					ARRAY_SIZE(mot_video_on_cmds3));
 
-	mipi_dsi_cmds_tx(mfd, &mot_tx_buf, mot_video_on_cmds3, ARRAY_SIZE(mot_video_on_cmds3));
-
-	msleep(5);
+	usleep(5000);
 
 	pr_info("%s completed\n", __func__);
 
 	return 0;
 }
 
-static int mipi_mot_lcd_off(struct platform_device *pdev)
+static int panel_disable(struct msm_fb_data_type *mfd)
 {
-	struct msm_fb_data_type *mfd;
+	struct dsi_buf *dsi_tx_buf;
 
 	pr_info("%s\n", __func__);
 
-	mfd = platform_get_drvdata(pdev);
+	if (mot_panel == NULL) {
+		pr_err("%s: Invalid mot_panel\n", __func__);
+		return -1;
+	}
 
-	if (!mfd)
-		return -ENODEV;
-	if (mfd->key != MFD_KEY)
-		return -EINVAL;
+	dsi_tx_buf =  mot_panel->mot_tx_buf;
 
-	mipi_dsi_cmds_tx(mfd, &mot_tx_buf,mot_display_off_cmds,
-			ARRAY_SIZE(mot_display_off_cmds));
-
-	pr_info("%s completed\n", __func__);
+	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_display_off_cmds,
+					ARRAY_SIZE(mot_display_off_cmds));
 
 	return 0;
 }
 
-static void mipi_mot_set_backlight(struct msm_fb_data_type *mfd)
+static void panel_set_backlight(struct msm_fb_data_type *mfd)
 {
+
 	struct mipi_panel_info *mipi;
 	static int bl_level_old;
 	int idx = 0;
+	struct dsi_buf *dsi_tx_buf;
 
 	pr_debug("%s(%d)\n", __func__, (s32)mfd->bl_level);
+
 	mipi  = &mfd->panel_info.mipi;
+	dsi_tx_buf =  mot_panel->mot_tx_buf;
 
 	if (!mfd->panel_power_on)
 		return;
@@ -451,92 +389,101 @@ static void mipi_mot_set_backlight(struct msm_fb_data_type *mfd)
 	mutex_lock(&mfd->dma->ov_mutex);
 	mdp4_dsi_cmd_dma_busy_wait(mfd);
 	mdp4_dsi_blt_dmap_busy_wait(mfd);
+
 	mipi_set_tx_power_mode(0);
-	mipi_dsi_cmds_tx(mfd, &mot_tx_buf, mot_set_brightness_cmds,
-		ARRAY_SIZE(mot_set_brightness_cmds));
+	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_set_brightness_cmds,
+					ARRAY_SIZE(mot_set_brightness_cmds));
+
 	bl_level_old = mfd->bl_level;
 	mutex_unlock(&mfd->dma->ov_mutex);
 
 	pr_debug("%s(%d) completed\n", __func__, (s32)mfd->bl_level);
-
 	return;
 }
 
-static int __devinit mipi_mot_lcd_probe(struct platform_device *pdev)
+
+static int __init mipi_video_mot_hd_pt_init(void)
 {
-	void *ret;
-
-	if (pdev->id == 0) {
-		mipi_mot_pdata = pdev->dev.platform_data;
-		return 0;
-	}
-
-	ret = msm_fb_add_device(pdev);
-
-	return 0;
-}
-
-static struct platform_driver this_driver = {
-	.probe  = mipi_mot_lcd_probe,
-	.driver = {
-		.name   = "mipi_mot_video",
-	},
-};
-
-static struct msm_fb_panel_data mot_panel_data = {
-	.on		= mipi_mot_lcd_on,
-	.off		= mipi_mot_lcd_off,
-	.set_backlight = mipi_mot_set_backlight,
-};
-
-static int ch_used[3];
-
-int mipi_mot_video_device_register(struct msm_panel_info *pinfo,
-					u32 channel, u32 panel)
-{
-	struct platform_device *pdev = NULL;
 	int ret;
+	struct msm_panel_info *pinfo;
 
-	if ((channel >= 3) || ch_used[channel])
-		return -ENODEV;
+	pr_info("%s\n", __func__);
 
-	ch_used[channel] = TRUE;
+	if (msm_fb_detect_client("mipi_mot_video_smd_hd_465"))
+		return 0;
 
-	pdev = platform_device_alloc("mipi_mot_video", (panel << 8)|channel);
-	if (!pdev)
-		return -ENOMEM;
-
-	mot_panel_data.panel_info = *pinfo;
-
-	ret = platform_device_add_data(pdev, &mot_panel_data,
-		sizeof(mot_panel_data));
-
-	if (ret) {
-		printk(KERN_ERR
-		  "%s: platform_device_add_data failed!\n", __func__);
-		goto err_device_put;
+	mot_panel = mipi_mot_get_mot_panel();
+	if (mot_panel == NULL) {
+		pr_err("%s:get mot_panel failed\n", __func__);
+		return -1;  /*TODO.. need to fix this */
 	}
 
-	ret = platform_device_add(pdev);
-	if (ret) {
-		printk(KERN_ERR
-		  "%s: platform_device_register failed!\n", __func__);
-		goto err_device_put;
-	}
+	pinfo = &mot_panel->pinfo;
 
-	return 0;
+	pinfo->xres = 720;
+	pinfo->yres = 1280;
+	pinfo->type = MIPI_VIDEO_PANEL;
+	pinfo->pdest = DISPLAY_1;
+	pinfo->wait_cycle = 0;
+	pinfo->bpp = 24;
 
-err_device_put:
-	platform_device_put(pdev);
+	pinfo->lcdc.h_back_porch = 128;
+	pinfo->mipi.hbp_power_stop = FALSE;
+
+	pinfo->lcdc.h_front_porch = 128;
+	pinfo->mipi.hfp_power_stop = TRUE;
+
+	pinfo->lcdc.h_pulse_width = 16;
+	pinfo->mipi.hsa_power_stop = FALSE;
+
+	pinfo->lcdc.v_back_porch = 2;
+	pinfo->lcdc.v_front_porch = 2;
+	pinfo->lcdc.v_pulse_width = 1;
+
+	pinfo->lcdc.border_clr = 0x0;
+	pinfo->lcdc.underflow_clr = 0xff;
+	pinfo->lcdc.hsync_skew = 0;
+	pinfo->bl_max = NUMBER_BRIGHTNESS_LEVELS - 1;
+	pinfo->bl_min = 0;
+	pinfo->fb_num = 2;
+
+	pinfo->mipi.mode = DSI_VIDEO_MODE;
+	pinfo->mipi.pulse_mode_hsa_he = TRUE;
+
+
+	pinfo->mipi.eof_bllp_power_stop = TRUE;
+	pinfo->mipi.bllp_power_stop = TRUE;
+	pinfo->mipi.traffic_mode = DSI_NON_BURST_SYNCH_EVENT;
+	pinfo->mipi.dst_format = DSI_VIDEO_DST_FORMAT_RGB888;
+	pinfo->mipi.vc = 0;
+	pinfo->mipi.rgb_swap = DSI_RGB_SWAP_RGB;
+	pinfo->mipi.data_lane0 = TRUE;
+	pinfo->mipi.data_lane1 = TRUE;
+	pinfo->mipi.data_lane2 = TRUE;
+	pinfo->mipi.data_lane3 = TRUE;
+	pinfo->mipi.hs_clk_always_on = TRUE;
+
+
+	pinfo->mipi.tx_eot_append = TRUE;
+	pinfo->mipi.t_clk_post = 4;
+	pinfo->mipi.t_clk_pre = 28;
+	pinfo->mipi.stream = 0; /* dma_p */
+	pinfo->mipi.mdp_trigger = DSI_CMD_TRIGGER_SW;
+	pinfo->mipi.dma_trigger = DSI_CMD_TRIGGER_SW;
+	pinfo->mipi.frame_rate = 60;
+	pinfo->mipi.dsi_phy_db = &dsi_video_mode_phy_db;
+
+	mot_panel->panel_enable = panel_enable;
+	mot_panel->panel_disable = panel_disable;
+	mot_panel->set_backlight = panel_set_backlight;
+
+	ret = mipi_mot_device_register(pinfo, MIPI_DSI_PRIM, MIPI_DSI_PANEL_HD);
+	if (ret)
+		pr_err("%s: failed to register device!\n", __func__);
+
+	pr_info("%s device registered\n", __func__);
+
 	return ret;
 }
 
-static int __init mipi_mot_lcd_init(void)
-{
-	mipi_dsi_buf_alloc(&mot_tx_buf, DSI_BUF_SIZE);
-	mipi_dsi_buf_alloc(&mot_rx_buf, DSI_BUF_SIZE);
-
-	return platform_driver_register(&this_driver);
-}
-
-module_init(mipi_mot_lcd_init);
+module_init(mipi_video_mot_hd_pt_init);
