@@ -36,6 +36,9 @@
 #ifdef CONFIG_VFP
 #include <asm/vfp.h>
 #endif
+#ifdef CONFIG_PM8921_BMS
+#include <linux/mfd/pm8xxx/pm8921-bms.h>
+#endif
 
 #include "acpuclock.h"
 #include "clock.h"
@@ -951,6 +954,15 @@ static int msm_pm_enter(suspend_state_t state)
 #ifdef CONFIG_MSM_IDLE_STATS
 	int64_t period = 0;
 	int64_t time = msm_timer_get_sclk_time(&period);
+#ifdef CONFIG_PM8921_BMS
+	int rc;
+	int64_t mAs;
+	int64_t time_in_ms;
+
+	rc = pm8921_bms_get_cc_mas(&mAs);
+	if (rc)
+		mAs = 0;
+#endif
 #endif
 
 	if (MSM_PM_DEBUG_SUSPEND & msm_pm_debug_mask)
@@ -1025,6 +1037,29 @@ static int msm_pm_enter(suspend_state_t state)
 				time = 0;
 		}
 
+#ifdef CONFIG_PM8921_BMS
+		if (mAs != 0) {
+			int64_t e_mAs;
+			rc = pm8921_bms_get_cc_mas(&e_mAs);
+			if (rc)
+				mAs = 0;
+			else
+				mAs = e_mAs - mAs;
+		}
+		time_in_ms = time;
+		do_div(time_in_ms, NSEC_PER_MSEC);
+		if (mAs != 0 && time_in_ms > 0) {
+			int remainder;
+			int64_t mAs_abs = abs64(mAs * 1000 * 1000);
+			do_div(mAs_abs, (int)time_in_ms);
+			remainder = do_div(mAs_abs, 1000);
+			pr_info("suspend average current drain: "
+					"%s%lld.%d(mA) @%lld ns\n",
+					mAs > 0 ? "" : "-",
+					mAs_abs, remainder,
+					time);
+		}
+#endif
 		msm_pm_add_stat(MSM_PM_STAT_SUSPEND, time);
 #endif /* CONFIG_MSM_IDLE_STATS */
 	} else if (allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE]) {
