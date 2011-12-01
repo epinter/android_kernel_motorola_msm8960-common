@@ -177,6 +177,21 @@ static unsigned pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_vanquish);
 static struct pm8xxx_keypad_platform_data *keypad_data = &mmi_keypad_data;
 static int keypad_mode = MMI_KEYPAD_RESET;
 
+#define BOOT_MODE_MAX_LEN 64
+static char boot_mode[BOOT_MODE_MAX_LEN + 1];
+int __init board_boot_mode_init(char *s)
+{
+	strncpy(boot_mode, s, BOOT_MODE_MAX_LEN);
+	boot_mode[BOOT_MODE_MAX_LEN] = '\0';
+	return 1;
+}
+__setup("androidboot.mode=", board_boot_mode_init);
+
+static int boot_mode_is_factory(void)
+{
+	return !strncmp(boot_mode, "factory", BOOT_MODE_MAX_LEN);
+}
+
 #ifdef CONFIG_EMU_DETECTION
 
 #define MSM8960_HSUSB_PHYS		0x12500000
@@ -274,7 +289,7 @@ static __init void emu_mux_ctrl_config_pin(const char *res_name, int value)
 
 static __init void mot_init_emu_detection(struct msm_otg_platform_data *ctrl_data)
 {
-	if (ctrl_data) {
+	if (ctrl_data && !boot_mode_is_factory()) {
 		ctrl_data->otg_control = OTG_ACCY_CONTROL;
 		ctrl_data->pmic_id_irq = 0;
 		ctrl_data->accy_pdev = &emu_det_device;
@@ -1274,21 +1289,6 @@ static void __init register_i2c_devices(void)
 						msm8960_i2c_devices[i].len);
 	}
 #endif
-}
-
-#define BOOT_MODE_MAX_LEN 64
-static char boot_mode[BOOT_MODE_MAX_LEN + 1];
-int __init board_boot_mode_init(char *s)
-{
-	strncpy(boot_mode, s, BOOT_MODE_MAX_LEN);
-	boot_mode[BOOT_MODE_MAX_LEN] = '\0';
-	return 1;
-}
-__setup("androidboot.mode=", board_boot_mode_init);
-
-static int boot_mode_is_factory(void)
-{
-	return !strncmp(boot_mode, "factory", BOOT_MODE_MAX_LEN);
 }
 
 static unsigned sdc_detect_gpio = 20;
