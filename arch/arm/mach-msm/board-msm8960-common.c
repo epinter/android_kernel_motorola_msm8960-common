@@ -520,8 +520,6 @@ static struct msm_gpiomux_config msm8960_cam_common_configs[] = {
 
 static uint16_t msm_cam_gpio_2d_tbl[] = {
 	5, /*CAMIF_MCLK*/
-	20, /*CAMIF_I2C_DATA*/
-	21, /*CAMIF_I2C_CLK*/
 };
 
 static struct msm_gpiomux_config msm8960_cam_2d_configs[] = {
