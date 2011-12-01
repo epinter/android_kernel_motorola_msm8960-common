@@ -1186,7 +1186,10 @@ static int check_hdmi_features(void)
 static boolean hdmi_msm_has_hdcp(void)
 {
 	/* RAW_FEAT_CONFIG_ROW0_LSB, HDCP_DISABLE */
-	return (inpdw(QFPROM_BASE + 0x0238) & 0x00400000) ? FALSE : TRUE;
+/*	return (inpdw(QFPROM_BASE + 0x0238) & 0x00400000) ? FALSE : TRUE;
+	   Short-term work-around for an HDCP failure causing
+	   HDMI to not render */
+	return FALSE;
 }
 
 static boolean hdmi_msm_is_power_on(void)
@@ -2310,6 +2313,9 @@ static int hdcp_authentication_part1(void)
 			(HDMI_INP_ND(0x011C) & BIT(9)) >> 9);
 			goto error;
 		}
+
+		/* Short-term work-around for an HDCP lockup issue */
+		msleep(20);
 
 		/* 0x0168 HDCP_RCVPORT_DATA12
 		   [23:8] BSTATUS
