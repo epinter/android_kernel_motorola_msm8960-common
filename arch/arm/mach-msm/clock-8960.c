@@ -5372,7 +5372,7 @@ static struct clk_lookup msm_clocks_8960_v1[] __initdata = {
 	CLK_LOOKUP("core_clk",		gsbi9_uart_clk.c,	NULL),
 	CLK_LOOKUP("core_clk",		gsbi10_uart_clk.c,	NULL),
 	CLK_LOOKUP("core_clk",		gsbi11_uart_clk.c,	NULL),
-	CLK_LOOKUP("core_clk",		gsbi12_uart_clk.c,	NULL),
+	CLK_LOOKUP("core_clk",		gsbi12_uart_clk.c, "msm_serial_hs.1"),
 	CLK_LOOKUP("core_clk",		gsbi1_qup_clk.c,	"spi_qsd.0"),
 	CLK_LOOKUP("core_clk",		gsbi2_qup_clk.c,	NULL),
 	CLK_LOOKUP("core_clk",		gsbi3_qup_clk.c,	"qup_i2c.3"),

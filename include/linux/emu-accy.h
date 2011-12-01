@@ -43,6 +43,9 @@ struct emu_accy_platform_data {
  *  CPCAP compatibility section
  */
 
+#undef CPCAP_DEV_NAME
+#define CPCAP_DEV_NAME	"emu_det"
+
 #define CPCAP_WHISPER_MODE_PU		0x00000001
 #define CPCAP_WHISPER_ENABLE_UART	0x00000002
 #define CPCAP_WHISPER_ACCY_MASK		0xF8000000

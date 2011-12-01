@@ -64,7 +64,7 @@
 #include <mach/usbdiag.h>
 #endif
 
-#include <mach/board.h>
+#include <mach/mmi_emu_det.h>
 #include <mach/msm_iomap.h>
 #include <mach/msm_spi.h>
 #ifdef CONFIG_USB_MSM_OTG_72K
@@ -202,6 +202,78 @@ static int boot_mode_is_factory(void)
 }
 
 #ifdef CONFIG_EMU_DETECTION
+static struct platform_device emu_det_device;
+static bool core_power_init, enable_5v_init;
+static int emu_det_enable_5v(int on);
+static int emu_det_core_power(int on);
+
+static int emu_det_core_power(int on)
+{
+	int rc = 0;
+	static struct regulator *emu_vdd;
+
+	if (!core_power_init) {
+		emu_vdd = regulator_get(&emu_det_device.dev, "EMU_POWER");
+		if (IS_ERR(emu_vdd)) {
+			pr_err("unable to get EMU_POWER reg\n");
+			return PTR_ERR(emu_vdd);
+		}
+		rc = regulator_set_voltage(emu_vdd, 2700000, 2700000);
+		if (rc) {
+			pr_err("unable to set voltage EMU_POWER reg\n");
+			goto put_vdd;
+		}
+		core_power_init = true;
+	}
+
+	if (on) {
+		rc = regulator_enable(emu_vdd);
+		if (rc)
+			pr_err("failed to enable EMU_POWER reg\n");
+	} else {
+		rc = regulator_disable(emu_vdd);
+		if (rc)
+			pr_err("failed to disable EMU_POWER reg\n");
+	}
+	return rc;
+
+put_vdd:
+	if (emu_vdd)
+		regulator_put(emu_vdd);
+	emu_vdd = NULL;
+	return rc;
+}
+
+static int emu_det_enable_5v(int on)
+{
+	int rc = 0;
+	static struct regulator *emu_ext_5v;
+
+	if (!enable_5v_init) {
+		emu_ext_5v = regulator_get(&emu_det_device.dev, "8921_usb_otg");
+		if (IS_ERR(emu_ext_5v)) {
+			pr_err("unable to get 5VS_OTG reg\n");
+			return PTR_ERR(emu_ext_5v);
+		}
+		enable_5v_init = true;
+	}
+
+	if (on) {
+		rc = regulator_enable(emu_ext_5v);
+		if (rc)
+			pr_err("failed to enable 5VS_OTG reg\n");
+	} else {
+		rc = regulator_disable(emu_ext_5v);
+		if (rc)
+			pr_err("failed to disable 5VS_OTG reg\n");
+	}
+	return rc;
+}
+
+static struct mmi_emu_det_platform_data mmi_emu_det_data = {
+	.enable_5v = emu_det_enable_5v,
+	.core_power = emu_det_core_power,
+};
 
 #define MSM8960_HSUSB_PHYS		0x12500000
 #define MSM8960_HSUSB_SIZE		SZ_4K
@@ -267,6 +339,7 @@ static struct platform_device emu_det_device = {
 	.id		= -1,
 	.num_resources	= ARRAY_SIZE(resources_emu_det),
 	.resource	= resources_emu_det,
+	.dev.platform_data = &mmi_emu_det_data,
 };
 
 static struct msm_otg_platform_data *otg_control_data = &msm_otg_pdata;
@@ -296,12 +369,129 @@ static __init void emu_mux_ctrl_config_pin(const char *res_name, int value)
 	}
 }
 
-static __init void mot_init_emu_detection(struct msm_otg_platform_data *ctrl_data)
+static struct gpiomux_setting emu_det_gsbi12 = {
+	.func = GPIOMUX_FUNC_1,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct msm_gpiomux_config emu_det_gsbi12_configs[] __initdata = {
+	{
+		.gpio      = 42,	/* GSBI12 WHISPER_TX */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &emu_det_gsbi12,
+			[GPIOMUX_ACTIVE] = &emu_det_gsbi12,
+		},
+	},
+	{
+		.gpio      = 43,	/* GSBI12 WHISPER_RX */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &emu_det_gsbi12,
+			[GPIOMUX_ACTIVE] = &emu_det_gsbi12,
+		},
+	},
+};
+
+#define MSM_GSBI12_PHYS		0x12480000
+#define MSM_UART12DM_PHYS	(MSM_GSBI12_PHYS + 0x40000)
+/* GSBIn HCLK register address */
+#define GSBIn_HCLK_CTRL_REG(n)	(0x009029C0+(32*(n-1)))
+/* Bit to Turn on Clk */
+#define CLK_BRANCH_ENA		(1<<4)
+/* Protocol for UART/I2C */
+#define UART_I2C_PROTOCOL	(0x6<<4)
+
+static struct resource resources_uart_gsbi12[] = {
+	{
+		.start	= GSBI12_UARTDM_IRQ,
+		.end	= GSBI12_UARTDM_IRQ,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= MSM_UART12DM_PHYS,
+		.end	= MSM_UART12DM_PHYS + PAGE_SIZE - 1,
+		.name	= "uartdm_resource",
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= 14,
+		.end	= 15,
+		.name	= "uartdm_channels",
+		.flags	= IORESOURCE_DMA,
+	},
+	{
+		.start	= 15,
+		.end	= 14,
+		.name	= "uartdm_crci",
+		.flags	= IORESOURCE_DMA,
+	},
+};
+
+static u64 msm_uart_dm12_dma_mask = DMA_BIT_MASK(32);
+struct platform_device msm8960_device_uart_gsbi12 = {
+	.name	= "msm_serial_hs",
+	.id	= 1,
+	.num_resources	= ARRAY_SIZE(resources_uart_gsbi12),
+	.resource	= resources_uart_gsbi12,
+	.dev	= {
+		.dma_mask		= &msm_uart_dm12_dma_mask,
+		.coherent_dma_mask	= DMA_BIT_MASK(32),
+	},
+};
+
+static __init void mot_init_emu_det_resources(
+			struct msm_otg_platform_data *ctrl_data)
+{
+	if (ctrl_data)
+		msm8960_i2c_qup_gsbi12_pdata.use_gsbi_shared_mode = 1;
+}
+
+static __init void mot_emu_det_protocol_code(void)
+{
+	void *gsbi_pclk;
+	void *gsbi_ctrl;
+	uint32_t ClkStatus;
+
+	gsbi_pclk = ioremap_nocache(GSBIn_HCLK_CTRL_REG(12), 4);
+	if (IS_ERR_OR_NULL(gsbi_pclk)) {
+		pr_err("unable to map clock ctrl register\n");
+		return;
+	}
+
+	gsbi_ctrl = ioremap_nocache(MSM_GSBI12_PHYS, 4);
+	if (IS_ERR_OR_NULL(gsbi_ctrl)) {
+		iounmap(gsbi_pclk);
+		pr_err("unable to map GSBI ctrl register\n");
+		return;
+	}
+
+	ClkStatus = readl_relaxed(gsbi_pclk) & CLK_BRANCH_ENA;
+	if (!ClkStatus) {
+		writel_relaxed(CLK_BRANCH_ENA, gsbi_pclk);
+		mb();
+	}
+
+	writel_relaxed(UART_I2C_PROTOCOL, gsbi_ctrl);
+	mb();
+
+	if (!ClkStatus)
+		writel_relaxed(0x00, gsbi_pclk);
+
+	iounmap(gsbi_pclk);
+	iounmap(gsbi_ctrl);
+}
+
+static __init void mot_init_emu_detection(
+			struct msm_otg_platform_data *ctrl_data)
 {
 	if (ctrl_data && !boot_mode_is_factory()) {
 		ctrl_data->otg_control = OTG_ACCY_CONTROL;
 		ctrl_data->pmic_id_irq = 0;
 		ctrl_data->accy_pdev = &emu_det_device;
+
+		msm_gpiomux_install(emu_det_gsbi12_configs,
+			ARRAY_SIZE(emu_det_gsbi12_configs));
+		mot_emu_det_protocol_code();
 	} else {
 		/* If platform data is not set, safely drive the MUX
 		 * CTRL pins to the USB configuration.
@@ -384,7 +574,7 @@ static int mipi_dsi_panel_power(int on)
 			}
 		}
 
-		rc = regulator_set_voltage(reg_vddio, 2800000, 3000000);
+		rc = regulator_set_voltage(reg_vddio, 2700000, 2700000);
 		if (rc) {
 
 			pr_err("set_voltage l8 failed, rc=%d\n", rc);
@@ -1216,6 +1406,9 @@ static struct platform_device *mmi_devices[] __initdata = {
 	&msm_bus_cpss_fpb,
 	&msm_tsens_device,
 	&pm8xxx_leds_pwm_gpio_device,
+#ifdef CONFIG_EMU_DETECTION
+	&msm8960_device_uart_gsbi12,
+#endif
 };
 
 #ifdef CONFIG_I2C
@@ -1631,6 +1824,11 @@ static void __init msm8960_mmi_init(void)
 
 	/* Init the bus, but no devices at this time */
 	msm8960_spi_init(&msm8960_qup_spi_gsbi1_pdata, NULL, 0);
+
+#ifdef CONFIG_EMU_DETECTION
+	/* This function has to be called prior I2C init */
+	mot_init_emu_det_resources(otg_control_data);
+#endif
 	msm8960_i2c_init(400000);
 	msm8960_gfx_init();
 	msm8960_spm_init();
@@ -1785,6 +1983,8 @@ static __init void teufel_init(void)
 #ifdef CONFIG_EMU_DETECTION
 	if (system_rev <= HWREV_P2)
 		otg_control_data = NULL;
+	else
+		set_emu_detection_resource("EMU_ID_EN_GPIO", 94);
 #endif
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 #ifdef CONFIG_INPUT_CT406
@@ -1895,10 +2095,6 @@ MACHINE_END
 
 static __init void becker_init(void)
 {
-#ifdef CONFIG_EMU_DETECTION
-	set_emu_detection_resource("EMU_MUX_CTRL0_GPIO", 96);
-	set_emu_detection_resource("EMU_MUX_CTRL1_GPIO", 107);
-#endif
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_ATMEL);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
@@ -1922,10 +2118,6 @@ MACHINE_END
 
 static __init void asanti_init(void)
 {
-#ifdef CONFIG_EMU_DETECTION
-	set_emu_detection_resource("EMU_MUX_CTRL0_GPIO", 96);
-	set_emu_detection_resource("EMU_MUX_CTRL1_GPIO", 107);
-#endif
 	otg_control_data = NULL;
 	pm8921_gpios = pm8921_gpios_asanti;
 	pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_asanti);

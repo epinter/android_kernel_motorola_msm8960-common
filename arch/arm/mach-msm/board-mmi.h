@@ -69,6 +69,7 @@ extern struct pm8xxx_keypad_platform_data mmi_keypad_data;
 extern struct pm8xxx_keypad_platform_data mmi_qwerty_keypad_data;
 
 extern struct pm8xxx_keypad_platform_data mot_keypad_data;
+extern struct msm_i2c_platform_data msm8960_i2c_qup_gsbi12_pdata;
 
 void __init msm8960_sensors_init(void);
 void __init mmi_vibrator_init(void);
