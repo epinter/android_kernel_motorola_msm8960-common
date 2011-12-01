@@ -149,6 +149,8 @@ static struct pm8xxx_gpio_init pm8921_gpios_vanquish[] = {
 	PM8XXX_GPIO_OUTPUT_FUNC(26, 0, PM_GPIO_FUNC_2),	 /* Blue LED */
 	PM8XXX_GPIO_INPUT(20,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
 	PM8XXX_GPIO_OUTPUT(43,	    PM_GPIO_PULL_UP_30), /* DISP_RESET_N */
+	PM8XXX_GPIO_OUTPUT_VIN(37, PM_GPIO_PULL_UP_30,
+			PM_GPIO_VIN_L17),	/* DISP_RESET_N on P1C+ */
 	PM8XXX_GPIO_OUTPUT(42, 0),                      /* USB 5V reg enable */
 };
 
@@ -332,6 +334,7 @@ static int mipi_dsi_panel_power(int on)
 	static struct regulator *reg_vddio, *reg_l23, *reg_l2, *reg_vci;
 	static struct regulator *ext_5v_vreg;
 	static int disp_5v_en, lcd_reset;
+	static int lcd_reset1; /* this is a hacked for vanquish phone */
 	int rc;
 
 	pr_info("%s: state : %d\n", __func__, on);
@@ -431,11 +434,39 @@ static int mipi_dsi_panel_power(int on)
 			}
 		}
 
-		lcd_reset = PM8921_GPIO_PM_TO_SYS(43);
+		/*
+		 * This is a work around for Vanquish P1C HW ONLY.
+		 * There are 2 HW versions of vanquish P1C, wing board phone and
+		 * normal phone. The wing P1C phone will use GPIO_PM 43 and
+		 * normal P1C phone will use GPIO_PM 37  but both of them will
+		 * have the same HWREV.
+		 * To make both of them to work, then if HWREV=P1C, then we
+		 * will toggle both GPIOs 43 and 37, but there will be one to
+		 * be used, and there will be no harm if another doesn't use.
+		 */
+		if (is_smd()) {
+			if (system_rev == HWREV_P1C) {
+				lcd_reset = PM8921_GPIO_PM_TO_SYS(43);
+				lcd_reset1 = PM8921_GPIO_PM_TO_SYS(37);
+			} else if (system_rev > HWREV_P1C)
+				lcd_reset = PM8921_GPIO_PM_TO_SYS(37);
+			else
+				lcd_reset = PM8921_GPIO_PM_TO_SYS(43);
+		}
+
 		rc = gpio_request(lcd_reset, "disp_rst_n");
 		if (rc) {
 			pr_err("request lcd_reset failed, rc=%d\n", rc);
 			return -ENODEV;
+		}
+
+		if (is_smd() && lcd_reset1 != 0) {
+			rc = gpio_request(lcd_reset1, "disp_rst_1_n");
+			if (rc) {
+				pr_err("request lcd_reset1 failed, rc=%d\n",
+									rc);
+				return -ENODEV;
+			}
 		}
 
 		disp_5v_en = 13;
@@ -542,6 +573,10 @@ static int mipi_dsi_panel_power(int on)
 		msleep(10);
 
 		gpio_set_value_cansleep(lcd_reset, 1);
+
+		if (is_smd() && lcd_reset1 != 0)
+			gpio_set_value_cansleep(lcd_reset1, 1);
+
 		msleep(20);
 	} else {
 		rc = regulator_disable(reg_l2);
@@ -589,6 +624,9 @@ static int mipi_dsi_panel_power(int on)
 			}
 		}
 		gpio_set_value_cansleep(lcd_reset, 0);
+		if (is_smd() && lcd_reset1 != 0)
+			gpio_set_value_cansleep(lcd_reset1, 0);
+
 		if (!(is_smd()) && system_rev >= HWREV_P2)
 			gpio_set_value(disp_5v_en, 0);
 		else if (is_smd())
