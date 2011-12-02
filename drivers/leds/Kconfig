@@ -353,6 +353,12 @@ config LEDS_PWM_GPIO
 	help
 	  This option enables support for GPIO leds with pwm driven blinking
 
+config LEDS_PM8XXX_RGB
+	tristate "Support for PMIC breathing RGB LED"
+	depends on LEDS_CLASS
+	help
+	  This option enables support for PMIC breathing RGB LED
+
 config LEDS_REGULATOR
 	tristate "REGULATOR driven LED support"
 	depends on LEDS_CLASS

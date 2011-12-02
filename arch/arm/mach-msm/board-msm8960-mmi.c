@@ -1289,16 +1289,16 @@ static struct led_pwm_gpio pm8xxx_pwm_gpio_leds[] = {
 	},
 };
 
-static struct led_pwm_gpio_platform_data pm8xxx_leds_pwm_gpio_pdata = {
+static struct led_pwm_gpio_platform_data pm8xxx_rgb_leds_pdata = {
 	.num_leds = ARRAY_SIZE(pm8xxx_pwm_gpio_leds),
 	.leds = pm8xxx_pwm_gpio_leds,
 };
 
-static struct platform_device pm8xxx_leds_pwm_gpio_device = {
-	.name	= "pwm_gpio_leds",
+static struct platform_device pm8xxx_rgb_leds_device = {
+	.name	= "pm8xxx_rgb_leds",
 	.id	= -1,
 	.dev	= {
-		.platform_data = &pm8xxx_leds_pwm_gpio_pdata,
+		.platform_data = &pm8xxx_rgb_leds_pdata,
 	},
 };
 
@@ -1405,10 +1405,10 @@ static struct platform_device *mmi_devices[] __initdata = {
 	&msm_bus_sys_fpb,
 	&msm_bus_cpss_fpb,
 	&msm_tsens_device,
-	&pm8xxx_leds_pwm_gpio_device,
 #ifdef CONFIG_EMU_DETECTION
 	&msm8960_device_uart_gsbi12,
 #endif
+	&pm8xxx_rgb_leds_device,
 };
 
 #ifdef CONFIG_I2C
