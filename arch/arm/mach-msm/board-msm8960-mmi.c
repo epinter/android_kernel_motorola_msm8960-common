@@ -1534,18 +1534,40 @@ static int mot_tcmd_export_gpio(void)
 		return -ENODEV;
 	}
 	/* Set Factory Kill Disable to OUTPUT/LOW to disable the circuitry that
-	 * powers down upon factory cable removal.  This should be re-added with
-	 * condition based on hardware/product revision.
+	 * powers down upon factory cable removal.
+	 *
+	 * Disabling is only needed for HW revision 'A' hardware:
+	 * Teufel:   {'A', "M1",   0x2100}
+	 * Asanti:   {'A', "M1",   0x2100}
+	 * Becker:   {'A', "M1",   0x2100}
+	 * Qinara:   {'A', "P1",   0x8100}
+	 * Vanquish: {'A', "P1",   0x8100}
+	 * Volta:    {'A', "M1",   0x2100}
 	 */
-	rc = gpio_direction_output(75, 0);
-	if (rc) {
-		pr_err("set output Factory Kill Disable failed, rc=%d\n", rc);
-		return -ENODEV;
-	}
-	rc = gpio_export(75, 0);
-	if (rc) {
-		pr_err("export Factory Kill Disable failed, rc=%d\n", rc);
-		return -ENODEV;
+	if ((system_rev == HWREV_M1) || (system_rev == HWREV_P1)) {
+		pr_info("Disabling Factory Kill.\n");
+		rc = gpio_direction_output(75, 0);
+		if (rc) {
+			pr_err("Factory Kill Disable, output error: %d\n", rc);
+			return -ENODEV;
+		}
+		rc = gpio_export(75, 0);
+		if (rc) {
+			pr_err("Factory Kill Disable, export error: %d\n", rc);
+			return -ENODEV;
+		}
+	} else {
+		pr_info("Enabling Factory Kill.\n");
+		rc = gpio_direction_output(75, 1);
+		if (rc) {
+			pr_err("Factory Kill Enable, output error: %d\n", rc);
+			return -ENODEV;
+		}
+		rc = gpio_export(75, 0);
+		if (rc) {
+			pr_err("Factory Kill Enable, export error: %d\n", rc);
+			return -ENODEV;
+		}
 	}
 
 	rc = gpio_request(PM8921_GPIO_PM_TO_SYS(36), "SIM_DET");
