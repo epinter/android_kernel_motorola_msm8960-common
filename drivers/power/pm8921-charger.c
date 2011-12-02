@@ -3837,6 +3837,70 @@ static int pm8921_charger_suspend(struct device *dev)
 
 	return 0;
 }
+
+static ssize_t force_chg_usb_suspend_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	unsigned long r;
+	unsigned long mode;
+
+	r = strict_strtoul(buf, 0, &mode);
+	if (r) {
+		pr_err("Invalid usb suspend mode value = %lu\n", mode);
+		r = -EINVAL;
+		return r;
+	}
+
+	if (!the_chip) {
+		pr_err("chip not valid\n");
+		r = -ENODEV;
+		return r;
+	}
+
+	if (!the_chip->factory_mode) {
+		pr_err("Only allowed in factory mode\n");
+		r = -EPERM;
+		return r;
+	}
+
+	r = pm_chg_masked_write(the_chip, CHG_CNTRL_3, CHG_USB_SUSPEND_BIT,
+				mode ? CHG_USB_SUSPEND_BIT : 0);
+
+	return r ? r : count;
+}
+
+static ssize_t force_chg_usb_suspend_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	int state;
+	int ret;
+	u8 value;
+
+	if (!the_chip) {
+		pr_err("chip not valid\n");
+		state = -ENODEV;
+		goto end;
+	}
+
+	ret = pm8xxx_readb(the_chip->dev->parent, CHG_CNTRL_3, &value);
+	if (ret) {
+		pr_err("pm8xxx_readb CHG_CNTRL_3 failed ret = %d\n", ret);
+		state = -EFAULT;
+		goto end;
+	}
+
+	state = (CHG_USB_SUSPEND_BIT & value) ? 1 : 0;
+
+end:
+	return sprintf(buf, "%d\n", state);
+}
+
+static DEVICE_ATTR(force_chg_usb_suspend, 0644,
+		force_chg_usb_suspend_show,
+		force_chg_usb_suspend_store);
+
 static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -3903,6 +3967,13 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	rc = pm8921_chg_hw_init(chip);
 	if (rc) {
 		pr_err("couldn't init hardware rc=%d\n", rc);
+		goto free_chip;
+	}
+
+	rc = device_create_file(&pdev->dev,
+				&dev_attr_force_chg_usb_suspend);
+	if (rc) {
+		pr_err("couldn't create force_chg_usb_suspend\n");
 		goto free_chip;
 	}
 
@@ -4017,6 +4088,7 @@ static int __devexit pm8921_charger_remove(struct platform_device *pdev)
 {
 	struct pm8921_chg_chip *chip = platform_get_drvdata(pdev);
 
+	device_remove_file(&pdev->dev, &dev_attr_force_chg_usb_suspend);
 	unregister_reboot_notifier(&pm8921_charging_reboot_notifier);
 	free_irqs(chip);
 	platform_set_drvdata(pdev, NULL);
