@@ -71,7 +71,7 @@ extern int msm_pm8921_regulator_pdata_len __devinitdata;
 #define MSM_FB_EXT_BUF_SIZE	0
 #endif
 
-#ifdef CONFIG_FB_MSM_OVERLAY_WRITEBACK
+#ifdef CONFIG_FB_MSM_OVERLAY0_WRITEBACK
 /* width x height x 3 bpp x 2 frame buffer */
 #define MSM_FB_WRITEBACK_SIZE (1280 * 720 * 3 * 2)
 #define MSM_FB_WRITEBACK_OFFSET  \
