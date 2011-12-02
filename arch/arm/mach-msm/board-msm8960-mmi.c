@@ -1303,7 +1303,7 @@ static struct i2c_board_info cyttsp_i2c_boardinfo[] __initdata = {
 #ifdef CONFIG_TOUCHSCREEN_ATMXT
 static struct i2c_board_info atmxt_i2c_boardinfo[] __initdata = {
 	{
-		I2C_BOARD_INFO(ATMXT_I2C_NAME, 0x42),
+		I2C_BOARD_INFO(ATMXT_I2C_NAME, 0x4A),
 		.platform_data = &ts_platform_data_atmxt,
 		.irq = MSM_GPIO_TO_INT(ATMXT_GPIO_INTR),
 	},

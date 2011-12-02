@@ -3412,11 +3412,11 @@ void mot_setup_touch_atmxt(void)
 
 	pr_info("%s: setting up platform data\n", __func__);
 	/* Setup settings */
-	ts_platform_data_atmxt.sett[0] = &setting_T7;
-	ts_platform_data_atmxt.sett[1] = &setting_T8;
-	ts_platform_data_atmxt.sett[2] = &setting_T9;
-	ts_platform_data_atmxt.sett[3] = &setting_T46;
-	ts_platform_data_atmxt.sett[4] = &setting_T48;
+	ts_platform_data_atmxt.sett[7] = &setting_T7;
+	ts_platform_data_atmxt.sett[8] = &setting_T8;
+	ts_platform_data_atmxt.sett[9] = &setting_T9;
+	ts_platform_data_atmxt.sett[46] = &setting_T46;
+	ts_platform_data_atmxt.sett[48] = &setting_T48;
 
 	/* set up firmware related stuff. We need a better way of doing it */
 	ts_firmware.img = firmwr;
