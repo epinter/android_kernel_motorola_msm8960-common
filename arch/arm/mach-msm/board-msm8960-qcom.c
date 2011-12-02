@@ -524,13 +524,6 @@ static struct platform_device mipi_dsi2lvds_bridge_device = {
 	.dev.platform_data = &mipi_dsi2lvds_pdata,
 };
 
-#define MDM2AP_ERRFATAL			70
-#define AP2MDM_ERRFATAL			95
-#define MDM2AP_STATUS			69
-#define AP2MDM_STATUS			94
-#define AP2MDM_PMIC_RESET_N		80
-#define AP2MDM_KPDPWR_N			81
-
 static struct resource mdm_resources[] = {
 	{
 		.start	= MDM2AP_ERRFATAL,

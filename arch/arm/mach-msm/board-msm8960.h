@@ -34,6 +34,13 @@ extern struct pm8921_regulator_platform_data
 
 extern int msm_pm8921_regulator_pdata_len __devinitdata;
 
+#define MDM2AP_ERRFATAL			70
+#define AP2MDM_ERRFATAL			95
+#define MDM2AP_STATUS			69
+#define AP2MDM_STATUS			94
+#define AP2MDM_PMIC_RESET_N		80
+#define AP2MDM_KPDPWR_N			81
+
 #define GPIO_VREG_ID_EXT_5V		0
 #define GPIO_VREG_ID_EXT_L2		1
 #define GPIO_VREG_ID_EXT_3P3V		2

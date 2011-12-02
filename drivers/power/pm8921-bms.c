@@ -925,7 +925,7 @@ static void calculate_cc_mas(struct pm8921_bms_chip *chip, int64_t *val,
 	rc = read_cc(the_chip, coulumb_counter);
 	cc_voltage_uv = (int64_t)*coulumb_counter;
 	cc_voltage_uv = cc_to_microvolt(chip, cc_voltage_uv);
-	cc_voltage_uv = cc_adjust_for_gain(chip, cc_voltage_uv);
+	cc_voltage_uv = pm8xxx_cc_adjust_for_gain(cc_voltage_uv);
 	pr_debug("cc_voltage_uv = %lld microvolts\n", cc_voltage_uv);
 	cc_uvs = ccmicrovolt_to_uvs(cc_voltage_uv);
 	pr_debug("cc_uvs = %lld micro_volt_seconds\n", cc_uvs);
