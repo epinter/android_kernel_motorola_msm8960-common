@@ -456,7 +456,8 @@ static int mipi_dsi_panel_power(int on)
 				lcd_reset = PM8921_GPIO_PM_TO_SYS(37);
 			else
 				lcd_reset = PM8921_GPIO_PM_TO_SYS(43);
-		}
+		} else
+			lcd_reset = PM8921_GPIO_PM_TO_SYS(43);
 
 		rc = gpio_request(lcd_reset, "disp_rst_n");
 		if (rc) {
