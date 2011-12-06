@@ -1143,14 +1143,14 @@ static void w1_gpio_enable_regulators(int enable)
 
 	if (enable) {
 		if (!IS_ERR_OR_NULL(vdd1)) {
-			rc = regulator_set_voltage(vdd1, 2700000, 2700000);
+			rc = regulator_set_voltage(vdd1, 1850000, 2950000);
 			if (!rc)
 				rc = regulator_enable(vdd1);
 			if (rc)
 				pr_err("w1_gpio Failed 8921_l7 to 2.7V\n");
 		}
 		if (!IS_ERR_OR_NULL(vdd2)) {
-			rc = regulator_set_voltage(vdd2, 2700000, 2700000);
+			rc = regulator_set_voltage(vdd2, 2700000, 2950000);
 			if (!rc)
 				rc = regulator_enable(vdd2);
 			if (rc)
