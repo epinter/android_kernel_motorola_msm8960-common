@@ -17,6 +17,7 @@
 
 /* #define DEBUG */
 #define DEV_DBG_PREFIX "EXT_COMMON: "
+#define SUPPORT_RAW_EDID_READS
 
 #include "msm_fb.h"
 #include "hdmi_msm.h"
@@ -251,6 +252,44 @@ static ssize_t hdmi_common_rda_edid_modes(struct device *dev,
 	ret += snprintf(buf+ret, PAGE_SIZE-ret, "\n");
 	return ret;
 }
+
+#ifdef SUPPORT_RAW_EDID_READS
+static ssize_t hdmi_common_rda_edid_data(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	uint32 ndx, start, end;
+	ssize_t ret = 0;
+	int status;
+	int block;
+
+	/* EDID_BLOCK_SIZE[0x80] Each page size in the EDID ROM */
+	uint8 edid_buf[(0x80 * 4) + 8]; /* +8 to avoid KW error */
+	memset(edid_buf, 0, sizeof(edid_buf));
+
+	/* Return no data if HDMI is not connected */
+	if (!external_common_state->hpd_state)
+		return 0;
+
+	/* Read all 4 Blocks of EDID data */
+	for (block = 0; block < 4; block++) {
+		DEV_DBG("READING EDID BLOCK %d\n", block);
+		start = 0x80 * block;
+		end = start + 0x80;
+		status = external_common_state->read_edid_block(block,
+							&edid_buf[start]);
+		for (ndx = start; ndx < end; ndx += 8) {
+			ret += snprintf(buf + ret, PAGE_SIZE - ret,
+					"%02x%02x%02x%02x%02x%02x%02x%02x",
+					edid_buf[ndx+0], edid_buf[ndx+1],
+					edid_buf[ndx+2], edid_buf[ndx+3],
+					edid_buf[ndx+4], edid_buf[ndx+5],
+					edid_buf[ndx+6], edid_buf[ndx+7]);
+		}
+	}
+
+	return ret;
+}
+#endif
 
 static ssize_t hdmi_common_rda_hdcp(struct device *dev,
 	struct device_attribute *attr, char *buf)
@@ -576,6 +615,9 @@ static DEVICE_ATTR(video_mode_str, S_IRUGO, external_common_rda_video_mode_str,
 static DEVICE_ATTR(connected, S_IRUGO, external_common_rda_connected, NULL);
 #ifdef CONFIG_FB_MSM_HDMI_COMMON
 static DEVICE_ATTR(edid_modes, S_IRUGO, hdmi_common_rda_edid_modes, NULL);
+#ifdef SUPPORT_RAW_EDID_READS
+static DEVICE_ATTR(edid_data, S_IRUGO, hdmi_common_rda_edid_data, NULL);
+#endif
 static DEVICE_ATTR(hpd, S_IRUGO | S_IWUGO, hdmi_common_rda_hpd,
 	hdmi_common_wta_hpd);
 static DEVICE_ATTR(hdcp, S_IRUGO, hdmi_common_rda_hdcp, NULL);
@@ -592,6 +634,9 @@ static struct attribute *external_common_fs_attrs[] = {
 	&dev_attr_video_mode_str.attr,
 	&dev_attr_connected.attr,
 #ifdef CONFIG_FB_MSM_HDMI_COMMON
+#ifdef SUPPORT_RAW_EDID_READS
+	&dev_attr_edid_data.attr,
+#endif
 	&dev_attr_edid_modes.attr,
 	&dev_attr_hdcp.attr,
 	&dev_attr_hpd.attr,
