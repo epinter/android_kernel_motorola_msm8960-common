@@ -35,9 +35,9 @@ VREG_CONSUMERS(L2) = {
 	REGULATOR_SUPPLY("8921_l2",		NULL),
 	REGULATOR_SUPPLY("dsi_vdda",		"mipi_dsi.1"),
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_motsoc1.0"),
-	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_mt9m114.0"),
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_imx074.0"),
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_ov2720.0"),
+	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_mt9m114.0"),
 };
 VREG_CONSUMERS(L3) = {
 	REGULATOR_SUPPLY("8921_l3",		NULL),
@@ -77,12 +77,14 @@ VREG_CONSUMERS(L11) = {
 	REGULATOR_SUPPLY("8921_l11",		NULL),
 	REGULATOR_SUPPLY("cam_vana",		"msm_camera_imx074.0"),
 	REGULATOR_SUPPLY("cam_vana",		"msm_camera_ov2720.0"),
+	REGULATOR_SUPPLY("cam_vana",		"msm_camera_mt9m114.0"),
 	REGULATOR_SUPPLY("disp_vci",		"mipi_dsi.1"),
 };
 VREG_CONSUMERS(L12) = {
 	REGULATOR_SUPPLY("8921_l12",		NULL),
 	REGULATOR_SUPPLY("cam_vdig",		"msm_camera_imx074.0"),
 	REGULATOR_SUPPLY("cam_vdig",		"msm_camera_ov2720.0"),
+	REGULATOR_SUPPLY("cam_vdig",		"msm_camera_mt9m114.0"),
 };
 VREG_CONSUMERS(L14) = {
 	REGULATOR_SUPPLY("8921_l14",		NULL),
@@ -95,6 +97,7 @@ VREG_CONSUMERS(L16) = {
 	REGULATOR_SUPPLY("8921_l16",		NULL),
 	REGULATOR_SUPPLY("cam_vaf",		"msm_camera_imx074.0"),
 	REGULATOR_SUPPLY("cam_vaf",		"msm_camera_ov2720.0"),
+	REGULATOR_SUPPLY("cam_vaf",		"msm_camera_mt9m114.0"),
 };
 VREG_CONSUMERS(L17) = {
 	REGULATOR_SUPPLY("8921_l17",		NULL),
@@ -198,6 +201,7 @@ VREG_CONSUMERS(LVS5) = {
 	REGULATOR_SUPPLY("8921_lvs5",		NULL),
 	REGULATOR_SUPPLY("cam_vio",		"msm_camera_imx074.0"),
 	REGULATOR_SUPPLY("cam_vio",		"msm_camera_ov2720.0"),
+	REGULATOR_SUPPLY("cam_vio",		"msm_camera_mt9m114.0"),
 };
 VREG_CONSUMERS(LVS6) = {
 	REGULATOR_SUPPLY("8921_lvs6",		NULL),
