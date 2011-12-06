@@ -488,6 +488,7 @@ static int msm_otg_link_reset(struct msm_otg *motg)
 	writel_relaxed(0x0, USB_AHBBURST);
 	writel_relaxed(0x00, USB_AHBMODE);
 
+	ulpi_init(motg);
 	return 0;
 }
 
@@ -506,7 +507,6 @@ static int msm_otg_reset(struct otg_transceiver *otg)
 		return ret;
 	}
 
-	ulpi_init(motg);
 
 	ret = msm_otg_link_reset(motg);
 	if (ret) {

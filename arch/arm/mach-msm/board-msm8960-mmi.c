@@ -198,6 +198,8 @@ static struct pm8xxx_gpio_init *pm8921_gpios = pm8921_gpios_vanquish;
 static unsigned pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_vanquish);
 static struct pm8xxx_keypad_platform_data *keypad_data = &mmi_keypad_data;
 static int keypad_mode = MMI_KEYPAD_RESET;
+/* Ulpi register setting  to increase eye digram strength for qinara HW */
+static int phy_settings[] = {0x34, 0x82, 0x3f, 0x81, -1};
 
 #define BOOT_MODE_MAX_LEN 64
 static char boot_mode[BOOT_MODE_MAX_LEN + 1];
@@ -2028,6 +2030,10 @@ MACHINE_END
 
 static __init void qinara_init(void)
 {
+	/* For qinara HW, to improve the signal strength
+	 * extra settings to ulpi_registers are needed
+	 */
+	msm_otg_pdata.phy_init_seq = phy_settings;
 #ifdef CONFIG_EMU_DETECTION
 	if (system_rev < HWREV_P2)
 		otg_control_data = NULL;
