@@ -142,10 +142,8 @@ static void melfas_ts_get_data(struct melfas_ts_data *ts)
 					 mtouch_info[i].xpos);
 			input_report_abs(ts->input_dev, ABS_MT_POSITION_Y,
 					 mtouch_info[i].ypos);
-			input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR,
+			input_report_abs(ts->input_dev, ABS_MT_PRESSURE,
 					 mtouch_info[i].strength);
-			input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR,
-					 mtouch_info[i].width);
 			input_mt_sync(ts->input_dev);
 
 			if (tsdebug >= TS_DBG_LVL_1)
@@ -333,13 +331,10 @@ static int melfas_ts_probe(struct i2c_client *client,
 			     TS_MAX_X_COORD, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_Y, 0,
 			     TS_MAX_Y_COORD, 0, 0);
-	input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0,
+	input_set_abs_params(ts->input_dev, ABS_MT_PRESSURE, 0,
 			     TS_MAX_Z_TOUCH, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_MT_TRACKING_ID, 0,
 			     MELFAS_MAX_TOUCH, 0, 0);
-	input_set_abs_params(ts->input_dev, ABS_MT_WIDTH_MAJOR, 0,
-			     TS_MAX_W_TOUCH, 0, 0);
-
 
 	ret = input_register_device(ts->input_dev);
 	if (ret) {
