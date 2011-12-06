@@ -2817,17 +2817,27 @@ msmsdcc_slot_status(struct msmsdcc_host *host)
 {
 	int status;
 	unsigned int gpio_no = host->plat->status_gpio;
+	static unsigned int allocated;
 
-	status = gpio_request(gpio_no, "SD_HW_Detect");
-	if (status) {
-		pr_err("%s: %s: Failed to request GPIO %d\n",
-			mmc_hostname(host->mmc), __func__, gpio_no);
-	} else {
-		status = gpio_direction_input(gpio_no);
-		if (!status)
-			status = !gpio_get_value_cansleep(gpio_no);
-		gpio_free(gpio_no);
+	if (!allocated) {
+		status = gpio_request(gpio_no, "SD_HW_Detect");
+		if (status) {
+			pr_err("%s: %s: Failed to request GPIO %d\n",
+				mmc_hostname(host->mmc), __func__, gpio_no);
+			goto out;
+		} else {
+			status = gpio_direction_input(gpio_no);
+			if (status) {
+				pr_err("%s: %s: Failed to configure GPIO %d\n",
+				mmc_hostname(host->mmc), __func__, gpio_no);
+				goto out;
+			}
+			allocated = 1;
+			gpio_export(gpio_no, 0);
+		}
 	}
+	status = !gpio_get_value_cansleep(gpio_no);
+out:
 	return status;
 }
 
