@@ -2543,7 +2543,7 @@ struct platform_device *common_devices[] __initdata = {
 #ifdef WE_NEED_EXT_L2
 	&msm8960_device_ext_l2_vreg,
 #endif
-	&msm8960_device_ssbi_pm8921,
+	&msm8960_device_ssbi_pmic,
 	&msm8960_device_qup_spi_gsbi1,
 	&msm8960_device_qup_i2c_gsbi3,
 	&msm8960_device_qup_i2c_gsbi4,
