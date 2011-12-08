@@ -46,7 +46,7 @@ static struct msm_camera_i2c_reg_conf mt9m114_stop_settings[] = {
 };
 static struct msm_camera_i2c_reg_dt_conf mt9m114_recommend_settings[] = {
 
-	//MT9M114_1280x720_720p_MIPI_768_fixed_30fps_EXTCLK_24
+	//MT9M114_1280x960_MIPI_768_fixed_30fps_EXTCLK_24
 	{0x098E, 0,1},
 	{0xC97E, 0x01,1},            //cam_sysctl_pll_enable = 1
 	{0xC980, 0x0120,2},          //cam_sysctl_pll_divider_m_n = 288
@@ -58,39 +58,39 @@ static struct msm_camera_i2c_reg_dt_conf mt9m114_recommend_settings[] = {
 	{0xC98E, 0x071D,2},          //cam_port_mipi_timing_t_clk_trail_clk_zero = 1821
 	{0xC990, 0x0006,2},          //cam_port_mipi_timing_t_lpx = 6
 	{0xC992, 0x0A0C,2},          //cam_port_mipi_timing_init_timing = 2572
-	{0xC800, 0x007C,2},          //cam_sensor_cfg_y_addr_start = 124
+	{0xC800, 0x0004,2},          //cam_sensor_cfg_y_addr_start = 4
 	{0xC802, 0x0004,2},          //cam_sensor_cfg_x_addr_start = 4
-	{0xC804, 0x0353,2},          //cam_sensor_cfg_y_addr_end = 851
+	{0xC804, 0x03CB,2},          //cam_sensor_cfg_y_addr_end = 971
 	{0xC806, 0x050B,2},          //cam_sensor_cfg_x_addr_end = 1291
 	{0xC808, 0x02DC,2},          //cam_sensor_cfg_pixclk = 48000000
 	{0xC80A, 0x6C00,2},          //cam_sensor_cfg_pixclk = 48000000
 	{0xC80C, 0x0001,2},          //cam_sensor_cfg_row_speed = 1
 	{0xC80E, 0x00DB,2},          //cam_sensor_cfg_fine_integ_time_min = 219
-	{0xC810, 0x05BD,2},          //cam_sensor_cfg_fine_integ_time_max = 1469
-	{0xC812, 0x03E8,2},          //cam_sensor_cfg_frame_length_lines = 1000
-	{0xC814, 0x0640,2},          //cam_sensor_cfg_line_length_pck = 1600
+	{0xC810, 0x05B3,2},          //cam_sensor_cfg_fine_integ_time_max = 1459
+	{0xC812, 0x03EE,2},          //cam_sensor_cfg_frame_length_lines = 1006
+	{0xC814, 0x0636,2},          //cam_sensor_cfg_line_length_pck = 1590
 	{0xC816, 0x0060,2},          //cam_sensor_cfg_fine_correction = 96
-	{0xC818, 0x02D3,2},          //cam_sensor_cfg_cpipe_last_row = 723
+	{0xC818, 0x03C3,2},          //cam_sensor_cfg_cpipe_last_row = 963
 	{0xC826, 0x0020,2},          //cam_sensor_cfg_reg_0_data = 32
 	{0xC834, 0x0000,2},          //cam_sensor_control_read_mode = 0
 	{0xC854, 0x0000,2},          //cam_crop_window_xoffset = 0
 	{0xC856, 0x0000,2},          //cam_crop_window_yoffset = 0
 	{0xC858, 0x0500,2},          //cam_crop_window_width = 1280
-	{0xC85A, 0x02D0,2},          //cam_crop_window_height = 720
+	{0xC85A, 0x03C0,2},          //cam_crop_window_height = 960
 	{0xC85C, 0x03,1},            //cam_crop_cropmode = 3
 	{0xC868, 0x0500,2},          //cam_output_width = 1280
-	{0xC86A, 0x02D0,2},          //cam_output_height = 720
+	{0xC86A, 0x03C0,2},          //cam_output_height = 960
 	{0xC878, 0x00,1},            //cam_aet_aemode = 0
-	{0xC88C, 0x1E00,2},          //cam_aet_max_frame_rate = 7680
-	{0xC88E, 0x1E00,2},          //cam_aet_min_frame_rate = 7680
+	{0xC88C, 0x1E02,2},          //cam_aet_max_frame_rate = 7682
+	{0xC88E, 0x1E02,2},          //cam_aet_min_frame_rate = 7682
 	{0xC914, 0x0000,2},          //cam_stat_awb_clip_window_xstart = 0
 	{0xC916, 0x0000,2},          //cam_stat_awb_clip_window_ystart = 0
 	{0xC918, 0x04FF,2},          //cam_stat_awb_clip_window_xend = 1279
-	{0xC91A, 0x02CF,2},          //cam_stat_awb_clip_window_yend = 719
+	{0xC91A, 0x03BF,2},          //cam_stat_awb_clip_window_yend = 959
 	{0xC91C, 0x0000,2},          //cam_stat_ae_initial_window_xstart = 0
 	{0xC91E, 0x0000,2},          //cam_stat_ae_initial_window_ystart = 0
 	{0xC920, 0x00FF,2},          //cam_stat_ae_initial_window_xend = 255
-	{0xC922, 0x008F,2},          //cam_stat_ae_initial_window_yend = 143
+	{0xC922, 0x00BF,2},          //cam_stat_ae_initial_window_yend = 191
 
 	//Sensor optimization
 	{0x316A, 0x8270,2},
@@ -1017,17 +1017,17 @@ static struct msm_camera_i2c_conf_array mt9m114_init_conf[] = {
 static struct msm_sensor_output_info_t mt9m114_dimensions[] = {
 	{
 		.x_output = 0x500,
-		.y_output = 0x2D0,
+		.y_output = 0x3C0,
 		.line_length_pclk = 0x500,
-		.frame_length_lines = 0x2D0,
+		.frame_length_lines = 0x3C0,
 		.vt_pixel_clk = 96000000,
 		.op_pixel_clk = 96000000,
 	},
 	{
 		.x_output = 0x500,
-		.y_output = 0x2D0,
+		.y_output = 0x3C0,
 		.line_length_pclk = 0x500,
-		.frame_length_lines = 0x2D0,
+		.frame_length_lines = 0x3C0,
 		.vt_pixel_clk = 96000000,
 		.op_pixel_clk = 96000000,
 	},
