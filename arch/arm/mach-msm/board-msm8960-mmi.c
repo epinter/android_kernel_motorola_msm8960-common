@@ -523,6 +523,8 @@ static __init void mot_init_emu_detection(
 #define DEFAULT_PANEL_NAME "mipi_mot_cmd_auo_hd_450"
 #elif defined(CONFIG_FB_MSM_MIPI_MOT_VIDEO_HD_PT)
 #define DEFAULT_PANEL_NAME "mipi_mot_video_smd_hd_465"
+#elif defined(CONFIG_FB_MSM_MIPI_MOT_CMD_QHD_PT)
+#define DEFAULT_PANEL_NAME "mipi_mot_cmd_auo_qhd_430"
 #else
 #define DEFAULT_PANEL_NAME ""
 #endif
