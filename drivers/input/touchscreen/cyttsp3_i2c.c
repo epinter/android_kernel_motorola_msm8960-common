@@ -48,14 +48,23 @@ static s32 ttsp_i2c_read_block_data(void *handle, u8 addr,
 	int retval = 0;
 
 	retval = i2c_master_send(ts->client, &addr, 1);
-	if (retval < 0)
+	if (retval < 0) {
+		pr_info("%s: i2c_master_send() failed. retval: %d\n",
+				__func__,
+				retval);
 		return retval;
-	else if (retval != 1)
-		return ~EIO;
+	}
+	else if (retval != 1 )
+	{
+		pr_info("%s: i2c_master_send() failed. retval: %d\n",
+				__func__,
+				retval);
+		return -EIO;
+	}
 
 	retval = i2c_master_recv(ts->client, values, length);
 
-	return (retval < 0) ? retval : retval != length ? ~EIO : 0;
+	return (retval < 0) ? retval : retval != length ? -EIO : 0;
 }
 
 static s32 ttsp_i2c_write_block_data(void *handle, u8 addr,
@@ -69,7 +78,7 @@ static s32 ttsp_i2c_write_block_data(void *handle, u8 addr,
 
 	retval = i2c_master_send(ts->client, ts->wr_buf, length+1);
 
-	return (retval < 0) ? retval : retval != length+1 ? ~EIO : 0;
+	return (retval < 0) ? retval : retval != length+1 ? -EIO : 0;
 }
 
 static int __devinit cyttsp_i2c_probe(struct i2c_client *client,
@@ -78,7 +87,7 @@ static int __devinit cyttsp_i2c_probe(struct i2c_client *client,
 	struct cyttsp_i2c *ts;
 	int retval = 0;
 
-	pr_err("%s: Starting %s probe...\n", __func__, CY3_I2C_NAME);
+	pr_info("%s: Starting %s probe...\n", __func__, CY3_I2C_NAME);
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		pr_err("%s: fail check I2C functionality\n", __func__);
@@ -148,12 +157,12 @@ static int cyttsp_i2c_resume(struct i2c_client *client)
 #endif
 
 static const struct i2c_device_id cyttsp_i2c_id[] = {
-	{ CYPRESS_TTSP3_NAME, 0 },  { }
+	{ CY3_I2C_NAME, 0 },  { }
 };
 
 static struct i2c_driver cyttsp_i2c_driver = {
 	.driver = {
-		.name = CYPRESS_TTSP3_NAME,
+		.name = CY3_I2C_NAME,
 		.owner = THIS_MODULE,
 	},
 	.probe = cyttsp_i2c_probe,
@@ -177,9 +186,8 @@ static void __exit cyttsp_i2c_exit(void)
 
 module_init(cyttsp_i2c_init);
 module_exit(cyttsp_i2c_exit);
-/*
+
 MODULE_ALIAS("i2c:cyttsp");
-*/
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Cypress TrueTouch(R) Standard Product (TTSP) I2C driver");
 MODULE_AUTHOR("Cypress");

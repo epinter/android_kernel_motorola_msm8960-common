@@ -1504,7 +1504,7 @@ static struct i2c_board_info i2c_bus3_melfas_ts_info[] __initdata = {
 #ifdef CONFIG_TOUCHSCREEN_CYTTSP3
 static struct i2c_board_info cyttsp_i2c_boardinfo[] __initdata = {
 	{
-		I2C_BOARD_INFO(CYPRESS_TTSP3_NAME, 0x3B),
+		I2C_BOARD_INFO(CY3_I2C_NAME, 0x3B),
 		.platform_data = &ts_platform_data_cyttsp3,
 		.irq = MSM_GPIO_TO_INT(CYTT_GPIO_INTR),
 	},

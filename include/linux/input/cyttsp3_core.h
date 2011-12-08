@@ -38,13 +38,13 @@
 #endif
 
 #define CYPRESS_TTSP3_NAME	    "cyttsp3"
-#define CY3_I2C_NAME                 "cyttsp3-i2c"
-#define CY_DRIVER_VERSION           "Rev3-2M-19M"
-#define CY_DRIVER_DATE              "2011-09-02"
+#define CY3_I2C_NAME                "cyttsp3-i2c"
+#define CY_DRIVER_VERSION           "Rev3-2M-25M4-8960"
+#define CY_DRIVER_DATE              "2011-12-09"
 
-#define CY3_NUM_RETRY                26 /* max retries for rd/wr ops */
+#define CY3_NUM_RETRY                10 /* max retries for rd/wr ops */
 
-#define CONFIG_TOUCHSCREEN_DEBUG 1
+#define CONFIG_TOUCHSCREEN_DEBUG	1
 #ifdef CONFIG_TOUCHSCREEN_DEBUG
 /* use the following defines for dynamic debug printing */
 /*
