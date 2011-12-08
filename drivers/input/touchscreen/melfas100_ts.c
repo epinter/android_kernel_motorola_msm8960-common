@@ -24,6 +24,7 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
+#include <linux/gpio.h>
 
 #include <linux/melfas100_ts.h>
 
@@ -79,6 +80,7 @@ struct melfas_ts_data {
 	struct melfas_ts_version_info version_info;
 	atomic_t irq_enabled;
 };
+
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void melfas_ts_early_suspend(struct early_suspend *h);
@@ -174,24 +176,53 @@ static irqreturn_t melfas_ts_irq_handler(int irq, void *handle)
 	return IRQ_HANDLED;
 }
 
+
+static int melfas_ts_reset(struct melfas_ts_data *ts)
+{
+	gpio_set_value(ts->pdata->gpio_vdd_en, 0);
+	msleep(50);
+	gpio_set_value(ts->pdata->gpio_vdd_en, 1);
+	msleep(150);
+	return 0;
+}
+
+static void hw_reboot(struct melfas_ts_data *ts, bool bootloader)
+{
+	gpio_direction_output(ts->pdata->gpio_vdd_en, 0);
+	gpio_direction_output(ts->pdata->gpio_sda, bootloader ? 0 : 1);
+	gpio_direction_output(ts->pdata->gpio_scl, bootloader ? 0 : 1);
+	gpio_direction_output(ts->pdata->gpio_resetb, 0);
+	msleep(30);
+	gpio_set_value(ts->pdata->gpio_vdd_en, 1);
+	msleep(30);
+
+	if (bootloader) {
+		gpio_set_value(ts->pdata->gpio_scl, 0);
+		gpio_set_value(ts->pdata->gpio_sda, 1);
+	} else {
+		gpio_set_value(ts->pdata->gpio_resetb, 1);
+		gpio_direction_input(ts->pdata->gpio_resetb);
+		gpio_direction_input(ts->pdata->gpio_scl);
+		gpio_direction_input(ts->pdata->gpio_sda);
+	}
+	msleep(40);
+}
+
 /* Driver debugging */
 static ssize_t melfas_ts_drv_debug_show(struct device *dev,
-					struct device_attribute *attr,
-					char *buf)
+			struct device_attribute *attr, char *buf)
 {
 	return sprintf(buf, "Debug Setting: %u\n", tsdebug);
 }
 
 static ssize_t melfas_ts_drv_debug_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
+		 struct device_attribute *attr, const char *buf, size_t size)
 {
-	int ret = 0;
-	unsigned long value = 0;
-
-	ret = strict_strtoul(buf, 10, &value);
-	if (ret < 0) {
-		pr_err("%s: Failed to convert value\n", __func__);
-		goto melfas_ts_drv_debug_store_exit;
+	unsigned long value;
+	int err = kstrtoul(buf, 0, &value);
+	if (err < 0) {
+		pr_err("%s: illegal sysfs data\n", __func__);
+		return -EINVAL;
 	}
 
 	switch (value) {
@@ -209,21 +240,41 @@ static ssize_t melfas_ts_drv_debug_store(struct device *dev,
 		break;
 	}
 
-	ret = size;
-
-melfas_ts_drv_debug_store_exit:
-	return ret;
+	return size;
 }
 static DEVICE_ATTR(drv_debug, S_IWUSR | S_IRUGO, melfas_ts_drv_debug_show,
 		   melfas_ts_drv_debug_store);
 
+/* interrupt status */
+static ssize_t melfas_ts_hw_irqstat_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	int err = 0;
+	struct melfas_ts_data *ts = dev_get_drvdata(dev);
+
+	err = gpio_get_value(ts->pdata->gpio_resetb);
+	switch (err) {
+	case 0:
+		err = sprintf(buf, "Interrupt line is LOW.\n");
+		break;
+	case 1:
+		err = sprintf(buf, "Interrupt line is HIGH.\n");
+		break;
+	default:
+		err = sprintf(buf, "Function irq_stat() returned %d.\n", err);
+		break;
+	}
+
+	return err;
+}
+static DEVICE_ATTR(hw_irqstat, S_IWUSR | S_IRUGO,
+		   melfas_ts_hw_irqstat_show, NULL);
+
 /* Interrupt enable/disable */
 static ssize_t melfas_ts_irq_enabled_show(struct device *dev,
-					struct device_attribute *attr,
-					char *buf)
+			struct device_attribute *attr, char *buf)
 {
-	struct i2c_client *client = container_of(dev, struct i2c_client, dev);
-	struct melfas_ts_data *ts = i2c_get_clientdata(client);
+	struct melfas_ts_data *ts = dev_get_drvdata(dev);
 	return sprintf(buf, "Interrupt: %u\n",
 		       atomic_read(&ts->irq_enabled));
 }
@@ -231,15 +282,12 @@ static ssize_t melfas_ts_irq_enabled_show(struct device *dev,
 static ssize_t melfas_ts_irq_enabled_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
-	struct i2c_client *client = container_of(dev, struct i2c_client, dev);
-	struct melfas_ts_data *ts = i2c_get_clientdata(client);
-	int ret = 0;
-	unsigned long value = 0;
-
-	ret = strict_strtoul(buf, 10, &value);
-	if (ret < 0) {
-		pr_err("%s: Failed to read value\n", __func__);
-		return ret;
+	struct melfas_ts_data *ts = dev_get_drvdata(dev);
+	unsigned long value;
+	int err = kstrtoul(buf, 0, &value);
+	if (err < 0) {
+		pr_err("%s: illegal sysfs data\n", __func__);
+		return -EINVAL;
 	}
 
 	switch (value) {
@@ -249,7 +297,6 @@ static ssize_t melfas_ts_irq_enabled_store(struct device *dev,
 				__func__, atomic_read(&ts->irq_enabled));
 			disable_irq_nosync(ts->client->irq);
 		}
-		ret = size;
 		break;
 	case 1:
 		if (!atomic_cmpxchg(&ts->irq_enabled, 0, 1)) {
@@ -257,19 +304,92 @@ static ssize_t melfas_ts_irq_enabled_store(struct device *dev,
 				__func__, atomic_read(&ts->irq_enabled));
 			enable_irq(ts->client->irq);
 		}
-		ret = size;
 		break;
 	default:
 		pr_info("melfas_irq_enable failed -> irq_enabled = %d\n",
 			atomic_read(&ts->irq_enabled));
-		ret = -EINVAL;
 		break;
 	}
 
-	return ret;
+	return size;
 }
 static DEVICE_ATTR(irq_enabled, S_IWUSR | S_IRUGO, melfas_ts_irq_enabled_show,
 		   melfas_ts_irq_enabled_store);
+
+static ssize_t melfas_ts_hw_recov_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct melfas_ts_data *ts = dev_get_drvdata(dev);
+	struct i2c_adapter *adapter = to_i2c_adapter(ts->client->dev.parent);
+	unsigned long value;
+	int err = kstrtoul(buf, 0, &value);
+	if (err < 0) {
+		pr_err("%s: illegal sysfs data\n", __func__);
+		return -EINVAL;
+	}
+
+	if (value) {
+		pr_info("%s: Setting IC in bootloader mode\n", __func__);
+		disable_irq_nosync(ts->client->irq);
+		i2c_lock_adapter(adapter);
+		ts->pdata->mux_fw_flash(true);
+		hw_reboot(ts, true);
+		pr_info("%s: IC is in bootloader mode\n", __func__);
+
+	} else {
+		pr_info("%s: Setting IC in Normal mode\n", __func__);
+		hw_reboot(ts, false);
+		ts->pdata->mux_fw_flash(false);
+		melfas_ts_reset(ts);
+		i2c_unlock_adapter(adapter);
+		enable_irq(ts->client->irq);
+		pr_info("%s: IC is in Normal mode\n", __func__);
+	}
+
+	return size;
+}
+static DEVICE_ATTR(hw_recov, S_IWUSR | S_IRUGO, NULL,
+		   melfas_ts_hw_recov_store);
+
+static ssize_t melfas_ts_hw_reset_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct melfas_ts_data *ts = dev_get_drvdata(dev);
+	unsigned long value;
+	int err = kstrtoul(buf, 0, &value);
+	if (err < 0) {
+		pr_err("%s: illegal sysfs data\n", __func__);
+		return -EINVAL;
+	}
+
+	disable_irq_nosync(ts->client->irq);
+
+	if (value) {
+		melfas_ts_reset(ts);
+		pr_info("%s: IC has been reset\n", __func__);
+	}
+
+	enable_irq(ts->client->irq);
+
+	return size;
+}
+static DEVICE_ATTR(hw_reset, S_IWUSR | S_IRUGO, NULL,
+		   melfas_ts_hw_reset_store);
+
+static ssize_t melfas_ts_ic_ver_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct melfas_ts_data *ts = dev_get_drvdata(dev);
+
+	return sprintf(buf, " Panel Version: %x, HW Revision: %x\n"
+		       "HW Comp Grp: %x,"
+		       " Core FW ver: %x\n Private FW ver: %x,"
+		       "Public FW ver: %x\n",\
+		 ts->version_info.panel_ver, ts->version_info.hw_ver, \
+		 ts->version_info.hw_comp_grp, ts->version_info.core_fw_ver, \
+		 ts->version_info.priv_fw_ver, ts->version_info.pub_fw_ver);
+}
+static DEVICE_ATTR(ic_ver, S_IWUSR | S_IRUGO, melfas_ts_ic_ver_show, NULL);
 
 static int melfas_ts_probe(struct i2c_client *client,
 				 const struct i2c_device_id *id)
@@ -371,6 +491,35 @@ static int melfas_ts_probe(struct i2c_client *client,
 		goto err_create_irq_enabled_device_failed;
 	}
 
+	ret = device_create_file(&ts->client->dev, &dev_attr_hw_recov);
+	if (ret) {
+		pr_err("%s:File device creation failed: %d\n", __func__, ret);
+		ret = -ENODEV;
+		goto err_create_hw_recov_device_failed;
+	}
+
+
+	ret = device_create_file(&ts->client->dev, &dev_attr_hw_reset);
+	if (ret) {
+		pr_err("%s:File device creation failed: %d\n", __func__, ret);
+		ret = -ENODEV;
+		goto err_create_hw_reset_device_failed;
+	}
+
+	ret = device_create_file(&ts->client->dev, &dev_attr_ic_ver);
+	if (ret) {
+		pr_err("%s:File device creation failed: %d\n", __func__, ret);
+		ret = -ENODEV;
+		goto err_create_ic_ver_device_failed;
+	}
+
+	ret = device_create_file(&ts->client->dev, &dev_attr_hw_irqstat);
+	if (ret) {
+		pr_err("%s:irqstat device creation failed: %d\n",
+		       __func__, ret);
+		ret = -ENODEV;
+	}
+
 	for (i = 0; i < MELFAS_MAX_TOUCH ; i++)  /* _SUPPORT_MULTITOUCH_ */
 		mtouch_info[i].strength = -1;
 
@@ -388,6 +537,15 @@ static int melfas_ts_probe(struct i2c_client *client,
 
 	return 0;
 
+err_create_ic_ver_device_failed:
+	pr_err("%s: device creation for ic_ver failed\n", __func__);
+	device_remove_file(ts->dev, &dev_attr_hw_reset);
+err_create_hw_reset_device_failed:
+	pr_err("%s: device creation for hw_reset failed\n", __func__);
+	device_remove_file(ts->dev, &dev_attr_hw_recov);
+err_create_hw_recov_device_failed:
+	pr_err("%s: device creation for hw_recov failed\n", __func__);
+	device_remove_file(ts->dev, &dev_attr_irq_enabled);
 err_create_irq_enabled_device_failed:
 	pr_err("%s: device creation for irq_enabled failed\n", __func__);
 	device_remove_file(ts->dev, &dev_attr_drv_debug);
@@ -418,8 +576,12 @@ static int melfas_ts_remove(struct i2c_client *client)
 	unregister_early_suspend(&ts->early_suspend);
 	free_irq(client->irq, ts);
 	input_unregister_device(ts->input_dev);
-	device_remove_file(ts->dev, &dev_attr_irq_enabled);
+	device_remove_file(ts->dev, &dev_attr_hw_irqstat);
+	device_remove_file(ts->dev, &dev_attr_ic_ver);
+	device_remove_file(ts->dev, &dev_attr_hw_reset);
+	device_remove_file(ts->dev, &dev_attr_hw_recov);
 	device_remove_file(ts->dev, &dev_attr_drv_debug);
+	device_remove_file(ts->dev, &dev_attr_irq_enabled);
 	i2c_set_clientdata(client, NULL);
 	kfree(ts);
 	return 0;

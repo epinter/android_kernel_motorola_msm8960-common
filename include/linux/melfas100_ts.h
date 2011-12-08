@@ -23,11 +23,14 @@
 #define TS_FLIP_Y           (1 << 1)
 
 struct melfas_ts_platform_data {
-	int x_size;
-	int y_size;
-	int  version;
 	unsigned long	flags;
-	int		(*hw_reset)(void);
+
+	int	gpio_sda;
+	int	gpio_scl;
+	int	gpio_resetb;
+	int	gpio_vdd_en;
+
+	int	(*mux_fw_flash)(bool to_gpios);
 };
 
 #endif /* _LINUX_MELFAS_TS100_H */
