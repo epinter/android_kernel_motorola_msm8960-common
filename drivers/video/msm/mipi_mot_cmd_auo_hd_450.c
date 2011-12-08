@@ -33,7 +33,6 @@ static struct mipi_dsi_phy_ctrl dsi_cmd_mode_phy_db = {
 };
 
 
-static char sw_reset[2] = {DCS_CMD_SOFT_RESET, 0x00};
 static char enter_sleep[2] = {DCS_CMD_ENTER_SLEEP_MODE, 0x00};
 static char exit_sleep[2] = {DCS_CMD_EXIT_SLEEP_MODE, 0x00};
 static char display_off[2] = {DCS_CMD_SET_DISPLAY_OFF, 0x00};
@@ -44,7 +43,6 @@ static char led_pwm2[2] = {DCS_CMD_SET_CTRL_DISP, 0x2C};
 /* static char led_pwm3[2] = {DCS_CMD_SET_CABC, 0x00}; */
 
 static struct dsi_cmd_desc mot_cmd_on_cmds[] = {
-	{DTYPE_DCS_WRITE, 1, 0, 0, 20, sizeof(sw_reset), sw_reset},
 	{DTYPE_DCS_WRITE, 1, 0, 0, 120, sizeof(exit_sleep), exit_sleep},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1), led_pwm1},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm2), led_pwm2},
@@ -99,7 +97,7 @@ static int __init mipi_cmd_mot_auo_qhd_450_init(void)
 	int ret;
 	struct msm_panel_info *pinfo;
 
-	pr_info("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 
 	if (msm_fb_detect_client("mipi_mot_cmd_auo_hd_450"))
 		return 0;
@@ -165,7 +163,7 @@ static int __init mipi_cmd_mot_auo_qhd_450_init(void)
 	if (ret)
 		pr_err("%s: failed to register device!\n", __func__);
 
-	pr_info("%s device registered\n", __func__);
+	pr_debug("%s device registered\n", __func__);
 
 	return ret;
 }

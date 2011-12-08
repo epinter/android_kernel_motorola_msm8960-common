@@ -331,6 +331,9 @@ static int msm_fb_probe(struct platform_device *pdev)
 	struct msm_fb_data_type *mfd;
 	int rc;
 	int err = 0;
+#ifdef CONFIG_FB_MSM_BOOTLOADER_INIT
+	struct fb_info *fbi;
+#endif
 
 	MSM_FB_DEBUG("msm_fb_probe\n");
 
@@ -402,6 +405,11 @@ static int msm_fb_probe(struct platform_device *pdev)
 
 	pdev_list[pdev_list_cnt++] = pdev;
 	msm_fb_create_sysfs(pdev);
+
+#ifdef CONFIG_FB_MSM_BOOTLOADER_INIT
+	fbi = mfd->fbi;
+	msm_fb_blank_sub(FB_BLANK_UNBLANK, fbi, mfd->op_enable);
+#endif
 	return 0;
 }
 
@@ -1286,7 +1294,6 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	fbi->fbops = &msm_fb_ops;
 	fbi->flags = FBINFO_FLAG_DEFAULT;
 	fbi->pseudo_palette = msm_fb_pseudo_palette;
-
 	mfd->ref_cnt = 0;
 	mfd->sw_currently_refreshing = FALSE;
 	mfd->sw_refreshing_enable = TRUE;
@@ -1530,8 +1537,10 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 
 static int msm_fb_open(struct fb_info *info, int user)
 {
-	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
 	int result;
+#ifndef CONFIG_FB_MSM_BOOTLOADER_INIT
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+#endif
 
 	result = pm_runtime_get_sync(info->dev);
 
@@ -1544,6 +1553,12 @@ static int msm_fb_open(struct fb_info *info, int user)
 			return 0;
 	}
 
+	/* The display will be unblanked in msm_fb_probe() when
+	 * CONFIG_FB_MSM_BOOTLOADER_INIT is set, because we don't want to depend
+	 * on the FB's client to call msm_fb_open() or msm_fb_release() which
+	 * cause the display to turn on and off unexpectively
+	 */
+#ifndef CONFIG_FB_MSM_BOOTLOADER_INIT
 	if (!mfd->ref_cnt) {
 		if (!bf_supported ||
 			(info->node != 1 && info->node != 2))
@@ -1559,13 +1574,15 @@ static int msm_fb_open(struct fb_info *info, int user)
 	}
 
 	mfd->ref_cnt++;
+#endif
 	return 0;
 }
 
 static int msm_fb_release(struct fb_info *info, int user)
 {
-	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
 	int ret = 0;
+#ifndef CONFIG_FB_MSM_BOOTLOADER_INIT
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
 
 	if (!mfd->ref_cnt) {
 		MSM_FB_INFO("msm_fb_release: try to close unopened fb %d!\n",
@@ -1583,6 +1600,7 @@ static int msm_fb_release(struct fb_info *info, int user)
 			return ret;
 		}
 	}
+#endif
 
 	pm_runtime_put(info->dev);
 	return ret;

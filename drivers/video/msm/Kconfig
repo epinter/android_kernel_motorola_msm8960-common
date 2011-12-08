@@ -216,6 +216,13 @@ config FB_MSM_MIPI_DSI_MOT
         select FB_MSM_MIPI_DSI
         default n
 
+config FB_MSM_BOOTLOADER_INIT
+	bool "Check bootloader initialization"
+	help
+	Say Y here if you want to enable checking if the bootloader has
+	already initialized the display. In this case the driver will
+	skip the initialization.
+
 config FB_MSM_LCDC_ST15_WXGA
     bool
     select FB_MSM_LCDC_PANEL

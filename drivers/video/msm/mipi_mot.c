@@ -173,7 +173,7 @@ static int __devinit mipi_mot_lcd_probe(struct platform_device *pdev)
 		mipi_mot_pdata = pdev->dev.platform_data;
 
 	lcd_dev = msm_fb_add_device(pdev);
-	if (lcd_dev)
+	if (!lcd_dev)
 		pr_err("%s: Failed to add lcd device\n", __func__);
 
 	return 0;

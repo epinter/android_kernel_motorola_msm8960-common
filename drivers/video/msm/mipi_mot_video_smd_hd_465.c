@@ -407,7 +407,7 @@ static int __init mipi_video_mot_hd_pt_init(void)
 	int ret;
 	struct msm_panel_info *pinfo;
 
-	pr_info("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 
 	if (msm_fb_detect_client("mipi_mot_video_smd_hd_465"))
 		return 0;
@@ -481,7 +481,7 @@ static int __init mipi_video_mot_hd_pt_init(void)
 	if (ret)
 		pr_err("%s: failed to register device!\n", __func__);
 
-	pr_info("%s device registered\n", __func__);
+	pr_debug("%s device registered\n", __func__);
 
 	return ret;
 }
