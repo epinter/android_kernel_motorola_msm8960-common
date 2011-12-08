@@ -2081,7 +2081,6 @@ static __init void teufel_init(void)
 #endif
 	ENABLE_I2C_DEVICE(CAMERA_FLASH_MSM);
 
-	keypad_mode = MMI_KEYPAD_RESET|MMI_KEYPAD_SLIDER;
 	msm8960_mmi_init();
 }
 
