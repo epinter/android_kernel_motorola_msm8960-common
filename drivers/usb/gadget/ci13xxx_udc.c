@@ -1771,6 +1771,14 @@ __acquires(mEp->lock)
 			list_entry(mEp->qh.queue.next,
 				   struct ci13xxx_req, queue);
 		list_del_init(&mReq->queue);
+		if (mReq->map) {
+			dma_unmap_single(mEp->device, mReq->req.dma,
+					 mReq->req.length,
+					 mEp->dir ?
+					 DMA_TO_DEVICE : DMA_FROM_DEVICE);
+			mReq->req.dma = 0;
+			mReq->map = 0;
+		}
 		mReq->req.status = -ESHUTDOWN;
 
 		if (mReq->req.complete != NULL) {
