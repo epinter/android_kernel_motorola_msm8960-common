@@ -956,6 +956,13 @@ static int usbnet_function_init(struct android_usb_function *f,
 	return 0;
 }
 
+static void usbnet_function_cleanup(struct android_usb_function *f)
+{
+	struct usbnet_device *dev = f->config;
+
+	usbnet_cleanup(dev);
+}
+
 static int usbnet_function_bind_config(struct android_usb_function *f, struct usb_configuration *c)
 {
 	struct usbnet_device *dev = f->config;
@@ -974,6 +981,7 @@ static int usbnet_function_ctrlrequest(struct android_usb_function *f, struct us
 static struct android_usb_function usbnet_function = {
 	.name		= "usbnet",
 	.init		= usbnet_function_init,
+	.cleanup	= usbnet_function_cleanup,
 	.bind_config	= usbnet_function_bind_config,
 	.ctrlrequest	= usbnet_function_ctrlrequest,
 };

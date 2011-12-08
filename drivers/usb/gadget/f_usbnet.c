@@ -442,8 +442,6 @@ static void usbnet_unbind(struct usb_configuration *c, struct usb_function *f)
 	}
 
 	context->config = 0;
-
-	usbnet_cleanup(dev);
 }
 
 static void ether_out_complete(struct usb_ep *ep, struct usb_request *req)
