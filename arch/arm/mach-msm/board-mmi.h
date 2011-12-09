@@ -18,6 +18,7 @@
 #define __ARCH_ARM_MACH_MSM_BOARD_MMI_H
 
 #include <linux/mfd/pm8xxx/pm8921.h>
+#include <linux/power/mmi-battery.h>
 #include <linux/ct406.h>
 
 #define _HWREV(x)	(x)
@@ -70,6 +71,21 @@ extern struct pm8xxx_keypad_platform_data mmi_qwerty_keypad_data;
 
 extern struct pm8xxx_keypad_platform_data mot_keypad_data;
 extern struct msm_i2c_platform_data msm8960_i2c_qup_gsbi12_pdata;
+
+enum {
+	MMI_BATTERY_DEFAULT = 0,
+	MMI_BATTERY_EB20_P1,
+	MMI_BATTERY_NUM,
+};
+
+struct mmi_battery_list {
+	unsigned int                        num_cells;
+	struct mmi_battery_cell             *cell_list[MMI_BATTERY_NUM];
+	struct pm8921_bms_battery_data      *bms_list[MMI_BATTERY_NUM];
+	struct pm8921_charger_battery_data  *chrg_list[MMI_BATTERY_NUM];
+};
+
+extern struct mmi_battery_list mmi_batts;
 
 void __init msm8960_sensors_init(void);
 void __init mmi_vibrator_init(void);

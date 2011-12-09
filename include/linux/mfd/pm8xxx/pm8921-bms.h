@@ -121,6 +121,8 @@ enum battery_type {
  * @calib_delay_ms:	how often should the adc calculate gain and offset
  * @enable_fcc_learning:	if set the driver will learn full charge
  *				capacity of the battery upon end of charge
+ * @get_batt_info:      a board specific function to return battery data If NULL
+ *                      default palladium data will be used to meter the battery
  */
 struct pm8921_bms_platform_data {
 	struct pm8xxx_bms_core_data	bms_cdata;
@@ -132,6 +134,10 @@ struct pm8921_bms_platform_data {
 	unsigned int			max_voltage_uv;
 	unsigned int			rconn_mohm;
 	int				enable_fcc_learning;
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+	int64_t (*get_batt_info) (int64_t battery_id,
+				  struct pm8921_bms_battery_data *data);
+#endif
 };
 
 #if defined(CONFIG_PM8921_BMS) || defined(CONFIG_PM8921_BMS_MODULE)

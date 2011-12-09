@@ -44,11 +44,19 @@ struct mmi_battery_info {
 	unsigned char uid[UID_SIZE];
 	struct delayed_work work;
 	unsigned char eeprom_read_cnt;
-	unsigned short peak_vlt;
-	unsigned short batt_cap;
-	unsigned short batt_dc_imped;
-	unsigned char batt_valid;
+	struct mmi_battery_cell cell_info;
 };
+
+static struct mmi_battery_info *the_batt;
+
+struct mmi_battery_cell *mmi_battery_get_info(void)
+{
+	if (the_batt)
+		return &(the_batt->cell_info);
+	else
+		return NULL;
+}
+EXPORT_SYMBOL(mmi_battery_get_info);
 
 static unsigned char mmi_battery_calc_checksum(unsigned char *data_start,
 						 unsigned char data_size)
@@ -83,7 +91,7 @@ static unsigned char mmi_battery_is_cpyrght_vld(unsigned char *rom_data)
 		return 0;
 }
 
-static unsigned char mmi_battery_valid_eeprom(struct mmi_battery_info *dev_info)
+static int mmi_battery_valid_eeprom(struct mmi_battery_info *dev_info)
 {
 	unsigned char page_2_checksum;
 	unsigned char page_3_checksum;
@@ -108,47 +116,33 @@ static unsigned char mmi_battery_valid_eeprom(struct mmi_battery_info *dev_info)
 	if ((page_2_checksum == 0) &&
 	    (page_3_checksum == 0) &&
 	    (cpyrght_vld == 1))
-		return 1;
-	else
-		return 0;
+		return MMI_BATTERY_VALID;
+	else {
+		if (dev_info->eeprom_read_cnt <= MAX_EEPROM_READ_CNT)
+			return MMI_BATTERY_UNKNOWN;
+		else
+			return MMI_BATTERY_INVALID;
+	}
 }
 
 static void mmi_battery_decode_eeprom(struct mmi_battery_info *dev_info)
 {
-	unsigned short scale_factor;
+	unsigned char *data = dev_info->eeprom;
 
-	switch (dev_info->eeprom[ROM_DATA_CMN_BATT_TYPE]) {
-	case 2:
-	case 9:
-		scale_factor = 20;
-		break;
+	dev_info->cell_info.capacity =
+		(unsigned short)(data[ROM_DATA_CMN_BATT_CPCTY]);
+	pr_info("MMI Battery Full Capacity 0x%2X\n",
+		dev_info->cell_info.capacity);
 
-	case 7:
-	case 10:
-		scale_factor = 40;
-		break;
+	dev_info->cell_info.peak_voltage =
+		(unsigned short)(data[ROM_DATA_GSM_TDMA_VLT_MAX]);
+	pr_info("MMI Battery Peak Voltage 0x%2X\n",
+		dev_info->cell_info.peak_voltage);
 
-	case 1:
-	case 8:
-	default:
-		scale_factor = 10;
-		break;
-	}
-
-	dev_info->batt_cap =
-		(unsigned short)(dev_info->eeprom[ROM_DATA_CMN_BATT_CPCTY]) *
-		scale_factor;
-	pr_info("MMI Battery Full Capacity %d mAh\n", dev_info->batt_cap);
-
-	dev_info->peak_vlt =
-		(unsigned short)(((dev_info->eeprom[ROM_DATA_GSM_TDMA_VLT_MAX] *
-				   BATTERY_VOLTAGE) / SCALE_TO_MV) +
-				 BATTERY_V_ADDER);
-	pr_info("MMI Battery Peak Voltage %d mV\n", dev_info->peak_vlt);
-
-	dev_info->batt_dc_imped =
-		(unsigned short)(dev_info->eeprom[ROM_DATA_DC_IMPEDANCE] * 2);
-	pr_info("MMI Battery DC Impedance %d mOhms\n", dev_info->batt_dc_imped);
+	dev_info->cell_info.dc_impedance =
+		(unsigned short)(data[ROM_DATA_DC_IMPEDANCE]);
+	pr_info("MMI Battery DC Impedance 0x%2X\n",
+		dev_info->cell_info.dc_impedance);
 }
 
 static void mmi_battery_eeprom_read_work(struct work_struct *work)
@@ -156,6 +150,7 @@ static void mmi_battery_eeprom_read_work(struct work_struct *work)
 	struct  mmi_battery_info *dev_info =
 		container_of(work, struct mmi_battery_info, work.work);
 	int read_size = 0;
+	int batt_valid = MMI_BATTERY_UNKNOWN;
 
 	dev_info->eeprom_read_cnt++;
 
@@ -169,16 +164,17 @@ static void mmi_battery_eeprom_read_work(struct work_struct *work)
 	if (read_size != EEPROM_SIZE) {
 		if (dev_info->eeprom_read_cnt <= MAX_EEPROM_READ_CNT)
 			schedule_delayed_work(&dev_info->work,
-					      msecs_to_jiffies(500));
+					      msecs_to_jiffies(100));
 	} else {
-		dev_info->batt_valid =
-			mmi_battery_valid_eeprom(dev_info);
-		if (dev_info->batt_valid)
+		batt_valid = mmi_battery_valid_eeprom(dev_info);
+		if (batt_valid == MMI_BATTERY_VALID)
 			mmi_battery_decode_eeprom(dev_info);
 		else if (dev_info->eeprom_read_cnt <= MAX_EEPROM_READ_CNT)
 			schedule_delayed_work(&dev_info->work,
-					      msecs_to_jiffies(500));
+					      msecs_to_jiffies(100));
 	}
+
+	dev_info->cell_info.batt_valid = batt_valid;
 }
 
 static int __devinit mmi_battery_probe(struct platform_device *pdev)
@@ -198,10 +194,12 @@ static int __devinit mmi_battery_probe(struct platform_device *pdev)
 	dev_info->w1_dev = container_of(pdev->dev.parent, struct w1_slave, dev);
 
 	dev_info->eeprom_read_cnt = 0;
-	dev_info->batt_valid = 0;
+	dev_info->cell_info.batt_valid = MMI_BATTERY_UNKNOWN;
+
+	the_batt = dev_info;
 
 	INIT_DELAYED_WORK(&dev_info->work,  mmi_battery_eeprom_read_work);
-	schedule_delayed_work(&dev_info->work, msecs_to_jiffies(500));
+	schedule_delayed_work(&dev_info->work, msecs_to_jiffies(100));
 
 fail:
 	return ret;

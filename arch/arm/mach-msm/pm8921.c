@@ -76,6 +76,11 @@
 #include <linux/ion.h>
 #include <mach/ion.h>
 
+#ifdef CONFIG_MACH_MSM8960_MMI
+#include <linux/power/mmi-battery.h>
+#include "board-mmi.h"
+#endif
+
 #include "timer.h"
 #include "devices.h"
 #include "devices-msm8x60.h"
@@ -122,6 +127,100 @@ static int pm8921_therm_mitigation[] = {
 	325,
 };
 
+#ifdef CONFIG_MACH_MSM8960_MMI
+int find_mmi_battery(struct mmi_battery_cell *cell_info)
+{
+	int i;
+
+	for (i = (MMI_BATTERY_DEFAULT + 1); i < MMI_BATTERY_NUM; i++) {
+		if (cell_info->capacity == mmi_batts.cell_list[i]->capacity) {
+			if (cell_info->peak_voltage ==
+			    mmi_batts.cell_list[i]->peak_voltage) {
+				if (cell_info->dc_impedance ==
+				   mmi_batts.cell_list[i]->dc_impedance) {
+					pr_info("Battery Match Found: %d\n", i);
+					return i;
+				}
+			}
+		}
+	}
+
+	pr_err("Battery Match Not Found!\n");
+	return MMI_BATTERY_DEFAULT;
+}
+
+int64_t read_mmi_battery_chrg(int64_t battery_id,
+			      struct pm8921_charger_battery_data *data)
+{
+	struct mmi_battery_cell *cell_info;
+	int i = 0;
+	int ret;
+	size_t len = sizeof(struct pm8921_charger_battery_data);
+
+	for (i = 0; i < 100; i++) {
+		cell_info = mmi_battery_get_info();
+		if (cell_info) {
+			if (cell_info->batt_valid != MMI_BATTERY_UNKNOWN) {
+				ret = find_mmi_battery(cell_info);
+				memcpy(data, mmi_batts.chrg_list[ret], len);
+				return (int64_t) cell_info->batt_valid;
+			}
+		}
+		msleep(500);
+	}
+
+	memcpy(data, mmi_batts.chrg_list[MMI_BATTERY_DEFAULT], len);
+	return 0;
+}
+
+int64_t read_mmi_battery_bms(int64_t battery_id,
+			     struct pm8921_bms_battery_data *data)
+{
+	struct mmi_battery_cell *cell_info;
+	int i = 0;
+	int ret;
+	size_t len = sizeof(struct pm8921_bms_battery_data);
+
+	for (i = 0; i < 100; i++) {
+		cell_info = mmi_battery_get_info();
+		if (cell_info) {
+			if (cell_info->batt_valid != MMI_BATTERY_UNKNOWN) {
+				ret = find_mmi_battery(cell_info);
+				memcpy(data, mmi_batts.bms_list[ret], len);
+				return (int64_t) cell_info->batt_valid;
+			}
+		}
+		msleep(500);
+	}
+
+	memcpy(data, mmi_batts.bms_list[MMI_BATTERY_DEFAULT], len);
+	return 0;
+}
+
+static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
+	.safety_time		= 180,
+	.update_time		= 60000,
+	.max_voltage		= 4350,
+	.min_voltage		= 3200,
+	.resume_voltage_delta	= 100,
+	.term_current		= 100,
+	.cool_temp		= 0,
+	.warm_temp		= 45,
+	.temp_check_period	= 1,
+	.max_bat_chg_current	= 1500,
+	.cool_bat_chg_current	= 1500,
+	.warm_bat_chg_current	= 150,
+	.cool_bat_voltage	= 3800,
+	.warm_bat_voltage	= 3800,
+	.batt_id_min            = 0,
+	.batt_id_max            = 1,
+	.thermal_mitigation	= pm8921_therm_mitigation,
+	.thermal_levels		= ARRAY_SIZE(pm8921_therm_mitigation),
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+	.get_batt_info          = read_mmi_battery_chrg,
+#endif
+};
+#else
 static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 	.safety_time		= 180,
 	.update_time		= 60000,
@@ -140,17 +239,30 @@ static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 	.thermal_mitigation	= pm8921_therm_mitigation,
 	.thermal_levels		= ARRAY_SIZE(pm8921_therm_mitigation),
 };
+#endif
 
 static struct pm8xxx_misc_platform_data pm8xxx_misc_pdata = {
 	.priority		= 0,
 };
 
+#ifdef CONFIG_MACH_MSM8960_MMI
+static struct pm8921_bms_platform_data pm8921_bms_pdata __devinitdata = {
+	.r_sense		= 10,
+	.i_test			= 2500,
+	.v_failure		= 3200,
+	.calib_delay_ms		= 600000,
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+	.get_batt_info          = read_mmi_battery_bms,
+#endif
+};
+#else
 static struct pm8921_bms_platform_data pm8921_bms_pdata __devinitdata = {
 	.r_sense		= 10,
 	.i_test			= 2500,
 	.v_failure		= 3000,
 	.calib_delay_ms		= 600000,
 };
+#endif
 
 #define	PM8921_LC_LED_MAX_CURRENT	4	/* I = 4mA */
 #define PM8XXX_LED_PWM_PERIOD		1000

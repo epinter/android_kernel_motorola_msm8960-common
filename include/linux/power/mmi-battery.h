@@ -36,6 +36,12 @@
 #define VLT_ROM_OFFSET_100_PERC	4000
 #define C5_VLT_LVL_OFFSET	712
 
+enum {
+	MMI_BATTERY_INVALID,
+	MMI_BATTERY_VALID,
+	MMI_BATTERY_UNKNOWN = 0xFF,
+};
+
 /*-----------------------------------------------------------------------------
  * DESCRIPTION:
  * This enumeration indexes the data received from the ROM of a Motorola
@@ -307,5 +313,14 @@ enum {
 	ROM_DATA_SIZE
 };
 
+/* Data in Raw Eprom format and valid flag */
+struct mmi_battery_cell {
+	unsigned short        capacity;
+	unsigned short        peak_voltage;
+	unsigned short        dc_impedance;
+	int                   batt_valid;
+};
+
+struct mmi_battery_cell *mmi_battery_get_info(void);
 
 #endif
