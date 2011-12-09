@@ -848,12 +848,19 @@ static void reserve_ion_memory(void)
 	msm8960_reserve_table[MEMTYPE_EBI1].size += MSM_ION_ADSP_SIZE;
 #endif
 }
+
+static void __init reserve_mdp_memory(void)
+{
+	msm8960_mdp_writeback(msm8960_reserve_table);
+}
+
 static void __init msm8960_calculate_reserve_sizes(void)
 {
 	size_pmem_devices();
 	reserve_pmem_memory();
 	reserve_ion_memory();
 	reserve_fmem_memory();
+	reserve_mdp_memory();
 	reserve_ram_console_memory();
 }
 
