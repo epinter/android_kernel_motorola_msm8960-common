@@ -48,7 +48,6 @@
 struct pn544_dev	{
 	wait_queue_head_t	read_wq;
 	struct mutex		read_mutex;
-	struct mutex		control_mutex;
 	struct i2c_client	*client;
 	struct miscdevice	pn544_device;
     struct device       *pn544_control_device;
@@ -315,15 +314,16 @@ static ssize_t pn544_control_func(struct device *dev,
                                   const char *buf,
                                   size_t count)
 {
-        struct pn544_dev *pn544_dev = dev_get_drvdata(dev);
+	struct miscdevice *pn544_device = dev_get_drvdata(dev);
+	struct pn544_dev *pn544_dev = container_of(pn544_device,
+		struct pn544_dev, pn544_device);
+
         unsigned long val = simple_strtoul(buf, NULL, 10);
         int ret = 0;
 
         pr_info ("pn544_control_func called value in ioctl is = %ld\n", val);
 
-        mutex_lock(&pn544_dev->control_mutex);
         ret = pn544_dev_ioctl(pn544_dev, PN544_SET_PWR, val);
-        mutex_unlock(&pn544_dev->control_mutex);
 
         if (ret != 0) {
             pr_err ("pn544_control_function ioctl return error\n");
@@ -405,7 +405,6 @@ static int pn544_probe(struct i2c_client *client,
 	/* init mutex and queues */
 	init_waitqueue_head(&pn544_dev->read_wq);
 	mutex_init(&pn544_dev->read_mutex);
-    mutex_init(&pn544_dev->control_mutex);
 	spin_lock_init(&pn544_dev->irq_enabled_lock);
 
 	pn544_dev->pn544_device.minor = MISC_DYNAMIC_MINOR;
@@ -453,7 +452,6 @@ err_device_create_file_failed:
 	misc_deregister(&pn544_dev->pn544_device);
 err_misc_register:
 	mutex_destroy(&pn544_dev->read_mutex);
-	mutex_destroy(&pn544_dev->control_mutex);
 	kfree(pn544_dev);
 err_exit:
 	gpio_free(platform_data->firmware_gpio);
@@ -475,7 +473,6 @@ static int pn544_remove(struct i2c_client *client)
     device_remove_file (pn544_dev->pn544_control_device, &dev_attr_pn544_control_dev);
 	misc_deregister(&pn544_dev->pn544_device);
 	mutex_destroy(&pn544_dev->read_mutex);
-	mutex_destroy(&pn544_dev->control_mutex);
 	gpio_free(pn544_dev->irq_gpio);
 	gpio_free(pn544_dev->ven_gpio);
 	gpio_free(pn544_dev->firmware_gpio);
