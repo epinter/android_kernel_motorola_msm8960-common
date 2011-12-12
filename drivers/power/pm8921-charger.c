@@ -3565,7 +3565,7 @@ static int __devinit pm8921_chg_hw_init(struct pm8921_chg_chip *chip)
 static int pm8921_charging_reboot(struct notifier_block *nb,
 				  unsigned long event, void *unused)
 {
-	struct pm8921_adc_chan_result res;
+	struct pm8xxx_adc_chan_result res;
 #define VBUS_OFF_THRESHOLD 2000
 	/*
 	 * Hack to power down when both VBUS and BPLUS are present.
@@ -3587,7 +3587,7 @@ static int pm8921_charging_reboot(struct notifier_block *nb,
 
 		res.physical = 0;
 		do {
-			if (pm8921_adc_read(CHANNEL_USBIN, &res)) {
+			if (pm8xxx_adc_read(CHANNEL_USBIN, &res)) {
 				pr_err("VBUS ADC read error\n");
 				break;
 			} else

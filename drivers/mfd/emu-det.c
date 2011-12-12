@@ -625,9 +625,9 @@ static void mux_ctrl_mode(int mode)
 
 static int adc_emu_id_get(void)
 {
-	struct pm8921_adc_chan_result res;
+	struct pm8xxx_adc_chan_result res;
 	memset(&res, 0, sizeof(res));
-	if (pm8921_adc_read(CHANNEL_MPP_2, &res))
+	if (pm8xxx_adc_read(CHANNEL_MPP_2, &res))
 		pr_err("CHANNEL_MPP_2 ADC read error\n");
 	else
 		pr_emu_det(DEBUG, "emu_id=%lld mV\n", res.physical);
@@ -636,9 +636,9 @@ static int adc_emu_id_get(void)
 
 static int adc_vbus_get(void)
 {
-	struct pm8921_adc_chan_result res;
+	struct pm8xxx_adc_chan_result res;
 	memset(&res, 0, sizeof(res));
-	if (pm8921_adc_read(CHANNEL_USBIN, &res))
+	if (pm8xxx_adc_read(CHANNEL_USBIN, &res))
 		pr_err("VBUS ADC read error\n");
 	else
 		pr_emu_det(DEBUG, "vbus=%lld mV\n", res.physical);

@@ -21,7 +21,7 @@
 #include <linux/msm_ssbi.h>
 #include <linux/regulator/gpio-regulator.h>
 #include <linux/mfd/pm8xxx/pm8921.h>
-#include <linux/mfd/pm8xxx/pm8921-adc.h>
+#include <linux/mfd/pm8xxx/pm8xxx-adc.h>
 #include <linux/regulator/consumer.h>
 #include <linux/spi/spi.h>
 #include <linux/slimbus/slimbus.h>
@@ -39,6 +39,7 @@
 #include <linux/i2c/atmel_mxt_ts.h>
 #include <linux/msm_tsens.h>
 #include <linux/ks8851.h>
+#include <linux/memory.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -809,6 +810,11 @@ struct ion_platform_data ion_pdata = {
 			.size	= MSM_ION_ADSP_SIZE,
 			.memory_type = ION_EBI_TYPE,
 		},
+		{
+			.id	= ION_HEAP_IOMMU_ID,
+			.type	= ION_HEAP_TYPE_IOMMU,
+			.name	= ION_IOMMU_HEAP_NAME,
+		},
 #endif
 	}
 };
@@ -864,12 +870,9 @@ static void __init locate_unstable_memory(void)
 
 	if (high - low <= bank_size)
 		return;
-	msm8960_reserve_info.low_unstable_address = low + bank_size;
-	/* To avoid overflow of u32 compute max_unstable_size
-	 * by first subtracting low from mb->start)
-	 * */
-	msm8960_reserve_info.max_unstable_size = (mb->start - low) +
-						mb->size - bank_size;
+	msm8960_reserve_info.low_unstable_address = high -
+						MIN_MEMORY_BLOCK_SIZE;
+	msm8960_reserve_info.max_unstable_size = MIN_MEMORY_BLOCK_SIZE;
 
 	msm8960_reserve_info.bank_size = bank_size;
 	pr_info("low unstable address %lx max size %lx bank size %lx\n",
@@ -1079,14 +1082,14 @@ struct msm_bus_scale_pdata mdp_bus_scale_pdata = {
 #endif
 
 #ifdef CONFIG_FB_MSM_HDMI_AS_PRIMARY
-int mdp_core_clk_rate_table[] = {
+static int mdp_core_clk_rate_table[] = {
 	200000000,
 	200000000,
 	200000000,
 	200000000,
 };
 #else
-int mdp_core_clk_rate_table[] = {
+static int mdp_core_clk_rate_table[] = {
 	85330000,
 	85330000,
 	160000000,
@@ -2640,10 +2643,8 @@ void __init msm8960_gfx_init(void)
 	if (SOCINFO_VERSION_MAJOR(soc_platform_version) == 1) {
 		struct kgsl_device_platform_data *kgsl_3d0_pdata =
 				msm_kgsl_3d0.dev.platform_data;
-		kgsl_3d0_pdata->pwr_data.pwrlevel[0].gpu_freq =
-				320000000;
-		kgsl_3d0_pdata->pwr_data.pwrlevel[1].gpu_freq =
-				266667000;
+		kgsl_3d0_pdata->pwrlevel[0].gpu_freq = 320000000;
+		kgsl_3d0_pdata->pwrlevel[1].gpu_freq = 266667000;
 	}
 }
 

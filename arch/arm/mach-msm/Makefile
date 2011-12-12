@@ -263,20 +263,6 @@ obj-$(CONFIG_ARCH_MSM8960) += memory_topology.o
 obj-$(CONFIG_ARCH_MSM8960) += saw-regulator.o
 obj-$(CONFIG_ARCH_MSM8960) += devices-8960.o
 obj-$(CONFIG_ARCH_APQ8064) += devices-8960.o devices-8064.o
-
-obj-$(CONFIG_ARCH_MSM8960) += board-msm8960-common.o
-
-obj-$(CONFIG_MACH_MSM8960_MMI) += board-msm8960-mmi.o board-mmi-msm8960-regulator.o board-mmi-sensors.o board-mmi-keypad.o
-obj-$(CONFIG_MACH_MSM8960_MMI) += pm8921.o devices-8960.o
-
-obj-$(CONFIG_TOUCHSCREEN_CYTTSP3) += board-mmi-cyttsp3.o
-obj-$(CONFIG_TOUCHSCREEN_ATMXT) += board-mmi-atmxt.o
-obj-$(CONFIG_VIB_TIMED) += board-mmi-vibrator.o
-
-ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
-obj-$(CONFIG_MACH_MSM8960_MMI) += board-mmi-melfas-touch.o
-endif
-
 board-8960-all-objs += board-8960.o board-8960-camera.o board-8960-display.o board-8960-pmic.o board-8960-storage.o board-8960-gpiomux.o
 board-8930-all-objs += board-8930.o board-8930-camera.o board-8930-display.o board-8930-pmic.o board-8930-storage.o board-8930-gpiomux.o devices-8930.o board-8930-gpu.o
 board-8064-all-objs += board-8064.o board-8064-pmic.o board-8064-storage.o board-8064-gpiomux.o board-8064-camera.o board-8064-display.o board-8064-gpu.o
@@ -285,6 +271,19 @@ obj-$(CONFIG_MACH_MSM8960_RUMI3) += board-8960-all.o board-8960-regulator.o
 obj-$(CONFIG_MACH_MSM8960_CDP) += board-8960-all.o board-8960-regulator.o
 obj-$(CONFIG_MACH_MSM8960_MTP) += board-8960-all.o board-8960-regulator.o
 obj-$(CONFIG_MACH_MSM8960_FLUID) += board-8960-all.o board-8960-regulator.o
+obj-$(CONFIG_MACH_MSM8960_MMI) += \
+	board-msm8960-common.o \
+	board-msm8960-mmi.o \
+	board-msm8960-regulator.o \
+	board-mmi-sensors.o \
+	board-mmi-keypad.o \
+	pm8921.o \
+	devices-8960.o \
+	board-mmi-cyttsp3.o \
+	board-mmi-atmxt.o \
+	board-mmi-vibrator.o \
+	board-mmi-melfas-touch.o
+
 obj-$(CONFIG_MACH_MSM8930_CDP) += board-8930-all.o board-8930-regulator.o
 obj-$(CONFIG_MACH_MSM8930_MTP) += board-8930-all.o board-8930-regulator.o
 obj-$(CONFIG_MACH_MSM8930_FLUID) += board-8930-all.o board-8930-regulator.o
@@ -303,7 +302,6 @@ obj-$(CONFIG_ARCH_MSMCOPPER) += acpuclock-krait.o acpuclock-copper.o
 obj-$(CONFIG_ARCH_MSMCOPPER) += clock-local2.o clock-pll.o clock-copper.o
 obj-$(CONFIG_ARCH_MSMCOPPER) += gdsc.o
 obj-$(CONFIG_ARCH_MSM9625) += board-9625.o board-9625-gpiomux.o
-
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire.o board-sapphire-gpio.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-keypad.o board-sapphire-panel.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-mmc.o board-sapphire-wifi.o

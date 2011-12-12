@@ -21,7 +21,7 @@
 #include <linux/msm_ssbi.h>
 #include <linux/regulator/gpio-regulator.h>
 #include <linux/mfd/pm8xxx/pm8921.h>
-#include <linux/mfd/pm8xxx/pm8921-adc.h>
+#include <linux/mfd/pm8xxx/pm8xxx-adc.h>
 #include <linux/regulator/consumer.h>
 #include <linux/spi/spi.h>
 #include <linux/slimbus/slimbus.h>
@@ -221,7 +221,7 @@ static struct pm8xxx_ccadc_platform_data pm8xxx_ccadc_pdata = {
 	.r_sense		= 10,
 };
 
-static struct pm8921_adc_amux pm8921_adc_channels_data[] = {
+static struct pm8xxx_adc_amux pm8921_adc_channels_data[] = {
 	{"vcoin", CHANNEL_VCOIN, CHAN_PATH_SCALING2, AMUX_RSV1,
 		ADC_DECIMATION_TYPE2, ADC_SCALE_DEFAULT},
 	{"vbat", CHANNEL_VBAT, CHAN_PATH_SCALING2, AMUX_RSV1,
@@ -258,13 +258,13 @@ static struct pm8921_adc_amux pm8921_adc_channels_data[] = {
 		ADC_DECIMATION_TYPE2, ADC_SCALE_DEFAULT},
 };
 
-static struct pm8921_adc_properties pm8921_adc_data = {
+static struct pm8xxx_adc_properties pm8921_adc_data = {
 	.adc_vdd_reference	= 1800, /* milli-voltage for this adc */
 	.bitresolution		= 15,
 	.bipolar                = 0,
 };
 
-static struct pm8921_adc_platform_data pm8921_adc_pdata = {
+static struct pm8xxx_adc_platform_data pm8921_adc_pdata = {
 	.adc_channel		= pm8921_adc_channels_data,
 	.adc_num_board_channel	= ARRAY_SIZE(pm8921_adc_channels_data),
 	.adc_prop		= &pm8921_adc_data,

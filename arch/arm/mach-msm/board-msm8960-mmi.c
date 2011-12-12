@@ -22,7 +22,7 @@
 #include <linux/msm_ssbi.h>
 #include <linux/regulator/gpio-regulator.h>
 #include <linux/mfd/pm8xxx/pm8921.h>
-#include <linux/mfd/pm8xxx/pm8921-adc.h>
+#include <linux/mfd/pm8xxx/pm8xxx-adc.h>
 #include <linux/regulator/consumer.h>
 #include <linux/spi/spi.h>
 #include <linux/slimbus/slimbus.h>
@@ -186,7 +186,7 @@ static struct pm8xxx_gpio_init pm8921_gpios_asanti[] = {
 static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 	/* External 5V regulator enable; shared by HDMI and USB_OTG switches. */
 	PM8XXX_MPP_INIT(7, D_INPUT, PM8921_MPP_DIG_LEVEL_VPH, DIN_TO_INT),
-	PM8XXX_MPP_INIT(PM8921_AMUX_MPP_8, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH8,
+	PM8XXX_MPP_INIT(PM8XXX_AMUX_MPP_8, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH8,
 								DOUT_CTRL_LOW),
 	PM8XXX_MPP_INIT(11, D_BI_DIR, PM8921_MPP_DIG_LEVEL_S4, BI_PULLUP_1KOHM),
 	PM8XXX_MPP_INIT(12, D_BI_DIR, PM8921_MPP_DIG_LEVEL_L17, BI_PULLUP_OPEN),
@@ -1170,7 +1170,7 @@ struct platform_device msm8960_camera_sensor_mt9m114 = {
 };
 #endif
 
-static void __init msm8960_init_cam(void)
+void __init msm8960_init_cam(void)
 {
 	int i;
 	struct platform_device *cam_dev[] = {
@@ -1379,6 +1379,9 @@ static void w1_gpio_enable_regulators(int enable)
 
 static struct platform_device *mmi_devices[] __initdata = {
 	&msm8960_w1_gpio_device,
+	&msm_8960_q6_lpass,
+	&msm_8960_q6_mss_fw,
+	&msm_8960_q6_mss_sw,
 	&msm8960_device_otg,
 	&msm8960_device_gadget_peripheral,
 	&msm_device_hsusb_host,
