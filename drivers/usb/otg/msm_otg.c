@@ -1860,6 +1860,13 @@ static int msm_otg_accy_notify(struct notifier_block *nb,
 
 	pr_info("%s called for %lu event\n", __func__, event);
 
+	/*
+	 * This is set after the accy detect driver determines the connection
+	 * status at boot.
+	 */
+	if (otg->state == OTG_STATE_UNDEFINED)
+		otg->state = OTG_STATE_B_IDLE;
+
 	if (event == USB_EVENT_ID)
 		req_mode = USB_HOST;
 	else if (event == USB_EVENT_VBUS || event == USB_EVENT_CHARGER)
@@ -2460,7 +2467,6 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		otg_register_notifier(&motg->otg, &motg->accy_nb);
 
 		msm_otg_init_sm(motg);
-		motg->otg.state = OTG_STATE_B_IDLE;
 
 		/* register accy detection device */
 		ret = platform_device_register(motg->pdata->accy_pdev);
