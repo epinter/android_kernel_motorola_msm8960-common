@@ -2219,6 +2219,12 @@ static __init void asanti_init(void)
 #endif
 	keypad_data = &mmi_qwerty_keypad_data;
 	keypad_mode = MMI_KEYPAD_RESET|MMI_KEYPAD_SLIDER;
+
+	/* Enable keyboard backlight */
+	strncpy((char *)&mp_lm3532_pdata.ctrl_b_name, "keyboard-backlight",
+		sizeof(mp_lm3532_pdata.ctrl_b_name)-1);
+	mp_lm3532_pdata.ctrl_b_usage = LM3532_LED_DEVICE;
+
 	msm8960_mmi_init();
 }
 

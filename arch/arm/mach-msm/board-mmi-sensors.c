@@ -144,14 +144,14 @@ static int lm3532_power_down(void)
 
 static int lm3532_reset_assert(void)
 {
-        gpio_set_value(LM3532_RESET_GPIO, 0);
+	gpio_set_value(LM3532_RESET_GPIO, 0);
 
 	return 0;
 }
 
 static int lm3532_reset_release(void)
 {
-        gpio_set_value(LM3532_RESET_GPIO, 1);
+	gpio_set_value(LM3532_RESET_GPIO, 1);
 
 	return 0;
 }
@@ -162,63 +162,63 @@ struct lm3532_backlight_platform_data mp_lm3532_pdata = {
 	.reset_assert = lm3532_reset_assert,
 	.reset_release = lm3532_reset_release,
 
-        .led1_controller = LM3532_CNTRL_A,
-        .led2_controller = LM3532_CNTRL_A,
-        .led3_controller = LM3532_CNTRL_C,
+	.led1_controller = LM3532_CNTRL_A,
+	.led2_controller = LM3532_CNTRL_B,
+	.led3_controller = LM3532_CNTRL_C,
 
-        .ctrl_a_name = "lm3532_bl",
-        .ctrl_b_name = "lm3532_led1",
-        .ctrl_c_name = "lm3532_led2",
+	.ctrl_a_name = "lm3532_bl",
+	.ctrl_b_name = "lm3532_led1",
+	.ctrl_c_name = "lm3532_led2",
 
-        .susd_ramp = 0xC0,
-        .runtime_ramp = 0xC0,
+	.susd_ramp = 0xC0,
+	.runtime_ramp = 0xC0,
 
-        .als1_res = 0xE0,
-        .als2_res = 0xE0,
-        .als_dwn_delay = 0x00,
-        .als_cfgr = 0x2C,
+	.als1_res = 0xE0,
+	.als2_res = 0xE0,
+	.als_dwn_delay = 0x00,
+	.als_cfgr = 0x2C,
 
-        .en_ambl_sens = 0,
+	.en_ambl_sens = 0,
 
-        .init_delay_ms = 5000,
+	.init_delay_ms = 5000,
 
-        .ctrl_a_usage = LM3532_BACKLIGHT_DEVICE,
-        .ctrl_a_pwm = 0xC2,
-        .ctrl_a_fsc = 0xFF,
-        .ctrl_a_l4_daylight = 0xFF,
-        .ctrl_a_l3_bright = 0xCC,
-        .ctrl_a_l2_office = 0x99,
-        .ctrl_a_l1_indoor = 0x66,
-        .ctrl_a_l0_dark = 0x33,
+	.ctrl_a_usage = LM3532_BACKLIGHT_DEVICE,
+	.ctrl_a_pwm = 0xC2,
+	.ctrl_a_fsc = 0xFF,
+	.ctrl_a_l4_daylight = 0xFF,
+	.ctrl_a_l3_bright = 0xCC,
+	.ctrl_a_l2_office = 0x99,
+	.ctrl_a_l1_indoor = 0x66,
+	.ctrl_a_l0_dark = 0x33,
 
-        .ctrl_b_usage = LM3532_UNUSED_DEVICE,
-        .ctrl_b_pwm = 0x82,
-        .ctrl_b_fsc = 0xFF,
-        .ctrl_b_l4_daylight = 0xFF,
-        .ctrl_b_l3_bright = 0xCC,
-        .ctrl_b_l2_office = 0x99,
-        .ctrl_b_l1_indoor = 0x66,
-        .ctrl_b_l0_dark = 0x33,
+	.ctrl_b_usage = LM3532_UNUSED_DEVICE,
+	.ctrl_b_pwm = 0x82,
+	.ctrl_b_fsc = 0xFF,
+	.ctrl_b_l4_daylight = 0xFF,
+	.ctrl_b_l3_bright = 0xCC,
+	.ctrl_b_l2_office = 0x99,
+	.ctrl_b_l1_indoor = 0x66,
+	.ctrl_b_l0_dark = 0x33,
 
-        .ctrl_c_usage = LM3532_UNUSED_DEVICE,
-        .ctrl_c_pwm = 0x82,
-        .ctrl_c_fsc = 0xFF,
-        .ctrl_c_l4_daylight = 0xFF,
-        .ctrl_c_l3_bright = 0xCC,
-        .ctrl_c_l2_office = 0x99,
-        .ctrl_c_l1_indoor = 0x66,
-        .ctrl_c_l0_dark = 0x33,
+	.ctrl_c_usage = LM3532_UNUSED_DEVICE,
+	.ctrl_c_pwm = 0x82,
+	.ctrl_c_fsc = 0xFF,
+	.ctrl_c_l4_daylight = 0xFF,
+	.ctrl_c_l3_bright = 0xCC,
+	.ctrl_c_l2_office = 0x99,
+	.ctrl_c_l1_indoor = 0x66,
+	.ctrl_c_l0_dark = 0x33,
 
-        .l4_high = 0xCC,
-        .l4_low = 0xCC,
-        .l3_high = 0x99,
-        .l3_low = 0x99,
-        .l2_high = 0x66,
-        .l2_low = 0x66,
-        .l1_high = 0x33,
-        .l1_low = 0x33,
+	.l4_high = 0xCC,
+	.l4_low = 0xCC,
+	.l3_high = 0x99,
+	.l3_low = 0x99,
+	.l2_high = 0x66,
+	.l2_low = 0x66,
+	.l1_high = 0x33,
+	.l1_low = 0x33,
 
-        .boot_brightness = LM3532_MAX_BRIGHTNESS,
+	.boot_brightness = LM3532_MAX_BRIGHTNESS,
 };
 #endif /* CONFIG_BACKLIGHT_LM3532 */
 
