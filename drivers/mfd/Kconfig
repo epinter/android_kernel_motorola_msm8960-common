@@ -918,7 +918,7 @@ config EMU_DETECTION
 	bool "Support for EMU accessory detection on Qualcomm MSM8960"
 	depends on MACH_MSM8960_MMI
 	select HWMON
-	select SENSORS_PM8921_ADC
+	select SENSORS_PM8XXX_ADC
 	default n
 	help
 	  This driver implements EMU accessory detection on Qualcomm
