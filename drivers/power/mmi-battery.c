@@ -177,6 +177,75 @@ static void mmi_battery_eeprom_read_work(struct work_struct *work)
 	dev_info->cell_info.batt_valid = batt_valid;
 }
 
+static ssize_t mmi_battery_show_capacity(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct mmi_battery_info *dev_info = platform_get_drvdata(pdev);
+	int val;
+	int sf;
+
+	if (dev_info->cell_info.batt_valid != MMI_BATTERY_VALID)
+		val = -EINVAL;
+	else {
+		switch (dev_info->eeprom[ROM_DATA_CMN_BATT_TYPE]) {
+		case 2:
+		case 9:
+			sf = 20;
+			break;
+
+		case 7:
+		case 10:
+			sf = 40;
+			break;
+
+		case 1:
+		case 8:
+		default:
+			sf = 10;
+			break;
+		}
+
+		val = dev_info->cell_info.capacity * sf;
+	}
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", val);
+}
+
+static DEVICE_ATTR(capacity, 0444, mmi_battery_show_capacity, NULL);
+
+static ssize_t mmi_battery_show_is_valid(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct mmi_battery_info *dev_info = platform_get_drvdata(pdev);
+	int val = 0;
+
+	if (dev_info->cell_info.batt_valid == MMI_BATTERY_VALID)
+		val = 1;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", val);
+}
+static DEVICE_ATTR(is_valid, 0444, mmi_battery_show_is_valid, NULL);
+
+static ssize_t mmi_battery_show_uid(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct mmi_battery_info *dev_info = platform_get_drvdata(pdev);
+
+	if (dev_info->cell_info.batt_valid != MMI_BATTERY_VALID)
+		return scnprintf(buf, PAGE_SIZE, "%d\n", -EINVAL);
+	else
+		return scnprintf(buf, PAGE_SIZE,
+				"%02x%02x%02x%02x%02x%02x%02x%02x\n",
+				dev_info->uid[0], dev_info->uid[1],
+				dev_info->uid[2], dev_info->uid[3],
+				dev_info->uid[4], dev_info->uid[5],
+				dev_info->uid[6], dev_info->uid[7]);
+}
+static DEVICE_ATTR(uid, 0444, mmi_battery_show_uid, NULL);
+
 static int __devinit mmi_battery_probe(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -196,11 +265,36 @@ static int __devinit mmi_battery_probe(struct platform_device *pdev)
 	dev_info->eeprom_read_cnt = 0;
 	dev_info->cell_info.batt_valid = MMI_BATTERY_UNKNOWN;
 
+	ret = device_create_file(dev_info->dev, &dev_attr_capacity);
+	if (ret < 0) {
+		pr_err("Failed to create capacity attribute : %d\n", ret);
+		goto fail_free_dev;
+	}
+
+	ret = device_create_file(dev_info->dev, &dev_attr_is_valid);
+	if (ret < 0) {
+		pr_err("Failed to create is_valid attribute : %d\n", ret);
+		goto fail_free_cap;
+	}
+
+	ret = device_create_file(dev_info->dev, &dev_attr_uid);
+	if (ret < 0) {
+		pr_err("Failed to create uid attribute : %d\n", ret);
+		goto fail_free_is_valid;
+	}
+
 	the_batt = dev_info;
 
 	INIT_DELAYED_WORK(&dev_info->work,  mmi_battery_eeprom_read_work);
 	schedule_delayed_work(&dev_info->work, msecs_to_jiffies(100));
+	return 0;
 
+fail_free_is_valid:
+	device_remove_file(dev_info->dev, &dev_attr_is_valid);
+fail_free_cap:
+	device_remove_file(dev_info->dev, &dev_attr_capacity);
+fail_free_dev:
+	kfree(dev_info);
 fail:
 	return ret;
 }
@@ -208,7 +302,9 @@ fail:
 static int __devexit mmi_battery_remove(struct platform_device *pdev)
 {
 	struct mmi_battery_info *dev_info = platform_get_drvdata(pdev);
-
+	device_remove_file(dev_info->dev, &dev_attr_uid);
+	device_remove_file(dev_info->dev, &dev_attr_is_valid);
+	device_remove_file(dev_info->dev, &dev_attr_capacity);
 	kfree(dev_info);
 	return 0;
 }
