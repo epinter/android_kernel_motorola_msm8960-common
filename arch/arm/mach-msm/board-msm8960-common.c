@@ -76,6 +76,7 @@
 
 #include <linux/ion.h>
 #include <mach/ion.h>
+#include <mach/mdm-peripheral.h>
 
 #include <linux/fmem.h>
 
@@ -2611,6 +2612,33 @@ void __init msm8960_init_dsps(void)
 	platform_device_register(&msm_dsps_device);
 #endif /* CONFIG_MSM_DSPS */
 }
+
+static int hsic_peripheral_status = 1;
+static DEFINE_MUTEX(hsic_status_lock);
+
+void peripheral_connect()
+{
+	mutex_lock(&hsic_status_lock);
+	if (hsic_peripheral_status)
+		goto out;
+	platform_device_add(&msm_device_hsic_host);
+	hsic_peripheral_status = 1;
+out:
+	mutex_unlock(&hsic_status_lock);
+}
+EXPORT_SYMBOL(peripheral_connect);
+
+void peripheral_disconnect()
+{
+	mutex_lock(&hsic_status_lock);
+	if (!hsic_peripheral_status)
+		goto out;
+	platform_device_del(&msm_device_hsic_host);
+	hsic_peripheral_status = 0;
+out:
+	mutex_unlock(&hsic_status_lock);
+}
+EXPORT_SYMBOL(peripheral_disconnect);
 
 void __init msm8960_init_hsic(void)
 {
