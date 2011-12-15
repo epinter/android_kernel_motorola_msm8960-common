@@ -27,7 +27,7 @@
 #ifdef CONFIG_KEYBOARD_GPIO
 #include <linux/gpio_keys.h>
 #endif
-#include "board-msm8960.h"
+#include "board-8960.h"
 #include "board-mmi.h"
 
 
