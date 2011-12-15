@@ -128,6 +128,8 @@ static int pm8921_therm_mitigation[] = {
 };
 
 #ifdef CONFIG_MACH_MSM8960_MMI
+static int battery_timeout;
+
 int find_mmi_battery(struct mmi_battery_cell *cell_info)
 {
 	int i;
@@ -157,7 +159,9 @@ int64_t read_mmi_battery_chrg(int64_t battery_id,
 	int ret;
 	size_t len = sizeof(struct pm8921_charger_battery_data);
 
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < 50; i++) {
+		if (battery_timeout)
+			break;
 		cell_info = mmi_battery_get_info();
 		if (cell_info) {
 			if (cell_info->batt_valid != MMI_BATTERY_UNKNOWN) {
@@ -169,6 +173,7 @@ int64_t read_mmi_battery_chrg(int64_t battery_id,
 		msleep(500);
 	}
 
+	battery_timeout = 1;
 	memcpy(data, mmi_batts.chrg_list[MMI_BATTERY_DEFAULT], len);
 	return 0;
 }
@@ -181,7 +186,9 @@ int64_t read_mmi_battery_bms(int64_t battery_id,
 	int ret;
 	size_t len = sizeof(struct pm8921_bms_battery_data);
 
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < 50; i++) {
+		if (battery_timeout)
+			break;
 		cell_info = mmi_battery_get_info();
 		if (cell_info) {
 			if (cell_info->batt_valid != MMI_BATTERY_UNKNOWN) {
@@ -193,6 +200,7 @@ int64_t read_mmi_battery_bms(int64_t battery_id,
 		msleep(500);
 	}
 
+	battery_timeout = 1;
 	memcpy(data, mmi_batts.bms_list[MMI_BATTERY_DEFAULT], len);
 	return 0;
 }
@@ -529,5 +537,6 @@ void __init pm8921_init(struct pm8xxx_keypad_platform_data *keypad,
 
 #ifdef CONFIG_MACH_MSM8960_MMI
 	pm8921_platform_data.charger_pdata->factory_mode = mode;
+	battery_timeout = mode;
 #endif
 }
