@@ -1309,6 +1309,12 @@ static CLK_GSBI_UART(gsbi10_uart, 10, CLK_HALT_CFPB_STATEB_REG,  2);
 static CLK_GSBI_UART(gsbi11_uart, 11, CLK_HALT_CFPB_STATEC_REG, 17);
 static CLK_GSBI_UART(gsbi12_uart, 12, CLK_HALT_CFPB_STATEC_REG, 13);
 
+int __init msm_gsbi12_uart_clk_ptr(struct clk **ptr)
+{
+	*ptr = &gsbi12_uart_clk.c;
+	return 0;
+}
+
 #define CLK_GSBI_QUP(i, n, h_r, h_b) \
 	struct rcg_clk i##_clk = { \
 		.b = { \
@@ -1368,6 +1374,11 @@ static CLK_GSBI_QUP(gsbi10_qup, 10, CLK_HALT_CFPB_STATEB_REG,  0);
 static CLK_GSBI_QUP(gsbi11_qup, 11, CLK_HALT_CFPB_STATEC_REG, 15);
 static CLK_GSBI_QUP(gsbi12_qup, 12, CLK_HALT_CFPB_STATEC_REG, 11);
 
+int __init msm_gsbi12_qup_clk_ptr(struct clk **ptr)
+{
+	*ptr = &gsbi12_qup_clk.c;
+	return 0;
+}
 #define F_PDM(f, s, d) \
 	{ \
 		.freq_hz = f, \
@@ -2303,6 +2314,12 @@ static struct branch_clk gsbi12_p_clk = {
 		CLK_INIT(gsbi12_p_clk.c),
 	},
 };
+
+int __init msm_gsbi12_p_clk_ptr(struct clk **ptr)
+{
+	*ptr = &gsbi12_p_clk.c;
+	return 0;
+}
 
 static struct branch_clk sata_phy_cfg_clk = {
 	.b = {
@@ -5960,6 +5977,14 @@ static struct clk_lookup msm_clocks_8930[] = {
 	CLK_LOOKUP("q6fw_clk",		q6fw_clk,     ""),
 	CLK_LOOKUP("q6_func_clk",	q6_func_clk,  ""),
 };
+
+int __init msm_clocks_8960_v1_info(struct clk_lookup **ptr, int *num_lookups)
+{
+	*ptr = msm_clocks_8960_v1;
+	*num_lookups = ARRAY_SIZE(msm_clocks_8960_v1);
+	return 0;
+}
+
 /*
  * Miscellaneous clock register initializations
  */

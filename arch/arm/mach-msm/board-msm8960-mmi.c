@@ -122,6 +122,7 @@
 #include "rpm_resources.h"
 #include "mpm.h"
 #include "acpuclock.h"
+#include "clock-local.h"
 #include "rpm_log.h"
 #include "smd_private.h"
 #include "pm-boot.h"
@@ -157,12 +158,14 @@ static struct pm8xxx_gpio_init pm8921_gpios_vanquish[] = {
 	PM8XXX_GPIO_DISABLE(6),				 			/* Disable unused */
 	PM8XXX_GPIO_DISABLE(7),				 			/* Disable NFC */
 	PM8XXX_GPIO_INPUT(16,	    PM_GPIO_PULL_UP_30), /* SD_CARD_WP */
-	PM8XXX_GPIO_OUTPUT(21,	    1),			 		/* Backlight Enable */
-	PM8XXX_GPIO_DISABLE(22),			 			/* Disable NFC */
+	PM8XXX_GPIO_PAIRED_OUT_VIN(21, PM_GPIO_VIN_L17), /* Whisper TX 2.7V */
+	PM8XXX_GPIO_PAIRED_IN_VIN(22,  PM_GPIO_VIN_S4),  /* Whisper TX 1.8V */
 	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Red LED */
 	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2),	 /* Green LED */
 	PM8XXX_GPIO_OUTPUT_FUNC(26, 0, PM_GPIO_FUNC_2),	 /* Blue LED */
 	PM8XXX_GPIO_INPUT(20,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
+	PM8XXX_GPIO_PAIRED_IN_VIN(41,  PM_GPIO_VIN_L17), /* Whisper TX 2.7V */
+	PM8XXX_GPIO_PAIRED_OUT_VIN(42, PM_GPIO_VIN_S4),  /* Whisper TX 1.8V */
 	PM8XXX_GPIO_OUTPUT(43,	    PM_GPIO_PULL_UP_1P5), /* DISP_RESET_N */
 	PM8XXX_GPIO_OUTPUT_VIN(37, PM_GPIO_PULL_UP_30,
 			PM_GPIO_VIN_L17),	/* DISP_RESET_N on P1C+ */
@@ -429,71 +432,47 @@ static struct resource resources_uart_gsbi12[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.start	= 14,
-		.end	= 15,
-		.name	= "uartdm_channels",
-		.flags	= IORESOURCE_DMA,
-	},
-	{
-		.start	= 15,
-		.end	= 14,
-		.name	= "uartdm_crci",
-		.flags	= IORESOURCE_DMA,
+		.start	= MSM_GSBI12_PHYS,
+		.end	= MSM_GSBI12_PHYS + 4 - 1,
+		.name	= "gsbi_resource",
+		.flags	= IORESOURCE_MEM,
 	},
 };
 
-static u64 msm_uart_dm12_dma_mask = DMA_BIT_MASK(32);
 struct platform_device msm8960_device_uart_gsbi12 = {
-	.name	= "msm_serial_hs",
+	.name	= "msm_serial_hsl",
 	.id	= 1,
 	.num_resources	= ARRAY_SIZE(resources_uart_gsbi12),
 	.resource	= resources_uart_gsbi12,
-	.dev	= {
-		.dma_mask		= &msm_uart_dm12_dma_mask,
-		.coherent_dma_mask	= DMA_BIT_MASK(32),
-	},
 };
 
-static __init void mot_init_emu_det_resources(
-			struct msm_otg_platform_data *ctrl_data)
+static __init void mot_set_gsbi12_clk(const char *con_id,
+		struct clk *clk_entity, const char *dev_id)
 {
-	if (ctrl_data)
-		msm8960_i2c_qup_gsbi12_pdata.use_gsbi_shared_mode = 1;
+	int num_lookups;
+	struct clk_lookup *lk;
+	if (!msm_clocks_8960_v1_info(&lk, &num_lookups)) {
+		int i;
+		for (i = 0; i < num_lookups; i++) {
+			if (!strncmp((lk+i)->con_id, con_id,
+				strlen((lk+i)->con_id)) &&
+				((lk+i)->clk == clk_entity)) {
+				(lk+i)->dev_id = dev_id;
+				break;
+			}
+		}
+	}
 }
 
-static __init void mot_emu_det_protocol_code(void)
+static __init void mot_setup_gsbi12_clk(void)
 {
-	void *gsbi_pclk;
-	void *gsbi_ctrl;
-	uint32_t ClkStatus;
-
-	gsbi_pclk = ioremap_nocache(GSBIn_HCLK_CTRL_REG(12), 4);
-	if (IS_ERR_OR_NULL(gsbi_pclk)) {
-		pr_err("unable to map clock ctrl register\n");
-		return;
-	}
-
-	gsbi_ctrl = ioremap_nocache(MSM_GSBI12_PHYS, 4);
-	if (IS_ERR_OR_NULL(gsbi_ctrl)) {
-		iounmap(gsbi_pclk);
-		pr_err("unable to map GSBI ctrl register\n");
-		return;
-	}
-
-	ClkStatus = readl_relaxed(gsbi_pclk) & CLK_BRANCH_ENA;
-	if (!ClkStatus) {
-		writel_relaxed(CLK_BRANCH_ENA, gsbi_pclk);
-		mb();
-	}
-
-	writel_relaxed(UART_I2C_PROTOCOL, gsbi_ctrl);
-	mb();
-
-	if (!ClkStatus)
-		writel_relaxed(0x00, gsbi_pclk);
-
-	iounmap(gsbi_pclk);
-	iounmap(gsbi_ctrl);
+	struct clk *clk;
+	if (!msm_gsbi12_uart_clk_ptr(&clk))
+		mot_set_gsbi12_clk("core_clk", clk, "msm_serial_hsl.1");
+	if (!msm_gsbi12_qup_clk_ptr(&clk))
+		mot_set_gsbi12_clk("core_clk", clk, NULL);
+	if (!msm_gsbi12_p_clk_ptr(&clk))
+		mot_set_gsbi12_clk("iface_clk", clk, "msm_serial_hsl.1");
 }
 
 static __init void mot_init_emu_detection(
@@ -506,7 +485,6 @@ static __init void mot_init_emu_detection(
 
 		msm_gpiomux_install(emu_det_gsbi12_configs,
 			ARRAY_SIZE(emu_det_gsbi12_configs));
-		mot_emu_det_protocol_code();
 	} else {
 		/* If platform data is not set, safely drive the MUX
 		 * CTRL pins to the USB configuration.
@@ -514,6 +492,58 @@ static __init void mot_init_emu_detection(
 		emu_mux_ctrl_config_pin("EMU_MUX_CTRL0_GPIO", 1);
 		emu_mux_ctrl_config_pin("EMU_MUX_CTRL1_GPIO", 0);
 	}
+}
+
+#else /* msm_otg driver still needs this */
+
+#define USB_5V_EN	42
+static void msm_hsusb_vbus_power(bool on)
+{
+	int rc;
+	static bool vbus_is_on;
+	static struct regulator *mvs_otg_switch;
+
+	if (vbus_is_on == on)
+		return;
+
+	if (on) {
+		mvs_otg_switch = regulator_get(&msm8960_device_otg.dev,
+					       "vbus_otg");
+		if (IS_ERR(mvs_otg_switch)) {
+			pr_err("Unable to get mvs_otg_switch\n");
+			return;
+		}
+
+		rc = gpio_request(PM8921_GPIO_PM_TO_SYS(USB_5V_EN),
+						"usb_5v_en");
+		if (rc < 0) {
+			pr_err("failed to request usb_5v_en gpio\n");
+			goto put_mvs_otg;
+		}
+
+		rc = gpio_direction_output(PM8921_GPIO_PM_TO_SYS(USB_5V_EN), 1);
+		if (rc) {
+			pr_err("%s: unable to set_direction for gpio [%d]\n",
+				__func__, PM8921_GPIO_PM_TO_SYS(USB_5V_EN));
+			goto free_usb_5v_en;
+		}
+
+		if (regulator_enable(mvs_otg_switch)) {
+			pr_err("unable to enable mvs_otg_switch\n");
+			goto err_ldo_gpio_set_dir;
+		}
+
+		vbus_is_on = true;
+		return;
+	}
+	regulator_disable(mvs_otg_switch);
+err_ldo_gpio_set_dir:
+	gpio_set_value(PM8921_GPIO_PM_TO_SYS(USB_5V_EN), 0);
+free_usb_5v_en:
+	gpio_free(PM8921_GPIO_PM_TO_SYS(USB_5V_EN));
+put_mvs_otg:
+	regulator_put(mvs_otg_switch);
+	vbus_is_on = false;
 }
 #endif
 
@@ -1223,59 +1253,6 @@ static int msm_fb_detect_panel(const char *name)
 	return -ENODEV;
 }
 
-#ifdef CONFIG_USB_MSM_OTG_72K
-static struct msm_otg_platform_data msm_otg_pdata;
-#else
-#define USB_5V_EN		42
-static void msm_hsusb_vbus_power(bool on)
-{
-	int rc;
-	static bool vbus_is_on;
-	static struct regulator *mvs_otg_switch;
-
-	if (vbus_is_on == on)
-		return;
-
-	if (on) {
-		mvs_otg_switch = regulator_get(&msm8960_device_otg.dev,
-					       "vbus_otg");
-		if (IS_ERR(mvs_otg_switch)) {
-			pr_err("Unable to get mvs_otg_switch\n");
-			return;
-		}
-
-		rc = gpio_request(PM8921_GPIO_PM_TO_SYS(USB_5V_EN),
-						"usb_5v_en");
-		if (rc < 0) {
-			pr_err("failed to request usb_5v_en gpio\n");
-			goto put_mvs_otg;
-		}
-
-		rc = gpio_direction_output(PM8921_GPIO_PM_TO_SYS(USB_5V_EN), 1);
-		if (rc) {
-			pr_err("%s: unable to set_direction for gpio [%d]\n",
-				__func__, PM8921_GPIO_PM_TO_SYS(USB_5V_EN));
-			goto free_usb_5v_en;
-		}
-
-		if (regulator_enable(mvs_otg_switch)) {
-			pr_err("unable to enable mvs_otg_switch\n");
-			goto err_ldo_gpio_set_dir;
-		}
-
-		vbus_is_on = true;
-		return;
-	}
-	regulator_disable(mvs_otg_switch);
-err_ldo_gpio_set_dir:
-	gpio_set_value_cansleep(PM8921_GPIO_PM_TO_SYS(USB_5V_EN), 0);
-free_usb_5v_en:
-	gpio_free(PM8921_GPIO_PM_TO_SYS(USB_5V_EN));
-put_mvs_otg:
-	regulator_put(mvs_otg_switch);
-	vbus_is_on = false;
-}
-#endif
 static struct led_pwm_gpio pm8xxx_pwm_gpio_leds[] = {
 	[0] = {
 		.name			= "red",
@@ -1915,10 +1892,6 @@ static void __init msm8960_mmi_init(void)
 	/* Init the bus, but no devices at this time */
 	msm8960_spi_init(&msm8960_qup_spi_gsbi1_pdata, NULL, 0);
 
-#ifdef CONFIG_EMU_DETECTION
-	/* This function has to be called prior I2C init */
-	mot_init_emu_det_resources(otg_control_data);
-#endif
 	msm8960_i2c_init(400000);
 	msm8960_gfx_init();
 	msm8960_spm_init();
@@ -1948,11 +1921,13 @@ static void __init msm8960_mmi_init(void)
 	pm8921_gpio_mpp_init(pm8921_gpios, pm8921_gpios_size,
 							pm8921_mpps, ARRAY_SIZE(pm8921_mpps));
 
-	msm8960_init_usb(msm_hsusb_vbus_power);
 	mot_init_usb();
 
 #ifdef CONFIG_EMU_DETECTION
+	msm8960_init_usb(NULL);
 	mot_init_emu_detection(otg_control_data);
+#else
+	msm8960_init_usb(msm_hsusb_vbus_power);
 #endif
 
 	platform_add_devices(mmi_devices, ARRAY_SIZE(mmi_devices));
@@ -2107,6 +2082,7 @@ static __init void qinara_init(void)
 	 */
 	msm_otg_pdata.phy_init_seq = phy_settings;
 #ifdef CONFIG_EMU_DETECTION
+	mot_setup_gsbi12_clk();
 	if (system_rev < HWREV_P2)
 		otg_control_data = NULL;
 #endif
@@ -2138,6 +2114,7 @@ MACHINE_END
 static __init void vanquish_init(void)
 {
 #ifdef CONFIG_EMU_DETECTION
+	mot_setup_gsbi12_clk();
 	if (system_rev < HWREV_P1B2)
 		otg_control_data = NULL;
 #endif

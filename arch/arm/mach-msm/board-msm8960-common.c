@@ -2322,7 +2322,7 @@ static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi10_pdata = {
 	.msm_i2c_config_gpio = gsbi_qup_i2c_gpio_config,
 };
 
-struct msm_i2c_platform_data msm8960_i2c_qup_gsbi12_pdata = {
+static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi12_pdata = {
 	.clk_freq = 100000,
 	.src_clk_rate = 24000000,
 	.msm_i2c_config_gpio = gsbi_qup_i2c_gpio_config,
