@@ -2185,6 +2185,7 @@ MACHINE_END
 
 static __init void becker_init(void)
 {
+	strncpy(panel_name, "mipi_mot_cmd_auo_qhd_430", PANEL_NAME_MAX_LEN);
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_ATMEL);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
@@ -2208,10 +2209,10 @@ MACHINE_END
 
 static __init void asanti_init(void)
 {
+	strncpy(panel_name, "mipi_mot_cmd_auo_qhd_430", PANEL_NAME_MAX_LEN);
 	otg_control_data = NULL;
 	pm8921_gpios = pm8921_gpios_asanti;
 	pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_asanti);
-
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_ATMEL);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
