@@ -35,9 +35,10 @@ VREG_CONSUMERS(L2) = {
 	REGULATOR_SUPPLY("8921_l2",		NULL),
 	REGULATOR_SUPPLY("dsi_vdda",		"mipi_dsi.1"),
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_motsoc1.0"),
+	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_mt9m114.0"),
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_imx074.0"),
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_ov2720.0"),
-	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_mt9m114.0"),
+	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_ov8820.0"),
 };
 VREG_CONSUMERS(L3) = {
 	REGULATOR_SUPPLY("8921_l3",		NULL),

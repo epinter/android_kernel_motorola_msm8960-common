@@ -1156,6 +1156,11 @@ static struct i2c_board_info msm_camera_boardinfo[] __initdata = {
 	I2C_BOARD_INFO("mt9m114", 0x48),
 	},
 #endif
+#ifdef CONFIG_OV8820
+	{
+	I2C_BOARD_INFO("ov8820", 0x6C >> 2),
+	},
+#endif
 };
 
 #ifdef CONFIG_MOTSOC1
@@ -1219,6 +1224,36 @@ struct platform_device msm8960_camera_sensor_mt9m114 = {
 };
 #endif
 
+#ifdef CONFIG_OV8820
+static struct msm_camera_sensor_flash_data flash_ov8820 = {
+	.flash_type	= MSM_CAMERA_FLASH_NONE,
+};
+
+static struct msm_camera_sensor_platform_info sensor_board_info_ov8820 = {
+	.mount_angle	= 90,
+	.sensor_reset	= 0,
+	.sensor_pwd	= 0,
+	.vcm_pwd	= 0,
+	.vcm_enable	= 0,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_ov8820_data = {
+	.sensor_name	= "ov8820",
+	.pdata	= &msm_camera_csi_device_data[0],
+	.flash_data	= &flash_ov8820,
+	.sensor_platform_info = &sensor_board_info_ov8820,
+	.gpio_conf = &msm_camif_gpio_conf,
+	.csi_if	= 1,
+	.camera_type = BACK_CAMERA_2D,
+};
+
+struct platform_device msm8960_camera_sensor_ov8820 = {
+	.name	= "msm_camera_ov8820",
+	.dev	= {
+		.platform_data = &msm_camera_sensor_ov8820_data,
+	},
+};
+#endif
 void __init msm8960_init_cam(void)
 {
 	int i;
@@ -1228,6 +1263,9 @@ void __init msm8960_init_cam(void)
 #endif
 #ifdef CONFIG_MT9M114
 		&msm8960_camera_sensor_mt9m114,
+#endif
+#ifdef CONFIG_OV8820
+		&msm8960_camera_sensor_ov8820,
 #endif
 	};
 

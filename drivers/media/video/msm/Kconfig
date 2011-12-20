@@ -207,6 +207,13 @@ config OV2720
 	depends on MSM_CAMERA
 	default n
 
+config OV8820
+	bool "Sensor ov8820 (Omnivision 8M)"
+	depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
+	default n
+	---help---
+	Omnivision 8M Bayer Sensor
+
 config VB6801
 	bool "Sensor vb6801"
 	depends on MSM_CAMERA && !ARCH_MSM8X60 && !MSM_CAMERA_V4L2
