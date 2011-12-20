@@ -2420,17 +2420,6 @@ static struct platform_device msm8960_device_ext_5v_vreg __devinitdata = {
 	},
 };
 
-/* this does not appear to be used */
-#ifdef WE_NEED_EXT_L2
-static struct platform_device msm8960_device_ext_l2_vreg __devinitdata = {
-	.name	= GPIO_REGULATOR_DEV_NAME,
-	.id	= 91,
-	.dev	= {
-		.platform_data = &msm_gpio_regulator_pdata[GPIO_VREG_ID_EXT_L2],
-	},
-};
-#endif
-
 struct platform_device msm8960_device_rpm_regulator __devinitdata = {
 	.name	= "rpm-regulator",
 	.id	= -1,
@@ -2569,9 +2558,6 @@ struct platform_device *common_devices[] __initdata = {
 	&msm_device_saw_core0,
 	&msm_device_saw_core1,
 	&msm8960_device_ext_5v_vreg,
-#ifdef WE_NEED_EXT_L2
-	&msm8960_device_ext_l2_vreg,
-#endif
 	&msm8960_device_ssbi_pmic,
 	&msm8960_device_qup_spi_gsbi1,
 	&msm8960_device_qup_i2c_gsbi3,
