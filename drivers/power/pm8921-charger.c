@@ -1020,15 +1020,15 @@ static void pm8921_chg_hw_config(struct pm8921_chg_chip *chip)
 	int rc;
 
 	rc = pm_chg_vbatdet_set(chip,
-				chip->max_voltage - chip->resume_voltage_delta);
+				chip->max_voltage_mv - chip->resume_voltage_delta);
 	if (rc)
 		pr_err("Failed to set vbatdet comprator voltage to %d rc=%d\n",
-			chip->max_voltage - chip->resume_voltage_delta, rc);
+			chip->max_voltage_mv - chip->resume_voltage_delta, rc);
 
-	rc = pm_chg_vddmax_set(chip, chip->max_voltage);
+	rc = pm_chg_vddmax_set(chip, chip->max_voltage_mv);
 	if (rc)
 		pr_err("Failed to set max voltage to %d rc=%d\n",
-						chip->max_voltage, rc);
+						chip->max_voltage_mv, rc);
 
 	rc = pm_chg_ibatmax_set(chip, chip->max_bat_chg_current);
 	if (rc)
@@ -1042,7 +1042,7 @@ static void pm8921_chg_hw_config(struct pm8921_chg_chip *chip)
 	 * if both the cool_temp and warm_temp are zero the device doesnt
 	 * care for jeita compliance
 	 */
-	if (!(chip->cool_temp == 0 && chip->warm_temp == 0)) {
+	if (!(chip->cool_temp_dc == 0 && chip->warm_temp_dc == 0)) {
 		rc = configure_btm(chip);
 		if (rc)
 			pr_err("couldn't register with btm rc=%d\n", rc);
@@ -1090,10 +1090,10 @@ static int is_battery_valid(struct pm8921_chg_chip *chip)
 	if (pdata->get_batt_info) {
 		batt_vld = pdata->get_batt_info(rc, &batt_data);
 		if (batt_vld) {
-			chip->max_voltage = batt_data.max_voltage;
-			pr_debug("max_voltage = %d\n", chip->max_voltage);
-			chip->min_voltage = batt_data.min_voltage;
-			pr_debug("min_voltage = %d\n", chip->min_voltage);
+			chip->max_voltage_mv = batt_data.max_voltage;
+			pr_debug("max_voltage = %d\n", chip->max_voltage_mv);
+			chip->min_voltage_mv = batt_data.min_voltage;
+			pr_debug("min_voltage = %d\n", chip->min_voltage_mv);
 			chip->resume_voltage_delta =
 				batt_data.resume_voltage_delta;
 			pr_debug("resume_voltage_delta = %d\n",
@@ -1104,10 +1104,10 @@ static int is_battery_valid(struct pm8921_chg_chip *chip)
 				batt_data.max_bat_chg_current;
 			pr_debug("max_bat_chg_current = %d\n",
 				chip->max_bat_chg_current);
-			chip->cool_temp = batt_data.cool_temp;
-			pr_debug("cool_temp = %d\n", chip->cool_temp);
-			chip->warm_temp = batt_data.warm_temp;
-			pr_debug("warm_temp = %d\n", chip->warm_temp);
+			chip->cool_temp_dc = batt_data.cool_temp;
+			pr_debug("cool_temp = %d\n", chip->cool_temp_dc);
+			chip->warm_temp_dc = batt_data.warm_temp;
+			pr_debug("warm_temp = %d\n", chip->warm_temp_dc);
 			chip->cool_bat_chg_current =
 				batt_data.cool_bat_chg_current;
 			pr_debug("cool_bat_chg_current = %d\n",
@@ -2736,16 +2736,16 @@ static void update_heartbeat(struct work_struct *work)
 
 	pm_chg_failed_clear(chip, 1);
 #ifdef CONFIG_PM8921_EXTENDED_INFO
-	if ((chip->step_charge_voltage < chip->max_voltage) &&
-	    (chip->step_charge_voltage > chip->min_voltage)) {
-		if (get_prop_battery_mvolts(chip) >=
+	if ((chip->step_charge_voltage < chip->max_voltage_mv) &&
+	    (chip->step_charge_voltage > chip->min_voltage_mv)) {
+		if (get_prop_battery_uvolts(chip) >=
 		    chip->step_charge_voltage) {
 			pr_debug("Step Rate used Batt V = %d\n",
-				get_prop_battery_mvolts(chip));
+				get_prop_battery_uvolts(chip));
 			pm_chg_ibatmax_set(chip, chip->step_charge_current);
 		} else {
 			pr_debug("Step Rate NOT used Batt V = %d\n",
-				get_prop_battery_mvolts(chip));
+				get_prop_battery_uvolts(chip));
 			pm_chg_ibatmax_set(chip, chip->max_bat_chg_current);
 		}
 	}
