@@ -271,6 +271,9 @@ struct pm8921_chg_chip {
 	unsigned int			step_charge_current;
 	unsigned int			step_charge_voltage;
 #endif
+#ifdef CONFIG_PM8921_FACTORY_SHUTDOWN
+	void				(*arch_reboot_cb)(void);
+#endif
 };
 
 /* user space parameter to limit usb current */
@@ -3696,6 +3699,11 @@ static int pm8921_charging_reboot(struct notifier_block *nb,
 		if (!the_chip->factory_mode)
 			break;
 
+#ifdef CONFIG_PM8921_FACTORY_SHUTDOWN
+		if (the_chip->arch_reboot_cb)
+			the_chip->arch_reboot_cb();
+#endif
+
 		res.physical = 0;
 		do {
 			if (pm8xxx_adc_read(CHANNEL_USBIN, &res)) {
@@ -4069,6 +4077,9 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	chip->thermal_mitigation = pdata->thermal_mitigation;
 	chip->thermal_levels = pdata->thermal_levels;
 	chip->factory_mode = pdata->factory_mode;
+#ifdef CONFIG_PM8921_FACTORY_SHUTDOWN
+	chip->arch_reboot_cb = pdata->arch_reboot_cb;
+#endif
 
 	chip->cold_thr = pdata->cold_thr;
 	chip->hot_thr = pdata->hot_thr;

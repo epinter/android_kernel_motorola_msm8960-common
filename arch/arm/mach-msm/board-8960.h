@@ -245,7 +245,8 @@ extern void __init pm8921_gpio_mpp_init(struct pm8xxx_gpio_init *pm8921_gpios,
 extern void __init msm8960_init_slim(void);
 extern void __init msm8960_pm_init(unsigned wakeup_irq);
 extern void __init pm8921_init(struct pm8xxx_keypad_platform_data *keypad,
-								int mode, int cool_temp, int warm_temp);
+								int mode, int cool_temp,
+								int warm_temp, void *cb);
 
 extern int  __init msm8960_change_memory_power(u64 start, u64 size, int change_type);
 extern void __init msm8960_map_io(void);

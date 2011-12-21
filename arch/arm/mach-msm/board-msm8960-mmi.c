@@ -1863,6 +1863,45 @@ static int mot_tcmd_export_gpio(void)
 	return 0;
 }
 
+#ifdef CONFIG_PM8921_FACTORY_SHUTDOWN
+#define MOT_EMU_MUX_CTRL_0_DEFAULT      107
+#define MOT_EMU_MUX_CTRL_1_DEFAULT      96
+static int mot_emu_mux_ctrl_0 = MOT_EMU_MUX_CTRL_0_DEFAULT;
+static int mot_emu_mux_ctrl_1 = MOT_EMU_MUX_CTRL_1_DEFAULT;
+
+#ifdef CONFIG_EMU_DETECTION
+static void mot_emu_mux_ctrl_update_config(void)
+{
+	struct resource *res;
+	res = platform_get_resource_byname(&emu_det_device,
+		IORESOURCE_IO, "EMU_MUX_CTRL0_GPIO");
+	if (!res)
+		return;
+	mot_emu_mux_ctrl_0 = res->start;
+
+	res = platform_get_resource_byname(&emu_det_device,
+		IORESOURCE_IO, "EMU_MUX_CTRL1_GPIO");
+	if (!res)
+		return;
+	mot_emu_mux_ctrl_1 = res->start;
+}
+#endif
+
+static void mot_factory_reboot_callback(void)
+{
+#ifdef CONFIG_EMU_DETECTION
+	/* If EMU detection driver is enabled, pull the pin configuration
+	   from its platform device data. */
+	mot_emu_mux_ctrl_update_config();
+#endif
+	gpio_direction_output(mot_emu_mux_ctrl_0, 0);
+	gpio_direction_output(mot_emu_mux_ctrl_1, 0);
+}
+static void (*reboot_ptr)(void) = &mot_factory_reboot_callback;
+#else
+static void (*reboot_ptr)(void);
+#endif
+
 static struct msm_spi_platform_data msm8960_qup_spi_gsbi1_pdata = {
 	.max_clock_speed = 15060000,
 };
@@ -1906,7 +1945,8 @@ static void __init msm8960_mmi_init(void)
 	msm8960_init_hdmi(&hdmi_msm_device, &hdmi_msm_data);
 #endif
 
-	pm8921_init(keypad_data, boot_mode_is_factory(), 0, 0);
+	pm8921_init(keypad_data, boot_mode_is_factory(), 0, 0,
+				reboot_ptr);
 
 	/* Init the bus, but no devices at this time */
 	msm8960_spi_init(&msm8960_qup_spi_gsbi1_pdata, NULL, 0);

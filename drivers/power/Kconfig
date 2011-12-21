@@ -376,4 +376,11 @@ config PM8921_EXTENDED_INFO
 	help
 	  Say Y here to enable support for Pm8921 Extended Info
 
+config PM8921_FACTORY_SHUTDOWN
+	bool "Enable PM8921 factory shutdown support"
+	depends on PM8921_CHARGER
+	help
+	  Say Y here to enable factory shutdown support in PM8921 Charger
+	  driver.
+
 endif # POWER_SUPPLY

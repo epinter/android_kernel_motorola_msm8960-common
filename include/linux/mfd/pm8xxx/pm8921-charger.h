@@ -208,6 +208,9 @@ struct pm8921_charger_platform_data {
 	unsigned int			step_charge_current;
 	unsigned int			step_charge_voltage;
 #endif
+#ifdef CONFIG_PM8921_FACTORY_SHUTDOWN
+	void				(*arch_reboot_cb)(void);
+#endif
 };
 
 enum pm8921_charger_source {
