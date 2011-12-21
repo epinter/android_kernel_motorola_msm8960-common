@@ -620,6 +620,7 @@ static void mux_ctrl_mode(int mode)
 	gpio_set_value(emud->emu_gpio[EMU_MUX_CTRL1_GPIO], sel1);
 }
 
+/* Returns voltage in mV */
 static int adc_emu_id_get(void)
 {
 	struct pm8xxx_adc_chan_result res;
@@ -627,10 +628,11 @@ static int adc_emu_id_get(void)
 	if (pm8xxx_adc_read(CHANNEL_MPP_2, &res))
 		pr_err("CHANNEL_MPP_2 ADC read error\n");
 	else
-		pr_emu_det(DEBUG, "emu_id=%lld mV\n", res.physical);
-	return (int)res.physical;
+		pr_emu_det(DEBUG, "emu_id=%lld uV\n", res.physical);
+	return (int)res.physical/1000;
 }
 
+/* Returns voltage in mV */
 static int adc_vbus_get(void)
 {
 	struct pm8xxx_adc_chan_result res;
@@ -638,8 +640,8 @@ static int adc_vbus_get(void)
 	if (pm8xxx_adc_read(CHANNEL_USBIN, &res))
 		pr_err("VBUS ADC read error\n");
 	else
-		pr_emu_det(DEBUG, "vbus=%lld mV\n", res.physical);
-	return (int)res.physical;
+		pr_emu_det(DEBUG, "vbus=%lld uV\n", res.physical);
+	return (int)res.physical/1000;
 }
 
 
