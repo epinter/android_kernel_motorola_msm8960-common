@@ -98,6 +98,9 @@
 
 #define PM8921_IRQ_BASE		(NR_MSM_IRQS + NR_GPIO_IRQS)
 
+#define GSBI_PROTOCOL_UNDEFINED	0x70
+#define GSBI_PROTOCOL_I2C_UART	0x60
+
 #define MSM_USB_BASE		(emud->regs)
 #define PHY_SESS_VLD		(1 << 29)
 #define PHY_SESS_VLD_CHG	(1 << 30)
@@ -177,6 +180,12 @@ static bool in_range(int voltage, int idx)
 #define MUXMODE_USB	0
 #define MUXMODE_UART	1
 #define MUXMODE_AUDIO	2
+
+#define DRVMODE_USB	MUXMODE_USB
+#define DRVMODE_UART	MUXMODE_UART
+#define DRVMODE_AUDIO	MUXMODE_AUDIO
+#define DRVMODE_FACTORY	3
+#define DRVMODE_NORMAL	4
 
 static int debug_mask = PRINT_ERROR | PRINT_DEBUG |
 	PRINT_STATUS | PRINT_TRANSITION /*| PRINT_PARANOIC*/;
@@ -312,6 +321,8 @@ enum emu_det_gpios {
 	EMU_ID_EN_GPIO,
 	EMU_MUX_CTRL0_GPIO,
 	EMU_MUX_CTRL1_GPIO,
+	WHISPER_TX_GPIO,
+	WHISPER_RX_GPIO,
 	PMGPIO_BASE,
 	SEMU_PPD_DET_GPIO = PMGPIO_BASE,
 	SEMU_ALT_MODE_EN_GPIO,
@@ -454,6 +465,9 @@ static char *bit_names[] = BITS;
 
 #define SENSE_USB_ADAPTER   (test_bit(GRND_BIT, &data->sense))
 
+#define SENSE_DISCONNECT    (test_bit(B_SESSEND_BIT, &data->sense) && \
+			     test_bit(FLOAT_BIT, &data->sense))
+
 struct emu_det_data {
 	struct device *dev;
 	struct delayed_work timer_work;
@@ -496,6 +510,7 @@ struct emu_det_data {
 	bool semu_alt_mode;
 	bool ext_5v_switch_enabled;
 	void __iomem *regs;
+	unsigned  gsbi_phys;
 	struct otg_transceiver *trans;
 };
 
@@ -601,6 +616,74 @@ static const char *print_accy_name(enum emu_det_accy accy)
 static const char *print_state_name(enum emu_det_state st)
 {
 	return (st < STATE_MAX ? state_names[st] : "NA");
+}
+
+static struct gpiomux_setting gsbi12_gpio_mode = {
+	.func = 0, /* GPIO function assigned in whisper_gpio_mode() */
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct msm_gpiomux_config gsbi12_gpio_configs[] = {
+	{
+		.gpio      = 42,	/* GSBI12 GPIO */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &gsbi12_gpio_mode,
+			[GPIOMUX_ACTIVE] = &gsbi12_gpio_mode,
+		},
+	},
+	{
+		.gpio      = 43,	/* GSBI12 GPIO */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &gsbi12_gpio_mode,
+			[GPIOMUX_ACTIVE] = &gsbi12_gpio_mode,
+		},
+	},
+};
+
+static void whisper_gpio_mode(int mode)
+{
+	switch (mode) {
+	case DRVMODE_FACTORY:
+		gsbi12_gpio_mode.func = GPIOMUX_FUNC_GPIO; break;
+	case DRVMODE_NORMAL:
+		gsbi12_gpio_mode.func = GPIOMUX_FUNC_1; break;
+	}
+	msm_gpiomux_install(gsbi12_gpio_configs,
+		ARRAY_SIZE(gsbi12_gpio_configs));
+}
+
+static void gsbi_ctrl_register(bool restore)
+{
+	struct emu_det_data *emud = the_emud;
+	void *gsbi_ctrl;
+	uint32_t new;
+	static uint32_t value;
+	static bool stored;
+
+	gsbi_ctrl = ioremap_nocache(emud->gsbi_phys, 4);
+	if (IS_ERR_OR_NULL(gsbi_ctrl)) {
+		pr_emu_det(ERROR, "cannot map GSBI ctrl reg\n");
+		return;
+	} else {
+		if (restore) {
+			if (stored) {
+				writel_relaxed(value, gsbi_ctrl);
+				stored = false;
+				pr_emu_det(DEBUG, "GSBI reg 0x%x restored\n",
+									value);
+			}
+		} else {
+			new = value = readl_relaxed(gsbi_ctrl);
+			stored = true;
+			new &= ~GSBI_PROTOCOL_UNDEFINED;
+			new |= GSBI_PROTOCOL_I2C_UART;
+			writel_relaxed(new, gsbi_ctrl);
+			mb();
+			pr_emu_det(DEBUG, "GSBI reg updated\n");
+		}
+	}
+	iounmap(gsbi_ctrl);
 }
 
 static void mux_ctrl_mode(int mode)
@@ -879,7 +962,8 @@ static void otgsc_setup(int disable)
 #define dcd_disable()		dcd_setup(1)
 #define emu_id_protection_on()	emu_id_protection_setup(true)
 #define emu_id_protection_off()	emu_id_protection_setup(false)
-
+#define gsbi_ctrl_reg_store()	gsbi_ctrl_register(0)
+#define gsbi_ctrl_reg_restore()	gsbi_ctrl_register(1)
 #define pmic_gpio_config_store(_idx)	pmic_gpio_config(1, _idx)
 #define pmic_gpio_config_restore(_idx)	pmic_gpio_config(0, _idx)
 
@@ -1075,15 +1159,21 @@ static int configure_hardware(enum emu_det_accy accy)
 	case ACCY_USB:
 	case ACCY_FACTORY:
 	case ACCY_UNKNOWN:
-	case ACCY_CHARGER:
 	case ACCY_WHISPER_SMART:
 		mux_ctrl_mode(MUXMODE_USB);
+		gsbi_ctrl_reg_restore();
+
+		break;
+
+	case ACCY_CHARGER:
+		mux_ctrl_mode(MUXMODE_UART);
+		gsbi_ctrl_reg_store();
 
 		break;
 
 	case ACCY_WHISPER_PPD:
 		mux_ctrl_mode(MUXMODE_UART);
-
+		gsbi_ctrl_reg_store();
 		if (emu_pdata && emu_pdata->enable_5v)	{
 			emu_pdata->enable_5v(1);
 			emud->ext_5v_switch_enabled = true;
@@ -1094,7 +1184,7 @@ static int configure_hardware(enum emu_det_accy accy)
 
 	case ACCY_NONE:
 		mux_ctrl_mode(MUXMODE_USB);
-
+		gsbi_ctrl_reg_restore();
 		emud->whisper_auth = AUTH_NOT_STARTED;
 		if (emu_pdata && emu_pdata->enable_5v &&
 			emud->ext_5v_switch_enabled) {
@@ -1174,6 +1264,7 @@ static void notify_whisper_switch(enum emu_det_accy accy)
 	if ((accy == ACCY_CHARGER) ||
 		(accy == ACCY_WHISPER_PPD)) {
 		switch_set_state(&data->wsdev, DOCKED);
+		pr_emu_det(DEBUG, "whisper switch set to DOCKED\n");
 	/* LD2 open->close */
 	} else if ((accy == ACCY_WHISPER_SMART) &&
 		   (data->state == WHISPER_SMART_LD2_CLOSE)) {
@@ -1192,6 +1283,7 @@ static void notify_whisper_switch(enum emu_det_accy accy)
 
 	} else {
 		switch_set_state(&data->wsdev, UNDOCKED);
+		pr_emu_det(DEBUG, "whisper switch set to UNDOCKED\n");
 		switch_set_state(&data->dsdev, NO_DOCK);
 		switch_set_state(&data->edsdev, NO_DOCK);
 		switch_set_state(&data->emusdev, NO_DEVICE);
@@ -1231,6 +1323,7 @@ static void detection_work(bool caused_by_irq)
 	switch (data->state) {
 	case CONFIG:
 		pm_runtime_get(data->trans->dev);
+		gsbi_ctrl_reg_restore();
 		memset(&data->sense, 0, sizeof(data->sense));
 		data->trans->init(data->trans); /* reset PHY */
 		phy_block_on();
@@ -1548,7 +1641,8 @@ static void detection_work(bool caused_by_irq)
 		pr_emu_det(STATUS, "detection_work: PPD_UNKNOWN\n");
 		last_irq = get_sense(true);
 
-		if ((last_irq == data->emu_irq[EMU_SCI_OUT_IRQ]) ||
+		if (SENSE_DISCONNECT ||
+		    (last_irq == data->emu_irq[EMU_SCI_OUT_IRQ]) ||
 		    (last_irq == data->emu_irq[SEMU_PPD_DET_IRQ])) {
 			data->state = CONFIG;
 			queue_delayed_work(data->wq, &data->timer_work, 0);
@@ -1746,57 +1840,65 @@ err_out:
 	return -EINVAL;
 }
 
-static struct gpiomux_setting emu_id_en_config = {
+static struct gpiomux_setting gpio_np_config = {
 	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_DOWN,
-};
-
-static struct gpiomux_setting emu_sci_out_config = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_2MA,
+	.drv = GPIOMUX_DRV_8MA,
 	.pull = GPIOMUX_PULL_NONE,
 };
 
-static struct gpiomux_setting mux_ctrl0_config = {
+static struct gpiomux_setting gpio_pu_config = {
 	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_2MA,
+	.drv = GPIOMUX_DRV_8MA,
 	.pull = GPIOMUX_PULL_UP,
 };
 
-static struct gpiomux_setting mux_ctrl1_config = {
+static struct gpiomux_setting gpio_pd_config = {
 	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_2MA,
+	.drv = GPIOMUX_DRV_8MA,
 	.pull = GPIOMUX_PULL_DOWN,
 };
 
 static struct msm_gpiomux_config msm_gpio_configs[] = {
 	{
-		.gpio = 0,
+		.gpio = 0, /* EMU_SCI_OUT */
 		.settings = {
-			[GPIOMUX_SUSPENDED] = &emu_sci_out_config,
-			[GPIOMUX_ACTIVE] = &emu_sci_out_config,
+			[GPIOMUX_SUSPENDED] = &gpio_np_config,
+			[GPIOMUX_ACTIVE] = &gpio_np_config,
 		}
 	},
 	{
-		.gpio = 0,
+		.gpio = 0, /* EMU_ID_EN */
 		.settings = {
-			[GPIOMUX_SUSPENDED] = &emu_id_en_config,
-			[GPIOMUX_ACTIVE] = &emu_id_en_config,
+			[GPIOMUX_SUSPENDED] = &gpio_pd_config,
+			[GPIOMUX_ACTIVE] = &gpio_pd_config,
 		}
 	},
 	{
-		.gpio = 0,
+		.gpio = 0, /* EMU_MUX_CTRL0 */
 		.settings = {
-			[GPIOMUX_SUSPENDED] = &mux_ctrl0_config,
-			[GPIOMUX_ACTIVE] = &mux_ctrl0_config,
+			[GPIOMUX_SUSPENDED] = &gpio_pu_config,
+			[GPIOMUX_ACTIVE] = &gpio_pu_config,
 		}
 	},
 	{
-		.gpio = 0,
+		.gpio = 0, /* EMU_MUX_CTRL1 */
 		.settings = {
-			[GPIOMUX_SUSPENDED] = &mux_ctrl1_config,
-			[GPIOMUX_ACTIVE] = &mux_ctrl1_config,
+			[GPIOMUX_SUSPENDED] = &gpio_pd_config,
+			[GPIOMUX_ACTIVE] = &gpio_pd_config,
+		}
+	},
+	{
+		.gpio = 0, /* WHISPER_TX */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &gpio_np_config,
+			[GPIOMUX_ACTIVE] = &gpio_np_config,
+		}
+	},
+	{
+		.gpio = 0, /* WHISPER_RX */
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &gpio_np_config,
+			[GPIOMUX_ACTIVE] = &gpio_np_config,
 		}
 	},
 };
@@ -2030,89 +2132,28 @@ static int debug_mask_get(void *data, u64 *val)
 DEFINE_SIMPLE_ATTRIBUTE(debug_mask_debugfs_fops, debug_mask_get, \
 						debug_mask_set, "%llx\n");
 
-
-#include <mach/msm_iomap.h>
-
-#define GSBI_BASE(id)	((id) <= 7 ? (0x16000000 + (((id)-1) << 20)) : \
-					(0x1A000000 + (((id)-8) << 20)))
-#define GSBI_UART_DM_BASE(id) (GSBI_BASE(id) + 0x40000)
-#define GSBI_CTRL_REG(id)     (GSBI_BASE(id) + 0x0)
-
-#define GSBI_CTRL_REG_PROTOCOL_CODE_S   4
-#define GSBI_PROTOCOL_CODE_I2C          0x2
-#define GSBI_PROTOCOL_CODE_SPI          0x3
-#define GSBI_PROTOCOL_CODE_UART_FLOW    0x4
-#define GSBI_PROTOCOL_CODE_I2C_UART     0x6
-
-#define GSBI_HCLK_CTL_S                 4
-#define GSBI_HCLK_CTL_CLK_ENA           0x1
-
-#define TLMM_BASE_ADDR      0x00800000
-#define GPIO_CONFIG_ADDR(x) (TLMM_BASE_ADDR + 0x1000 + (x)*0x10)
-#define GPIO_IN_OUT_ADDR(x) (TLMM_BASE_ADDR + 0x1004 + (x)*0x10)
-
-#define GPIO_CFG_ADDR(n)    (MSM_TLMM_BASE + 0x1000 + (0x10 * n))
-#define MSM_GSBI12_PHYS		0x12480000
-/* GSBIn HCLK register address */
-#define GSBIn_HCLK_CTRL_REG(n)	(0x009029C0+(32*(n-1)))
-/* Bit to Turn on Clk */
-#define CLK_BRANCH_ENA		(1<<4)
-/* Protocol for UART/I2C */
-#define UART_I2C_PROTOCOL	(0x6<<4)
-
-static void show_gsbi_registers(void)
-{
-	void *gsbi_ctrl;
-	void *gsbi_pclk;
-	void *gpio_conf;
-	uint32_t value;
-
-	gsbi_pclk = ioremap_nocache(GSBIn_HCLK_CTRL_REG(12), 4);
-	if (!IS_ERR_OR_NULL(gsbi_pclk)) {
-		value = readl_relaxed(gsbi_pclk);
-		if (!(value & CLK_BRANCH_ENA)) {
-			writel_relaxed(CLK_BRANCH_ENA, gsbi_pclk);
-			mb();
-		}
-		iounmap(gsbi_pclk);
-	}
-
-	gsbi_ctrl = ioremap_nocache(GSBI_CTRL_REG(12), 4);
-	if (!IS_ERR_OR_NULL(gsbi_ctrl)) {
-		value = readl_relaxed(gsbi_ctrl);
-		pr_emu_det(DEBUG, "GSBI12_CTRL_REG[0]: 0x%x\n", value);
-		iounmap(gsbi_ctrl);
-	}
-
-	gsbi_ctrl = ioremap_nocache(MSM_GSBI12_PHYS, 4);
-	if (!IS_ERR_OR_NULL(gsbi_ctrl)) {
-		value = readl_relaxed(gsbi_ctrl);
-		pr_emu_det(DEBUG, "GSBI12_CTRL_REG[1]: 0x%x\n", value);
-		iounmap(gsbi_ctrl);
-	}
-
-	gpio_conf = ioremap_nocache(GPIO_CONFIG_ADDR(42), 4);
-	if (!IS_ERR_OR_NULL(gpio_conf)) {
-		value = readl_relaxed(gpio_conf);
-		pr_emu_det(DEBUG, "GPIO42_CFG[0]: 0x%x\n", value);
-		iounmap(gpio_conf);
-	}
-
-	value = __raw_readl(GPIO_CFG_ADDR(42));
-	pr_emu_det(DEBUG, "GPIO42_CFG[1]: 0x%x\n", value);
-}
-
 static int mode_set(void *data, u64 val)
 {
-	show_gsbi_registers();
 	switch ((int)val) {
-	case 0:
-		pr_emu_det(ERROR, "MUX_CTRL: USB mode\n");
+	case DRVMODE_USB:
+		pr_emu_det(TRANSITION, "USB mode\n");
 		mux_ctrl_mode(MUXMODE_USB);
 		break;
-	case 1:
-		pr_emu_det(ERROR, "MUX_CTRL: UART mode\n");
+	case DRVMODE_UART:
+		pr_emu_det(TRANSITION, "UART mode\n");
 		mux_ctrl_mode(MUXMODE_UART);
+		break;
+	case DRVMODE_AUDIO:
+		pr_emu_det(TRANSITION, "AUDIO mode\n");
+		mux_ctrl_mode(MUXMODE_AUDIO);
+		break;
+	case DRVMODE_FACTORY:
+		pr_emu_det(TRANSITION, "GPIO mode\n");
+		whisper_gpio_mode(DRVMODE_FACTORY);
+		break;
+	case DRVMODE_NORMAL:
+		pr_emu_det(TRANSITION, "GSBI12 mode\n");
+		whisper_gpio_mode(DRVMODE_NORMAL);
 		break;
 	default:
 		pr_emu_det(ERROR, "unsupported mode\n");
@@ -2326,6 +2367,14 @@ static int emu_det_probe(struct platform_device *pdev)
 		goto free_data;
 	}
 
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (!res) {
+		pr_err("failed to get platform resource mem\n");
+		ret = -ENODEV;
+		goto free_data;
+	}
+	data->gsbi_phys = res->start;
+
 	data->trans = otg_get_transceiver();
 	if (!data->trans || !data->trans->io_ops ||
 		!data->trans->init) {
@@ -2448,6 +2497,8 @@ free_misc_dev:
 free_gpios:
 	free_gpios();
 free_data:
+	if (data->regs)
+		iounmap(data->regs);
 	kfree(data);
 	return ret;
 }
@@ -2480,6 +2531,8 @@ static int __exit emu_det_remove(struct platform_device *pdev)
 	misc_deregister(&emu_det_dev);
 	if (emu_pdata && emu_pdata->core_power)
 		emu_pdata->core_power(0);
+	if (data->regs)
+		iounmap(data->regs);
 	kfree(data);
 
 	return 0;
@@ -2511,5 +2564,4 @@ module_exit(emu_det_exit);
 MODULE_ALIAS("platform:emu_det");
 MODULE_DESCRIPTION("Motorola MSM8960 EMU detection driver");
 MODULE_LICENSE("GPL");
-
 

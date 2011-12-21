@@ -169,20 +169,22 @@ static struct pm8xxx_gpio_init pm8921_gpios_vanquish[] = {
 	PM8XXX_GPIO_OUTPUT(43,	    PM_GPIO_PULL_UP_1P5), /* DISP_RESET_N */
 	PM8XXX_GPIO_OUTPUT_VIN(37, PM_GPIO_PULL_UP_30,
 			PM_GPIO_VIN_L17),	/* DISP_RESET_N on P1C+ */
-	PM8XXX_GPIO_OUTPUT(42, 0),                      /* USB 5V reg enable */
 };
 
 static struct pm8xxx_gpio_init pm8921_gpios_asanti[] = {
 	PM8XXX_GPIO_DISABLE(6),				 /* Disable unused */
 	PM8XXX_GPIO_DISABLE(7),				 /* Disable NFC */
 	PM8XXX_GPIO_INPUT(16,	    PM_GPIO_PULL_UP_30), /* SD_CARD_WP */
+	PM8XXX_GPIO_PAIRED_OUT_VIN(21, PM_GPIO_VIN_L17), /* Whisper TX 2.7V */
+	PM8XXX_GPIO_PAIRED_IN_VIN(22,  PM_GPIO_VIN_S4),  /* Whisper TX 1.8V */
 	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Red LED */
 	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2),	 /* Green LED */
 	PM8XXX_GPIO_OUTPUT_FUNC(26, 0, PM_GPIO_FUNC_2),	 /* Blue LED */
-	PM8XXX_GPIO_INPUT(22,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
+	PM8XXX_GPIO_INPUT(20,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
+	PM8XXX_GPIO_PAIRED_IN_VIN(41,  PM_GPIO_VIN_L17), /* Whisper TX 2.7V */
+	PM8XXX_GPIO_PAIRED_OUT_VIN(42, PM_GPIO_VIN_S4),  /* Whisper TX 1.8V */
 	PM8XXX_GPIO_OUTPUT(43, 1),			 /* DISP_RESET_N */
 	PM8XXX_GPIO_INPUT(33,	    PM_GPIO_PULL_UP_30), /* Volume Down key */
-	PM8XXX_GPIO_OUTPUT(42, 0),                      /* USB 5V reg enable */
 };
 
 /* Initial PM8921 MPP configurations */
@@ -293,13 +295,22 @@ static struct mmi_emu_det_platform_data mmi_emu_det_data = {
 	.core_power = emu_det_core_power,
 };
 
-#define MSM8960_HSUSB_PHYS		0x12500000
-#define MSM8960_HSUSB_SIZE		SZ_4K
+#define MSM8960_HSUSB_PHYS	0x12500000
+#define MSM8960_HSUSB_SIZE	SZ_4K
+
+#define MSM_UART_NAME		"msm_serial_hs"
+#define MSM_GSBI12_PHYS		0x12480000
+#define MSM_UART12DM_PHYS	(MSM_GSBI12_PHYS + 0x10000)
 
 static struct resource resources_emu_det[] = {
 	{
 		.start	= MSM8960_HSUSB_PHYS,
 		.end	= MSM8960_HSUSB_PHYS + MSM8960_HSUSB_SIZE,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= MSM_GSBI12_PHYS,
+		.end	= MSM_GSBI12_PHYS,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
@@ -410,15 +421,6 @@ static struct msm_gpiomux_config emu_det_gsbi12_configs[] __initdata = {
 	},
 };
 
-#define MSM_GSBI12_PHYS		0x12480000
-#define MSM_UART12DM_PHYS	(MSM_GSBI12_PHYS + 0x40000)
-/* GSBIn HCLK register address */
-#define GSBIn_HCLK_CTRL_REG(n)	(0x009029C0+(32*(n-1)))
-/* Bit to Turn on Clk */
-#define CLK_BRANCH_ENA		(1<<4)
-/* Protocol for UART/I2C */
-#define UART_I2C_PROTOCOL	(0x6<<4)
-
 static struct resource resources_uart_gsbi12[] = {
 	{
 		.start	= GSBI12_UARTDM_IRQ,
@@ -437,13 +439,30 @@ static struct resource resources_uart_gsbi12[] = {
 		.name	= "gsbi_resource",
 		.flags	= IORESOURCE_MEM,
 	},
+	{
+		.start	= DMOV_WHISPER_TX_CHAN,
+		.end	= DMOV_WHISPER_RX_CHAN,
+		.name	= "uartdm_channels",
+		.flags	= IORESOURCE_DMA,
+	},
+	{
+		.start	= DMOV_WHISPER_TX_CRCI,
+		.end	= DMOV_WHISPER_RX_CRCI,
+		.name	= "uartdm_crci",
+		.flags	= IORESOURCE_DMA,
+	},
 };
 
+static u64 msm_uart_dm12_dma_mask = DMA_BIT_MASK(32);
 struct platform_device msm8960_device_uart_gsbi12 = {
-	.name	= "msm_serial_hsl",
+	.name	= MSM_UART_NAME,
 	.id	= 1,
 	.num_resources	= ARRAY_SIZE(resources_uart_gsbi12),
 	.resource	= resources_uart_gsbi12,
+	.dev	= {
+		.dma_mask		= &msm_uart_dm12_dma_mask,
+		.coherent_dma_mask	= DMA_BIT_MASK(32),
+	},
 };
 
 static __init void mot_set_gsbi12_clk(const char *con_id,
@@ -468,11 +487,11 @@ static __init void mot_setup_gsbi12_clk(void)
 {
 	struct clk *clk;
 	if (!msm_gsbi12_uart_clk_ptr(&clk))
-		mot_set_gsbi12_clk("core_clk", clk, "msm_serial_hsl.1");
+		mot_set_gsbi12_clk("core_clk", clk, MSM_UART_NAME ".1");
 	if (!msm_gsbi12_qup_clk_ptr(&clk))
 		mot_set_gsbi12_clk("core_clk", clk, NULL);
 	if (!msm_gsbi12_p_clk_ptr(&clk))
-		mot_set_gsbi12_clk("iface_clk", clk, "msm_serial_hsl.1");
+		mot_set_gsbi12_clk("iface_clk", clk, MSM_UART_NAME ".1");
 }
 
 static __init void mot_init_emu_detection(
@@ -2083,7 +2102,7 @@ static __init void qinara_init(void)
 	msm_otg_pdata.phy_init_seq = phy_settings;
 #ifdef CONFIG_EMU_DETECTION
 	mot_setup_gsbi12_clk();
-	if (system_rev < HWREV_P2)
+	if (system_rev < HWREV_P1B2)
 		otg_control_data = NULL;
 #endif
 	flash_hw_enable = 2;
