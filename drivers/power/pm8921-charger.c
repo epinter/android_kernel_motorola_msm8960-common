@@ -1104,9 +1104,9 @@ static int is_battery_valid(struct pm8921_chg_chip *chip)
 				batt_data.max_bat_chg_current;
 			pr_debug("max_bat_chg_current = %d\n",
 				chip->max_bat_chg_current);
-			chip->cool_temp_dc = batt_data.cool_temp;
+			chip->cool_temp_dc = batt_data.cool_temp * 10;
 			pr_debug("cool_temp = %d\n", chip->cool_temp_dc);
-			chip->warm_temp_dc = batt_data.warm_temp;
+			chip->warm_temp_dc = batt_data.warm_temp * 10;
 			pr_debug("warm_temp = %d\n", chip->warm_temp_dc);
 			chip->cool_bat_chg_current =
 				batt_data.cool_bat_chg_current;
