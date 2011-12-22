@@ -352,6 +352,10 @@ config VIB_TIMED
 	depends on ANDROID_TIMED_OUTPUT
 	default n
 
+config MOT_CONFIG
+	tristate  "Motorola Configuration read/write support "
+	default n
+
 config SENSORS_TSL2550
 	tristate "Taos TSL2550 ambient light sensor"
 	depends on I2C && SYSFS
