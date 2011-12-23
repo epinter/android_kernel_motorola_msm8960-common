@@ -186,6 +186,8 @@ static bool in_range(int voltage, int idx)
 #define DRVMODE_AUDIO	MUXMODE_AUDIO
 #define DRVMODE_FACTORY	3
 #define DRVMODE_NORMAL	4
+#define DRVMODE_GPIO	5
+#define DRVMODE_GSBI	6
 
 static int debug_mask = PRINT_ERROR | PRINT_DEBUG |
 	PRINT_STATUS | PRINT_TRANSITION /*| PRINT_PARANOIC*/;
@@ -518,6 +520,7 @@ static struct mmi_emu_det_platform_data *emu_pdata;
 static struct emu_det_data *the_emud;
 static DEFINE_MUTEX(switch_access);
 static char buffer[512];
+static bool factory_mode;
 
 /*
 static char *irq_names[23] = {"NA", "NA", "NA", "NA", "NA",
@@ -1314,6 +1317,9 @@ static void detection_work(bool caused_by_irq)
 
 	static unsigned long last_run;
 
+	if (factory_mode)
+		return;
+
 	pr_emu_det(STATUS, "state %s, time since last run %d ms\n",
 				print_state_name(data->state),
 				jiffies_to_msecs(jiffies-last_run));
@@ -1714,7 +1720,8 @@ put_on_schedule:
 	pr_emu_det(DEBUG, "irq=%d(%d), usbsts: 0x%08x, otgsc: 0x%08x\n",
 				irq, count, usbsts, otgsc);
 	count = 0;
-	queue_delayed_work(emud->wq, &emud->irq_work, 0);
+	if (!factory_mode)
+		queue_delayed_work(emud->wq, &emud->irq_work, 0);
 
 	return IRQ_HANDLED;
 }
@@ -2118,51 +2125,6 @@ static int emu_id_en_set(void *data, u64 val)
 DEFINE_SIMPLE_ATTRIBUTE(emu_id_en_debugfs_fops, emu_id_en_get, \
 						emu_id_en_set, "%lld\n");
 
-static int debug_mask_set(void *data, u64 val)
-{
-	debug_mask = val;
-	return 0;
-}
-
-static int debug_mask_get(void *data, u64 *val)
-{
-	*val = debug_mask;
-	return 0;
-}
-DEFINE_SIMPLE_ATTRIBUTE(debug_mask_debugfs_fops, debug_mask_get, \
-						debug_mask_set, "%llx\n");
-
-static int mode_set(void *data, u64 val)
-{
-	switch ((int)val) {
-	case DRVMODE_USB:
-		pr_emu_det(TRANSITION, "USB mode\n");
-		mux_ctrl_mode(MUXMODE_USB);
-		break;
-	case DRVMODE_UART:
-		pr_emu_det(TRANSITION, "UART mode\n");
-		mux_ctrl_mode(MUXMODE_UART);
-		break;
-	case DRVMODE_AUDIO:
-		pr_emu_det(TRANSITION, "AUDIO mode\n");
-		mux_ctrl_mode(MUXMODE_AUDIO);
-		break;
-	case DRVMODE_FACTORY:
-		pr_emu_det(TRANSITION, "GPIO mode\n");
-		whisper_gpio_mode(DRVMODE_FACTORY);
-		break;
-	case DRVMODE_NORMAL:
-		pr_emu_det(TRANSITION, "GSBI12 mode\n");
-		whisper_gpio_mode(DRVMODE_NORMAL);
-		break;
-	default:
-		pr_emu_det(ERROR, "unsupported mode\n");
-		break;
-	}
-	return 0;
-}
-DEFINE_SIMPLE_ATTRIBUTE(mode_debugfs_fops, NULL, mode_set, "%llx\n");
-
 static void create_debugfs_entries(void)
 {
 	struct dentry *dent = debugfs_create_dir("emu_det", NULL);
@@ -2184,16 +2146,83 @@ static void create_debugfs_entries(void)
 			    (void *)NULL, &semu_ppd_det_debugfs_fops);
 	debugfs_create_file("emu_id_en", 0644, dent,
 			    (void *)NULL, &emu_id_en_debugfs_fops);
-	debugfs_create_file("debug", 0644, dent,
-			    (void *)NULL, &debug_mask_debugfs_fops);
-	debugfs_create_file("mode", 0644, dent,
-			    (void *)NULL, &mode_debugfs_fops);
 }
 #else
 static inline void create_debugfs_entries(void)
 {
 }
 #endif
+
+static ssize_t debug_mask_store(struct device *dev, struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	debug_mask = (int)simple_strtoul(buf, NULL, 0);
+	pr_emu_det(DEBUG, "new debug_mask=%d\n", debug_mask);
+	return strnlen(buf, count);
+}
+
+static ssize_t debug_mask_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	pr_emu_det(DEBUG, "debug_mask=%d\n", debug_mask);
+	return snprintf(buf, PAGE_SIZE, "%d\n", debug_mask);
+}
+static DEVICE_ATTR(debug_mask, 0644, debug_mask_show, debug_mask_store);
+
+static ssize_t mode_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	pr_emu_det(DEBUG, "mode=%d\n", (int)factory_mode);
+	return snprintf(buf, PAGE_SIZE, "%d\n", (int)factory_mode);
+}
+
+static ssize_t mode_store(struct device *dev, struct device_attribute *attr,
+				const char *buf, size_t count)
+ {
+	int value = (int)simple_strtoul(buf, NULL, 0);
+	switch (value) {
+	case DRVMODE_USB:
+		pr_emu_det(TRANSITION, "USB mode\n");
+		mux_ctrl_mode(MUXMODE_USB);
+		break;
+	case DRVMODE_UART:
+		pr_emu_det(TRANSITION, "UART mode\n");
+		mux_ctrl_mode(MUXMODE_UART);
+		break;
+	case DRVMODE_AUDIO:
+		pr_emu_det(TRANSITION, "AUDIO mode\n");
+		mux_ctrl_mode(MUXMODE_AUDIO);
+		break;
+	case DRVMODE_FACTORY:
+		pr_emu_det(TRANSITION, "FACTORY mode\n");
+		factory_mode = true;
+	case DRVMODE_GPIO:
+		pr_emu_det(TRANSITION, "GPIO mode\n");
+		whisper_gpio_mode(DRVMODE_FACTORY);
+		break;
+	case DRVMODE_NORMAL:
+		pr_emu_det(TRANSITION, "NORMAL mode\n");
+		factory_mode = false;
+		detection_work(true);
+	case DRVMODE_GSBI:
+		pr_emu_det(TRANSITION, "GSBI12 mode\n");
+		whisper_gpio_mode(DRVMODE_NORMAL);
+		break;
+	default:
+		pr_emu_det(ERROR, "unsupported mode\n");
+		break;
+	}
+	return strnlen(buf, count);
+}
+static DEVICE_ATTR(mode, 0664, mode_show, mode_store);
+
+static struct attribute *emu_dev_attrs[] = {
+	&dev_attr_debug_mask.attr,
+	&dev_attr_mode.attr,
+	NULL,
+};
+
+static struct attribute_group emu_dev_attr_groups = {
+	.attrs = emu_dev_attrs,
+};
 
 static void emu_det_vbus_state(int online)
 {
@@ -2212,8 +2241,9 @@ static void emu_det_vbus_state(int online)
 	if (!online)
 		emu_id_protection_on();
 */
-	queue_delayed_work(emud->wq, &emud->irq_work,
-				msecs_to_jiffies(50));
+	if (!factory_mode)
+		queue_delayed_work(emud->wq, &emud->irq_work,
+					msecs_to_jiffies(50));
 }
 
 static void timer_work(struct work_struct *work)
@@ -2482,6 +2512,10 @@ static int emu_det_probe(struct platform_device *pdev)
 	data->whisper_auth = AUTH_NOT_STARTED;
 	dev_set_drvdata(&pdev->dev, data);
 
+	ret = sysfs_create_group(&(pdev->dev.kobj), &emu_dev_attr_groups);
+	if (ret)
+		pr_err("failed to create sysfs group: %d\n", ret);
+
 	create_debugfs_entries();
 	pr_emu_det(DEBUG, "EMU detection driver started\n");
 
@@ -2512,6 +2546,7 @@ static int __exit emu_det_remove(struct platform_device *pdev)
 	cancel_delayed_work_sync(&data->timer_work);
 	cancel_delayed_work_sync(&data->irq_work);
 	destroy_workqueue(data->wq);
+	sysfs_remove_group(&(pdev->dev.kobj), &emu_dev_attr_groups);
 /*
 	if ((data->accy != ACCY_NONE) && (data->usb_dev != NULL))
 		platform_device_del(data->usb_dev);
