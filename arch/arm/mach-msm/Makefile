@@ -1,3 +1,10 @@
+ifdef CONFIG_FUNCTION_TRACER
+CFLAGS_REMOVE_timer.o = -pg
+CFLAGS_REMOVE_clock.o = -pg
+CFLAGS_REMOVE_acpuclock.o = -pg
+CFLAGS_REMOVE_scm.o = -pg
+endif
+
 obj-y += io.o dma.o memory.o
 ifndef CONFIG_ARM_ARCH_TIMER
 obj-y += timer.o
