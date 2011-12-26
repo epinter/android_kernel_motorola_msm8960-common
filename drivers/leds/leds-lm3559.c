@@ -870,6 +870,7 @@ static int lm3559_probe(struct i2c_client *client,
 	if (torch_data == NULL) {
 		err = -ENOMEM;
 		dev_err(&client->dev, "kzalloc failed\n");
+		gpio_free(pdata->hw_enable);
 		goto error1;
 	}
 	if (lm3559_debug)
@@ -1048,6 +1049,7 @@ error4:
 	led_classdev_unregister(&torch_data->led_dev);
 error3:
 error2:
+	gpio_free(pdata->hw_enable);
 	kfree(torch_data);
 error1:
 	return err;
@@ -1085,6 +1087,7 @@ static int lm3559_remove(struct i2c_client *client)
 
 	device_remove_file(torch_data->led_dev.dev, &dev_attr_registers);
 
+	gpio_free(torch_data->pdata->hw_enable);
 	kfree(torch_data->pdata);
 	kfree(torch_data);
 	return 0;

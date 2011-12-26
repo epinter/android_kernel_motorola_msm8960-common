@@ -106,6 +106,9 @@
 #ifdef CONFIG_LEDS_LM3559
 #include <linux/leds-lm3559.h>
 #endif
+#ifdef CONFIG_LEDS_LM3556
+#include <linux/leds-lm3556.h>
+#endif
 
 #include <linux/ion.h>
 #include <mach/ion.h>
@@ -1134,14 +1137,50 @@ static struct lm3559_platform_data camera_flash_3559 = {
 	.msg_ind_blink_val = 0x1f,
 	.hw_enable = 0,
 };
+#endif /* CONFIG_LEDS_LM3559 */
 
+#ifdef CONFIG_LEDS_LM3556
+static struct lm3556_platform_data camera_flash_3556;
+static unsigned short flash_hw_enable;
+
+static struct lm3556_platform_data camera_flash_3556 = {
+	.flags = (LM3556_TORCH | LM3556_FLASH |
+			LM3556_ERROR_CHECK),
+	.si_rev_filter_time_def = 0x00,
+	.ivfm_reg_def = 0x80,
+	.ntc_reg_def = 0x12,
+	.ind_ramp_time_reg_def = 0x00,
+	.ind_blink_reg_def = 0x00,
+	.ind_period_cnt_reg_def = 0x00,
+	.torch_ramp_time_reg_def = 0x00,
+	.config_reg_def = 0x7f,
+	.flash_features_reg_def = 0xd2,
+	.current_cntrl_reg_def = 0x0f,
+	.torch_brightness_def = 0x10,
+	.enable_reg_def = 0x00,
+	.flag_reg_def = 0x00,
+	.torch_enable_val = 0x02,
+	.flash_enable_val = 0x03,
+	.hw_enable = 0,
+};
+#endif /* CONFIG_LEDS_LM3556 */
+
+#if (defined CONFIG_LEDS_LM3559 || defined CONFIG_LEDS_LM3556)
 static struct i2c_board_info msm_camera_flash_boardinfo[] __initdata = {
+#ifdef CONFIG_LEDS_LM3559
 	{
 	I2C_BOARD_INFO("lm3559_led", 0x53),
 	.platform_data = &camera_flash_3559,
 	},
-};
 #endif /* CONFIG_LEDS_LM3559 */
+#ifdef CONFIG_LEDS_LM3556
+	{
+	I2C_BOARD_INFO("lm3556_led", 0x63),
+	.platform_data = &camera_flash_3556,
+	},
+#endif /* CONFIG_LEDS_LM3556 */
+};
+#endif
 
 #ifdef CONFIG_MSM_CAMERA
 
@@ -1289,10 +1328,13 @@ void __init msm8960_init_cam(void)
 static void __init msm8960_init_cam_flash(unsigned short hw_enable)
 {
 #ifdef CONFIG_LEDS_LM3559
-	if (hw_enable) {
+	if (hw_enable)
 		camera_flash_3559.hw_enable = hw_enable;
-	}
 #endif /* CONFIG_LEDS_LM3559 */
+#ifdef CONFIG_LEDS_LM3556
+	if (hw_enable)
+		camera_flash_3556.hw_enable = hw_enable;
+#endif /* CONFIG_LEDS_LM3556 */
 }
 
 static int msm_fb_detect_panel(const char *name)
@@ -1595,7 +1637,7 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		ARRAY_SIZE(msm_camera_boardinfo),
 	},
 #endif
-#ifdef CONFIG_LEDS_LM3559
+#if (defined CONFIG_LEDS_LM3559 || defined CONFIG_LEDS_LM3556)
 	[CAMERA_FLASH_MSM] = {
 		0,
 		MSM_8960_GSBI4_QUP_I2C_BUS_ID,
@@ -2263,9 +2305,11 @@ MACHINE_END
 
 static __init void becker_init(void)
 {
+	flash_hw_enable = 2;
 	strncpy(panel_name, "mipi_mot_cmd_auo_qhd_430", PANEL_NAME_MAX_LEN);
 	ENABLE_I2C_DEVICE(TOUCHSCREEN_ATMEL);
 	ENABLE_I2C_DEVICE(CAMERA_MSM);
+	ENABLE_I2C_DEVICE(CAMERA_FLASH_MSM);
 	ENABLE_I2C_DEVICE(ALS_CT406);
 	ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
 
