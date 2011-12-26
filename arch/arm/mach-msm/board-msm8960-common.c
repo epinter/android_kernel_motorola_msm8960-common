@@ -2577,10 +2577,10 @@ struct platform_device msm_tsens_device = {
 	},
 };
 
-void __init msm8960_init_usb(void (*vbus_power)(bool on))
+void __init msm8960_init_usb(void)
 {
 	msm_otg_pdata.swfi_latency = msm_rpmrs_levels[0].latency_us;
-	msm_otg_pdata.vbus_power = vbus_power;
+	msm_otg_pdata.vbus_power = NULL;
 	msm8960_device_otg.dev.platform_data = &msm_otg_pdata;
 }
 

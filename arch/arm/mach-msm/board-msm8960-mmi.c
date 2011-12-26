@@ -516,37 +516,6 @@ static __init void mot_init_emu_detection(
 	}
 }
 
-#else /* msm_otg driver still needs this */
-
-static void msm_hsusb_vbus_power(bool on)
-{
-	static bool vbus_is_on;
-	static struct regulator *mvs_otg_switch;
-
-	if (vbus_is_on == on)
-		return;
-
-	if (on) {
-		mvs_otg_switch = regulator_get(&msm8960_device_otg.dev,
-					       "vbus_otg");
-		if (IS_ERR(mvs_otg_switch)) {
-			pr_err("Unable to get mvs_otg_switch\n");
-			return;
-		}
-
-		if (regulator_enable(mvs_otg_switch)) {
-			pr_err("unable to enable mvs_otg_switch\n");
-			goto put_mvs_otg;
-		}
-
-		vbus_is_on = true;
-		return;
-	}
-	regulator_disable(mvs_otg_switch);
-put_mvs_otg:
-	regulator_put(mvs_otg_switch);
-	vbus_is_on = false;
-}
 #endif
 
 /* defaulting to qinara, atag parser will override */
@@ -2047,10 +2016,10 @@ static void __init msm8960_mmi_init(void)
 	mot_init_usb();
 
 #ifdef CONFIG_EMU_DETECTION
-	msm8960_init_usb(NULL);
+	msm8960_init_usb();
 	mot_init_emu_detection(otg_control_data);
 #else
-	msm8960_init_usb(msm_hsusb_vbus_power);
+	msm8960_init_usb();
 #endif
 
 	platform_add_devices(mmi_devices, ARRAY_SIZE(mmi_devices));

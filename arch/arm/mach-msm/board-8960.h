@@ -221,7 +221,7 @@ extern struct msm_otg_platform_data msm_otg_pdata;
 extern void msm8960_init_hdmi(struct platform_device *hdmi_dev,
 						struct msm_hdmi_platform_data *hdmi_data);
 
-extern void __init msm8960_init_usb(void (*vbus_power)(bool on));
+extern void __init msm8960_init_usb(void);
 extern void __init msm8960_init_dsps(void);
 
 extern void __init msm8960_init_hsic(void);
