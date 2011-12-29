@@ -2978,6 +2978,7 @@ void *cyttsp_core_init(struct cyttsp_bus_ops *bus_ops, struct device *dev,
 	memset(ts->prv_trk, CY_NTCH, sizeof(ts->prv_trk));
 
 	__set_bit(EV_ABS, input_device->evbit);
+	__set_bit(INPUT_PROP_DIRECT, input_device->propbit);
 
 	for (i = 0; i < (ts->platform_data->frmwrk->size / CY_NUM_ABS_SET); i++) {
 		signal = ts->platform_data->frmwrk->abs[(i * CY_NUM_ABS_SET)
