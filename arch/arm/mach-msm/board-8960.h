@@ -248,7 +248,7 @@ extern void __init pm8921_init(struct pm8xxx_keypad_platform_data *keypad,
 								int mode, int cool_temp,
 								int warm_temp, void *cb);
 
-extern int  __init msm8960_change_memory_power(u64 start, u64 size, int change_type);
+extern int  msm8960_change_memory_power(u64 start, u64 size, int change_type);
 extern void __init msm8960_map_io(void);
 extern void __init msm8960_reserve(void);
 extern void __init msm8960_allocate_memory_regions(void);
