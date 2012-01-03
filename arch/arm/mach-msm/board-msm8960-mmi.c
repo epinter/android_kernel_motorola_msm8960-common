@@ -221,6 +221,16 @@ int __init board_boot_mode_init(char *s)
 }
 __setup("androidboot.mode=", board_boot_mode_init);
 
+#define SERIALNO_MAX_LEN 64
+static char serialno[SERIALNO_MAX_LEN + 1];
+int __init board_serialno_init(char *s)
+{
+	strncpy(serialno, s, SERIALNO_MAX_LEN);
+	boot_mode[SERIALNO_MAX_LEN] = '\0';
+	return 1;
+}
+__setup("androidboot.serialno=", board_serialno_init);
+
 static int boot_mode_is_factory(void)
 {
 	return !strncmp(boot_mode, "factory", BOOT_MODE_MAX_LEN);
@@ -1415,6 +1425,35 @@ static void w1_gpio_enable_regulators(int enable)
 	}
 }
 
+struct mmi_unit_info_v1 mmi_unit_info_v1 = {
+	.machine = "dummy_mach",
+	.barcode = "dummy_barcode",
+};
+
+struct platform_device msm_device_smd = {
+	.name	= "msm_smd",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &mmi_unit_info_v1,
+	},
+};
+
+static void init_mmi_unit_info(void){
+	struct mmi_unit_info_v1 *mui;
+	mui = &mmi_unit_info_v1;
+	mui->version = 1;
+	mui->system_rev = system_rev;
+	mui->system_serial_low = system_serial_low;
+	mui->system_serial_high = system_serial_high;
+	strncpy(mui->machine, machine_desc->name, MACHINE_MAX_LEN);
+	strncpy(mui->barcode, serialno, BARCODE_MAX_LEN);
+
+	pr_err("unit_info (SMEM): version = 0x%02x, system_rev = 0x%08x, "
+		"system_serial = 0x%08x%08x, machine = '%s', barcode = '%s'\n",
+		mui->version, mui->system_rev, mui->system_serial_high,
+		mui->system_serial_low, mui->machine, mui->barcode);
+}
+
 static struct platform_device *mmi_devices[] __initdata = {
 	&msm8960_w1_gpio_device,
 	&msm_8960_q6_lpass,
@@ -2149,6 +2188,8 @@ static void __init msm8960_mmi_init(void)
 
 	change_memory_power = &msm8960_change_memory_power;
 	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
+
+	init_mmi_unit_info();
 }
 
 static int __init mot_parse_atag_baseband(const struct tag *tag)
