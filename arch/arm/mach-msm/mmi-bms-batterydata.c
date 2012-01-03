@@ -114,6 +114,37 @@ static struct mmi_battery_cell mmi_eb20_cell_data = {
 	.dc_impedance = 0x6D,
 };
 
+/* EB20 Preliminary Tables and Charging Parameters */
+static struct pm8921_bms_battery_data  mmi_eb20_pre_metering_data = {
+	.fcc			= 1750,
+	.fcc_temp_lut		= &mmi_eb20_fcc_temp,
+	.fcc_sf_lut		= &mmi_eb20_fcc_sf,
+	.pc_temp_ocv_lut	= &mmi_eb20_pc_temp_ocv,
+	.pc_sf_lut		= &mmi_eb20_pc_sf,
+};
+
+static struct pm8921_charger_battery_data mmi_eb20_pre_charging_data = {
+	.max_voltage			= 4350,
+	.min_voltage			= 3200,
+	.resume_voltage_delta		= 100,
+	.term_current			= 80,
+	.cool_temp			= 0,
+	.warm_temp			= 45,
+	.max_bat_chg_current		= 1750,
+	.cool_bat_chg_current		= 0,
+	.warm_bat_chg_current		= 0,
+	.cool_bat_voltage		= 3800,
+	.warm_bat_voltage		= 3800,
+	.step_charge_current		= 1130,
+	.step_charge_voltage		= 4200,
+};
+
+static struct mmi_battery_cell mmi_eb20_pre_cell_data = {
+	.capacity = 0xAE,
+	.peak_voltage = 0xB9,
+	.dc_impedance = 0x5A,
+};
+
 /* Default Tables and Charging Parameters */
 static struct single_row_lut mmi_df_fcc_temp = {
 	.x	= {25},
@@ -218,13 +249,16 @@ struct mmi_battery_list mmi_batts = {
 	.cell_list = {
 		&mmi_df_cell_data,
 		&mmi_eb20_cell_data,
+		&mmi_eb20_pre_cell_data,
 	},
 	.bms_list = {
 		 &mmi_df_metering_data,
 		 &mmi_eb20_metering_data,
+		 &mmi_eb20_pre_metering_data,
 	 },
 	.chrg_list = {
 		 &mmi_df_charging_data,
 		 &mmi_eb20_charging_data,
+		 &mmi_eb20_pre_charging_data,
 	 },
 };

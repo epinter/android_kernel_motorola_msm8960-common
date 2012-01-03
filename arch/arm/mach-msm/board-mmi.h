@@ -75,6 +75,7 @@ extern struct msm_i2c_platform_data msm8960_i2c_qup_gsbi12_pdata;
 enum {
 	MMI_BATTERY_DEFAULT = 0,
 	MMI_BATTERY_EB20_P1,
+	MMI_BATTERY_EB20_PRE,
 	MMI_BATTERY_NUM,
 };
 
