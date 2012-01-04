@@ -195,6 +195,17 @@ int pm8921_bms_get_fcc(void);
 int pm8921_bms_get_cc_mas(int64_t *result);
 
 /**
+ * pm8921_bms_get_aged_capacity - returns percentage of full battery capacity taking
+                                  aging into acccount
+ *
+ * @result:	The pointer where the percentage will be updated.
+ *
+ * RETURNS:	Error code if there was a problem reading, Zero otherwise
+ *              The result won't be updated in case of an error.
+ */
+int pm8921_bms_get_aged_capacity(int *result);
+
+/**
  * pm8921_bms_charging_began - function to notify the bms driver that charging
  *				has started. Used by the bms driver to keep
  *				track of chargecycles
@@ -238,6 +249,10 @@ static inline int pm8921_bms_get_fcc(void)
 	return -ENXIO;
 }
 static inline int pm8921_bms_get_cc_mas(int64_t *result)
+{
+	return -ENXIO;
+}
+static inline int pm8921_bms_get_aged_capacity(int *result)
 {
 	return -ENXIO;
 }
