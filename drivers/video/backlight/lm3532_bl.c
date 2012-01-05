@@ -142,6 +142,59 @@ static int suspended;
 static enum lm3532_display_connected_state display_connected
 	= LM3522_STATE_UNKNOWN;
 
+static struct lm3532_reg {
+	const char *name;
+	int reg;
+} lm3532_regs[] = {
+	{"OUTPUT_CFG_REG",      LM3532_OUTPUT_CFGR},
+	{"START_UP_RAMP_REG",   LM3532_SUSD_RAMP},
+	{"RUN_TIME_RAMP_REG",   LM3532_RUNTIME_RAMP},
+	{"CTRL_A_PWM_REG",      LM3532_CTRL_A_PWM},
+	{"CTRL_B_PWM_REG",      LM3532_CTRL_B_PWM},
+	{"CTRL_C_PWM_REG",      LM3532_CTRL_C_PWM},
+	{"CTRL_A_BR_CFG_REG",   LM3532_CTRL_A_BRT},
+	{"CTRL_A_FS_CURR_REG",  LM3532_CTRL_A_FSC},
+	{"CTRL_B_BR_CFG_REG",   LM3532_CTRL_B_BRT},
+	{"CTRL_B_FS_CURR_REG",  LM3532_CTRL_B_FSC},
+	{"CTRL_C_BR_CFG_REG",   LM3532_CTRL_C_BRT},
+	{"CTRL_C_FS_CURR_REG",  LM3532_CTRL_C_FSC},
+	{"ENABLE_REG",          LM3532_CTRL_EN},
+	{"FEEDBACK_ENABLE_REG", LM3532_FDBCK_EN},
+	{"ALS1_RES_SEL_REG",    LM3532_ALS1_RES_SLT},
+	{"ALS2_RES_SEL_REG",    LM3532_ALS2_RES_SLT},
+	{"ALS_CFG_REG",         LM3532_ALS_CFGR},
+	{"ALS_ZONE_REG",        LM3532_ALS_ZN_INFO},
+	{"ALS_DOWN_DEALY",      LM3532_ALS_DWN_DELAY},
+	{"ALS_BR_ZONE_REG",     LM3532_ALS_BRT_ZN},
+	{"ALS_UP_ZONE_REG",     LM3532_ALS_UP_ONLY_ZN},
+	{"ADC_REG",             LM3532_ADC},
+	{"ADC_AVG_REG",         LM3532_ADC_AVG},
+	{"ZB1_HIGH_REG",        LM3532_ALS_ZB_1_HIGH},
+	{"ZB1_LOW_REG",         LM3532_ALS_ZB_1_LOW},
+	{"ZB2_HIGH_REG",        LM3532_ALS_ZB_2_HIGH},
+	{"ZB2_LOW_REG",         LM3532_ALS_ZB_2_LOW},
+	{"ZB3_HIGH_REG",        LM3532_ALS_ZB_3_HIGH},
+	{"ZB3_LOW_REG",         LM3532_ALS_ZB_3_LOW},
+	{"ZB4_HIGH_REG",        LM3532_ALS_ZB_4_HIGH},
+	{"ZB4_LOW_REG",         LM3532_ALS_ZB_4_LOW},
+	{"CTRL_A_ZT0_REG",      LM3532_CTRL_A_ZT_0},
+	{"CTRL_A_ZT1_REG",      LM3532_CTRL_A_ZT_1},
+	{"CTRL_A_ZT2_REG",      LM3532_CTRL_A_ZT_2},
+	{"CTRL_A_ZT3_REG",      LM3532_CTRL_A_ZT_3},
+	{"CTRL_A_ZT4_REG",      LM3532_CTRL_A_ZT_4},
+	{"CTRL_B_ZT0_REG",      LM3532_CTRL_B_ZT_0},
+	{"CTRL_B_ZT1_REG",      LM3532_CTRL_B_ZT_1},
+	{"CTRL_B_ZT2_REG",      LM3532_CTRL_B_ZT_2},
+	{"CTRL_B_ZT3_REG",      LM3532_CTRL_B_ZT_3},
+	{"CTRL_B_ZT4_REG",      LM3532_CTRL_B_ZT_4},
+	{"CTRL_C_ZT0_REG",      LM3532_CTRL_C_ZT_0},
+	{"CTRL_C_ZT1_REG",      LM3532_CTRL_C_ZT_1},
+	{"CTRL_C_ZT2_REG",      LM3532_CTRL_C_ZT_2},
+	{"CTRL_C_ZT3_REG",      LM3532_CTRL_C_ZT_3},
+	{"CTRL_C_ZT4_REG",      LM3532_CTRL_C_ZT_4},
+	{"REVISION_REG",        LM3532_REVISION},
+};
+
 static int lm3532_read(struct i2c_client *client, int reg, uint8_t *val)
 {
 	int ret;
@@ -159,6 +212,8 @@ static int lm3532_read(struct i2c_client *client, int reg, uint8_t *val)
 
 static int lm3532_write(struct i2c_client *client, u8 reg, u8 val)
 {
+	pr_debug("%s: write reg 0x%02x, value 0x%02x\n",
+		__func__, reg, val);
 	return i2c_smbus_write_byte_data(client, reg, val);
 }
 
@@ -216,6 +271,7 @@ static void lm3532_led_set(struct led_classdev *led_cdev,
 {
 	struct lm3532_led *led;
 
+	pr_info("%s: %d\n", __func__, value);
 	mutex_lock(&lock);
 
 	led = container_of(led_cdev, struct lm3532_led, cdev);
@@ -264,6 +320,7 @@ static int __devinit lm3532_led_probe(struct i2c_client *client, int control)
 		return -ENOMEM;
 	}
 
+	pr_info("%s: control = %d\n", __func__, control);
 	led_dat->control = control;
 
 	if (control == LM3532_CNTRL_A) {
@@ -288,6 +345,8 @@ static int __devinit lm3532_led_probe(struct i2c_client *client, int control)
 	led_dat->new_brightness = LED_OFF;
 	INIT_WORK(&led_dat->work, lm3532_led_work);
 
+	dev_info(&client->dev, "Registering %s LED class\n",
+		pdata->ctrl_a_name);
 	ret = led_classdev_register(&client->dev, &led_dat->cdev);
 	if (ret) {
 		dev_err(&client->dev, "failed to register LED %d\n",
@@ -297,10 +356,10 @@ static int __devinit lm3532_led_probe(struct i2c_client *client, int control)
 
 	return 0;
 
- err:
+err:
 	cancel_work_sync(&led_dat->work);
 
- err_free:
+err_free:
 	kfree(led_dat);
 
 	return ret;
@@ -397,6 +456,9 @@ static int lm3532_bl_set(struct backlight_device *bl, int brightness)
 static int lm3532_bl_update_status(struct backlight_device *bl)
 {
 	int brightness = bl->props.brightness;
+
+	pr_info("%s: br=%d, power=%d, fb_blank=%d\n",
+		__func__, brightness, bl->props.power, bl->props.fb_blank);
 	if (bl->props.power != FB_BLANK_UNBLANK)
 		brightness = 0;
 
@@ -511,6 +573,7 @@ int lm3532_register_init(struct lm3532_bl *data)
 	uint8_t ctrl_en;
 	int ret = 0;
 
+	pr_debug("%s: initializing registers\n", __func__);
 	ret |= lm3532_write(client, LM3532_CTRL_A_FSC, pdata->ctrl_a_fsc);
 	ret |= lm3532_write(client, LM3532_CTRL_B_FSC, pdata->ctrl_b_fsc);
 	ret |= lm3532_write(client, LM3532_CTRL_C_FSC, pdata->ctrl_c_fsc);
@@ -704,7 +767,7 @@ static void lm3532_bl_work(struct work_struct *work)
 #endif
 		if (display_connected != LM3522_STATE_CONNECTED) {
 			if (lm3532_bl_init(data)) {
-				pr_info("%s: Init failed\n", __func__);
+				pr_info("%s: init failed\n", __func__);
 #if 0
 				break;
 #endif
@@ -722,7 +785,7 @@ static void lm3532_bl_work(struct work_struct *work)
 		if (ret)
 			dev_err(&client->dev, "Failed to initialize pwm\n");
 
-		pr_info("%s: Display backlight enabled\n", __func__);
+		pr_info("%s: display backlight enabled\n", __func__);
 #if 0
 		break;
 	default:
@@ -744,6 +807,7 @@ static void lm3532_early_suspend(struct early_suspend *handler)
 
 	mutex_lock(&lock);
 
+	pr_debug("%s: started\n", __func__);
 	suspended =  1;
 
 	if (data->revid == LM3532_REV1) {
@@ -780,6 +844,7 @@ static void lm3532_early_resume(struct early_suspend *handler)
 	data = container_of(handler, struct lm3532_bl, early_suspend);
 	pdata = data->pdata;
 
+	pr_debug("%s: started\n", __func__);
 	mutex_lock(&lock);
 
 	if (data->revid == LM3532_REV1) {
@@ -807,6 +872,51 @@ static void lm3532_early_resume(struct early_suspend *handler)
 }
 #endif
 
+static ssize_t lm3532_registers_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct lm3532_bl *data = dev_get_drvdata(dev);
+	int reg_count = sizeof(lm3532_regs) / sizeof(lm3532_regs[0]);
+	int i, n = 0;
+	uint8_t value;
+
+	pr_debug("%s: reading registers\n", __func__);
+	for (i = 0, n = 0; i < reg_count; i++) {
+		lm3532_read(data->client, lm3532_regs[i].reg, &value);
+		n += scnprintf(buf + n, PAGE_SIZE - n,
+			"%-20s (0x%x) = 0x%02X\n",
+			lm3532_regs[i].name, (unsigned)lm3532_regs[i].reg,
+			(unsigned)value);
+	}
+	return n;
+}
+
+#ifdef LM3532_DEBUG
+static ssize_t lm3532_registers_store(struct device *dev,
+	struct device_attribute *attr,
+	const char *buf, size_t size)
+{
+	struct lm3532_bl *data = dev_get_drvdata(dev);
+	unsigned reg;
+	unsigned value;
+
+	if (suspended)
+		return -ENODEV;
+
+	sscanf(buf, "%x %x", &reg, &value);
+	if (value > 0xFF || reg > 0xFF)
+		return -EINVAL;
+	pr_debug("%s: writing reg 0x%x = 0x%x\n", __func__, reg, value);
+	lm3532_write(data->client, (u8)reg, (u8)value);
+
+	return size;
+}
+static DEVICE_ATTR(registers, 0664, lm3532_registers_show,
+	lm3532_registers_store);
+#else
+static DEVICE_ATTR(registers, 0664, lm3532_registers_show, NULL);
+#endif
+
 static int __devinit lm3532_probe(struct i2c_client *client,
 					const struct i2c_device_id *id)
 {
@@ -817,6 +927,7 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 	uint8_t reg_val;
 	int ret;
 
+	pr_debug("%s: started\n", __func__);
 	if (!i2c_check_functionality(client->adapter,
 					I2C_FUNC_SMBUS_BYTE_DATA)) {
 		dev_err(&client->dev, "SMBUS Byte Data not Supported\n");
@@ -863,6 +974,8 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 	data->current_brightness = -1;
 	i2c_set_clientdata(client, data);
 
+	dev_info(&client->dev, "Revision %X backlight\n", data->revid);
+
 	mutex_init(&lock);
 
 	if (data->revid == LM3532_REV1) {
@@ -893,12 +1006,9 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 
 		data->bl = bl;
 
-		dev_info(&client->dev, "Rev. %X Backlight\n", data->revid);
-
+		pr_info("%s: finished\n", __func__);
 		return 0;
 	}
-
-	dev_info(&client->dev, "Rev. %X Backlight\n", data->revid);
 
 	INIT_DELAYED_WORK(&data->work, lm3532_bl_work);
 
@@ -908,6 +1018,12 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 		dev_err(&client->dev, "failed to register backlight\n");
 		ret = PTR_ERR(bl);
 		goto out;
+	}
+
+	ret = device_create_file(&client->dev, &dev_attr_registers);
+	if (ret) {
+		/* This is not a fatal error */
+		dev_err(&client->dev, "unable to create \'registers\' device file\n");
 	}
 
 	bl->props.max_brightness = LM3532_MAX_BRIGHTNESS;
@@ -935,6 +1051,7 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 	schedule_delayed_work(&data->work,
 		msecs_to_jiffies(pdata->init_delay_ms));
 
+	pr_info("%s: finished\n", __func__);
 	return 0;
 
 out:
