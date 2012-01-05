@@ -209,6 +209,8 @@ static int keypad_mode = MMI_KEYPAD_RESET;
 /* Ulpi register setting  to increase eye digram strength for qinara HW */
 static int phy_settings[] = {0x34, 0x82, 0x3f, 0x81, -1};
 
+bool camera_single_mclk;
+
 #define BOOT_MODE_MAX_LEN 64
 static char boot_mode[BOOT_MODE_MAX_LEN + 1];
 int __init board_boot_mode_init(char *s)
@@ -1169,7 +1171,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_motsoc1_data = {
 	.pdata                = &msm_camera_csi_device_data[0],
 	.flash_data           = &flash_motsoc1,
 	.sensor_platform_info = &sensor_board_info_motsoc1,
-	.gpio_conf            = &msm_camif_gpio_conf,
+	.gpio_conf            = &msm_camif_gpio_conf_mclk0,
 	.csi_if               = 1,
 	.camera_type          = BACK_CAMERA_2D,
 };
@@ -1199,7 +1201,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9m114_data = {
 	.pdata                = &msm_camera_csi_device_data[1],
 	.flash_data           = &flash_mt9m114,
 	.sensor_platform_info = &sensor_board_info_mt9m114,
-	.gpio_conf            = &msm_camif_gpio_conf,
+	.gpio_conf            = &msm_camif_gpio_conf_mclk1,
 	.csi_if               = 1,
 	.camera_type          = FRONT_CAMERA_2D,
 };
@@ -1230,7 +1232,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_ov8820_data = {
 	.pdata	= &msm_camera_csi_device_data[0],
 	.flash_data	= &flash_ov8820,
 	.sensor_platform_info = &sensor_board_info_ov8820,
-	.gpio_conf = &msm_camif_gpio_conf,
+	.gpio_conf = &msm_camif_gpio_conf_mclk0,
 	.csi_if	= 1,
 	.camera_type = BACK_CAMERA_2D,
 };
@@ -1260,6 +1262,17 @@ void __init msm8960_init_cam(void)
 	for (i = 0; i < ARRAY_SIZE(cam_dev); i++) {
 		struct msm_camera_sensor_info *s_info;
 		s_info = cam_dev[i]->dev.platform_data;
+		if (camera_single_mclk &&
+				s_info->camera_type == FRONT_CAMERA_2D) {
+			if (s_info->gpio_conf->cam_gpio_tbl_size != 1)
+				pr_err("unexpected camera gpio "
+						"configuration\n");
+			else {
+				pr_info("%s using gpio 5\n",
+						s_info->sensor_name);
+				s_info->gpio_conf->cam_gpio_tbl[0] = 5;
+			}
+		}
 		msm_get_cam_resources(s_info);
 		platform_device_register(cam_dev[i]);
 	}
@@ -2154,6 +2167,8 @@ static __init void teufel_init(void)
 	/* Setup correct button backlight LED name */
 	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
 
+	camera_single_mclk = true;
+
 	msm8960_mmi_init();
 }
 
@@ -2190,6 +2205,9 @@ static __init void qinara_init(void)
 
 	/* Setup correct button backlight LED name */
 	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
+
+	if (system_rev < HWREV_P2)
+		camera_single_mclk = true;
 
 	msm8960_mmi_init();
 }

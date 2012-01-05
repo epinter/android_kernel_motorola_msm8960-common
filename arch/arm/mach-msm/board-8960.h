@@ -211,12 +211,15 @@ extern struct regulator_init_data msm_saw_regulator_pdata_s6;
 
 extern struct rpm_regulator_platform_data msm_rpm_regulator_pdata __devinitdata;
 extern struct lcdc_platform_data dtv_pdata;
-extern struct msm_camera_gpio_conf msm_camif_gpio_conf;
+extern struct msm_camera_gpio_conf msm_camif_gpio_conf_mclk0;
+extern struct msm_camera_gpio_conf msm_camif_gpio_conf_mclk1;
 extern struct platform_device hdmi_msm_device;
 extern struct platform_device android_usb_device;
 extern struct platform_device msm_tsens_device;
 
 extern struct msm_otg_platform_data msm_otg_pdata;
+
+extern bool camera_single_mclk;
 
 extern void msm8960_init_hdmi(struct platform_device *hdmi_dev,
 						struct msm_hdmi_platform_data *hdmi_data);

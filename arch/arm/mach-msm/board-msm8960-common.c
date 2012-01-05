@@ -475,6 +475,12 @@ struct gpiomux_setting cam_settings[] = {
 		.pull = GPIOMUX_PULL_KEEPER,
 	},
 
+	{
+		.func = GPIOMUX_FUNC_2, /*active 9*/
+		.drv = GPIOMUX_DRV_2MA,
+		.pull = GPIOMUX_PULL_NONE,
+	},
+
 };
 
 static struct msm_gpiomux_config msm8960_cam_common_configs[] = {
@@ -495,7 +501,7 @@ static struct msm_gpiomux_config msm8960_cam_common_configs[] = {
 	{
 		.gpio = 4,
 		.settings = {
-			[GPIOMUX_ACTIVE]    = &cam_settings[1],
+			[GPIOMUX_ACTIVE]    = &cam_settings[9],
 			[GPIOMUX_SUSPENDED] = &cam_settings[0],
 		},
 	},
@@ -522,8 +528,12 @@ static struct msm_gpiomux_config msm8960_cam_common_configs[] = {
 	},
 };
 
-static uint16_t msm_cam_gpio_2d_tbl[] = {
+static uint16_t msm_cam_gpio_2d_tbl_mclk0[] = {
 	5, /*CAMIF_MCLK*/
+};
+
+static uint16_t msm_cam_gpio_2d_tbl_mclk1[] = {
+	4, /*CAMIF_MCLK*/
 };
 
 static struct msm_gpiomux_config msm8960_cam_2d_configs[] = {
@@ -543,11 +553,18 @@ static struct msm_gpiomux_config msm8960_cam_2d_configs[] = {
 	},
 };
 
-struct msm_camera_gpio_conf msm_camif_gpio_conf = {
+struct msm_camera_gpio_conf msm_camif_gpio_conf_mclk0 = {
 	.cam_gpiomux_conf_tbl = msm8960_cam_2d_configs,
 	.cam_gpiomux_conf_tbl_size = ARRAY_SIZE(msm8960_cam_2d_configs),
-	.cam_gpio_tbl = msm_cam_gpio_2d_tbl,
-	.cam_gpio_tbl_size = ARRAY_SIZE(msm_cam_gpio_2d_tbl),
+	.cam_gpio_tbl = msm_cam_gpio_2d_tbl_mclk0,
+	.cam_gpio_tbl_size = ARRAY_SIZE(msm_cam_gpio_2d_tbl_mclk0),
+};
+
+struct msm_camera_gpio_conf msm_camif_gpio_conf_mclk1 = {
+	.cam_gpiomux_conf_tbl = msm8960_cam_2d_configs,
+	.cam_gpiomux_conf_tbl_size = ARRAY_SIZE(msm8960_cam_2d_configs),
+	.cam_gpio_tbl = msm_cam_gpio_2d_tbl_mclk1,
+	.cam_gpio_tbl_size = ARRAY_SIZE(msm_cam_gpio_2d_tbl_mclk1),
 };
 #endif
 
