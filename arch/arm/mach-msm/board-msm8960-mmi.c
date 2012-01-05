@@ -2328,6 +2328,7 @@ static __init void asanti_init(void)
 	/* Enable keyboard backlight */
 	strncpy((char *)&mp_lm3532_pdata.ctrl_b_name, "keyboard-backlight",
 		sizeof(mp_lm3532_pdata.ctrl_b_name)-1);
+	mp_lm3532_pdata.led2_controller = LM3532_CNTRL_B;
 	mp_lm3532_pdata.ctrl_b_usage = LM3532_LED_DEVICE;
 
 	/* Setup correct shift key light LED name */
