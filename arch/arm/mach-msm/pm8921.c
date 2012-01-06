@@ -567,6 +567,8 @@ static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 #ifdef CONFIG_PM8921_EXTENDED_INFO
 	.get_batt_info          = read_mmi_battery_chrg,
 	.temp_range_cb          = temp_range_check,
+	.batt_alarm_delta	= 100,
+	.lower_battery_threshold = 3400,
 #endif
 };
 #else

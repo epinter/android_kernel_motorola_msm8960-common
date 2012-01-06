@@ -103,6 +103,21 @@ enum pm8921_chg_led_src_config {
 	LED_SRC_BYPASS,
 };
 
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+enum alarm_status {
+	SPURIOUS,
+	LOW_THRLD,
+	HIGH_THRLD
+};
+
+enum pm8921_alarm_state {
+	PM_BATT_ALARM_NORMAL,
+	PM_BATT_ALARM_WARNING,
+	PM_BATT_ALARM_SHUTDOWN,
+	PM_BATT_ALARM_INVALID
+};
+#endif
+
 /**
  * struct pm8921_charger_platform_data -
  * @safety_time:	max charging time in minutes incl. fast and trkl
@@ -168,6 +183,11 @@ enum pm8921_chg_led_src_config {
  * @step_charge_voltage:        Batteries with Peak Voltages above 4.2 V
  *                              sometimes require a reduced Charge Rate
  *                              above a voltage threshold; this is that voltage
+ * @batt_alarm_delta:           This is the delta voltage that is added to the
+ *                              peak volatg of teh battery to determine the
+ *                              Upper batt alarm threshold
+ * @lower_battery_threshold:    Warning threshold for lower battery alarm
+ *                              threshold while discharging.
  */
 struct pm8921_charger_platform_data {
 	struct pm8xxx_charger_core_data	charger_cdata;
@@ -210,6 +230,8 @@ struct pm8921_charger_platform_data {
 	int64_t (*temp_range_cb) (int batt_temp, int batt_mvolt,
 				  struct pm8921_charger_battery_data *data,
 				  int64_t *enable);
+	unsigned int			batt_alarm_delta;
+	unsigned int			lower_battery_threshold;
 #endif
 #ifdef CONFIG_PM8921_FACTORY_SHUTDOWN
 	void				(*arch_reboot_cb)(void);
