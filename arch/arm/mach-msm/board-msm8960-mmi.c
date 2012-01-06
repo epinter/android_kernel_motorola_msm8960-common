@@ -2323,13 +2323,6 @@ static __init void qinara_init(void)
 #endif
 	flash_hw_enable = 2;
 
-	ENABLE_I2C_DEVICE(TOUCHSCREEN_CYTTSP3);
-	ENABLE_I2C_DEVICE(CAMERA_MSM);
-	if (system_rev >= HWREV_P2)
-		ENABLE_I2C_DEVICE(ALS_CT406);
-	ENABLE_I2C_DEVICE(CAMERA_FLASH_MSM);
-	ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
-
 	/* Setup correct button backlight LED name */
 	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
 
