@@ -2290,12 +2290,6 @@ static __init void teufel_init(void)
 	else
 		set_emu_detection_resource("EMU_ID_EN_GPIO", 94);
 #endif
-	ENABLE_I2C_DEVICE(CAMERA_MSM);
-#ifdef CONFIG_INPUT_CT406
-	if (system_rev >= HWREV_P2)
-		ENABLE_I2C_DEVICE(ALS_CT406);
-#endif
-	ENABLE_I2C_DEVICE(CAMERA_FLASH_MSM);
 
 	/* Setup correct button backlight LED name */
 	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
