@@ -1638,9 +1638,96 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 #endif /* CONFIG_PN544 */
 };
 
-#define ENABLE_I2C_DEVICE(device)	{ msm8960_i2c_devices[device].enabled = 1; }
+#define ENABLE_I2C_DEVICE(device)                        \
+	do {                                             \
+		msm8960_i2c_devices[device].enabled = 1; \
+	} while (0)
 
 #endif /* CONFIG_I2C */
+
+static __init void register_i2c_devices_from_dt(int bus)
+{
+	char path[18];
+	struct device_node *parent, *child;
+
+	snprintf(path, sizeof(path), "/System@0/I2C@%d", bus);
+
+	parent = of_find_node_by_path(path);
+	if (!parent)
+		goto out;
+
+	for_each_child_of_node(parent, child) {
+		struct i2c_board_info info;
+		int len = 0;
+		const void *prop;
+
+		memset(&info, 0, sizeof(struct i2c_board_info));
+
+		prop = of_get_property(child, "i2c,type", &len);
+		if (prop)
+			strncpy(info.type, (const char *)prop,
+					len > I2C_NAME_SIZE ? I2C_NAME_SIZE :
+					len);
+
+		prop = of_get_property(child, "i2c,address", &len);
+		if (prop && (len == sizeof(u32)))
+			info.addr = *(u32 *)prop;
+
+		prop = of_get_property(child, "irq,gpio", &len);
+		if (prop && (len == sizeof(u8)))
+			info.irq = MSM_GPIO_TO_INT(*(u8 *)prop);
+
+		prop = of_get_property(child, "type", &len);
+		if (prop && (len == sizeof(u32))) {
+			/* must match type identifiers defined in DT schema */
+			switch (*(u32 *)prop) {
+			case 0x00040002: /* Cypress_CYTTSP3 */
+				info.platform_data = &ts_platform_data_cyttsp3;
+				mot_setup_touch_cyttsp3();
+				break;
+
+			case 0x000B0003: /* National_LM3559 */
+				info.platform_data = &camera_flash_3559;
+				break;
+
+			case 0x000B0004: /* National_LM3532 */
+				info.platform_data = &mp_lm3532_pdata;
+				break;
+
+			case 0x000B0006: /* National_LM3556 */
+				info.platform_data = &camera_flash_3556;
+				break;
+
+			case 0x00190001: /* NXP_PN544 */
+#ifdef CONFIG_PN544
+				info.platform_data = &pn544_pdata;
+#endif
+				break;
+
+			case 0x00250001: /* TAOS_CT406 */
+				info.platform_data = &mp_ct406_pdata;
+				break;
+
+			case 0x00260001: /* Atmel_MXT */
+				info.platform_data = &ts_platform_data_atmxt;
+				mot_setup_touch_atmxt();
+				break;
+
+			case 0x000270000: /* Melfas_MMS100 */
+				info.platform_data = &touch_pdata;
+				melfas_ts_platform_init();
+				break;
+			}
+		}
+
+		i2c_register_board_info(bus, &info, 1);
+	}
+
+	of_node_put(parent);
+
+out:
+	return;
+}
 
 static void __init register_i2c_devices(void)
 {
@@ -1655,6 +1742,10 @@ static void __init register_i2c_devices(void)
 						msm8960_i2c_devices[i].len);
 	}
 #endif
+
+	register_i2c_devices_from_dt(MSM_8960_GSBI3_QUP_I2C_BUS_ID);
+	register_i2c_devices_from_dt(MSM_8960_GSBI4_QUP_I2C_BUS_ID);
+	register_i2c_devices_from_dt(MSM_8960_GSBI10_QUP_I2C_BUS_ID);
 }
 
 #ifdef CONFIG_USB_ANDROID_DIAG
