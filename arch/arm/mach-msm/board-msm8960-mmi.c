@@ -2352,13 +2352,6 @@ static __init void vanquish_init(void)
 #endif
 	flash_hw_enable = 2;
 
-	ENABLE_I2C_DEVICE(TOUCHSCREEN_MELFAS100_TS);
-	ENABLE_I2C_DEVICE(CAMERA_MSM);
-	ENABLE_I2C_DEVICE(CAMERA_FLASH_MSM);
-	ENABLE_I2C_DEVICE(ALS_CT406);
-#ifdef CONFIG_PN544
-	ENABLE_I2C_DEVICE(NFC_PN544);
-#endif
 	use_mdp_vsync = MDP_VSYNC_DISABLED;
 	msm8960_mmi_init();
 }
