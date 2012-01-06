@@ -2395,11 +2395,6 @@ static __init void becker_init(void)
 {
 	flash_hw_enable = 2;
 	strncpy(panel_name, "mipi_mot_cmd_auo_qhd_430", PANEL_NAME_MAX_LEN);
-	ENABLE_I2C_DEVICE(TOUCHSCREEN_ATMEL);
-	ENABLE_I2C_DEVICE(CAMERA_MSM);
-	ENABLE_I2C_DEVICE(CAMERA_FLASH_MSM);
-	ENABLE_I2C_DEVICE(ALS_CT406);
-	ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
 
 	/* Setup correct button backlight LED name */
 	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
