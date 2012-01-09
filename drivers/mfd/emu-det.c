@@ -511,6 +511,7 @@ struct emu_det_data {
 	bool protection_forced_off;
 	bool semu_alt_mode;
 	bool ext_5v_switch_enabled;
+	bool otg_enabled;
 	void __iomem *regs;
 	unsigned  gsbi_phys;
 	struct otg_transceiver *trans;
@@ -1328,7 +1329,10 @@ static void detection_work(bool caused_by_irq)
 
 	switch (data->state) {
 	case CONFIG:
-		pm_runtime_get(data->trans->dev);
+		if (!data->otg_enabled) {
+			data->otg_enabled = true;
+			pm_runtime_get(data->trans->dev);
+		}
 		gsbi_ctrl_reg_restore();
 		memset(&data->sense, 0, sizeof(data->sense));
 		data->trans->init(data->trans); /* reset PHY */
@@ -1442,6 +1446,10 @@ static void detection_work(bool caused_by_irq)
 			pr_emu_det(DEBUG, "no accessory\n");
 			notify_accy(ACCY_NONE);
 			notify_whisper_switch(ACCY_NONE);
+			if (data->otg_enabled) {
+				pm_runtime_put(data->trans->dev);
+				data->otg_enabled = false;
+			}
 		}
 		break;
 
@@ -2510,6 +2518,7 @@ static int emu_det_probe(struct platform_device *pdev)
 	data->undetect_cnt = 0;
 	data->bpass_mod = 'a';
 	data->whisper_auth = AUTH_NOT_STARTED;
+	data->otg_enabled = false;
 	dev_set_drvdata(&pdev->dev, data);
 
 	ret = sysfs_create_group(&(pdev->dev.kobj), &emu_dev_attr_groups);

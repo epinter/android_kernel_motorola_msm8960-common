@@ -2815,6 +2815,9 @@ static int msm_otg_accy_notify(struct notifier_block *nb,
 	switch (req_mode) {
 	case USB_NONE:
 		switch (otg->state) {
+		case OTG_STATE_B_IDLE:
+			if (motg->chg_type != USB_DCP_CHARGER)
+				goto out;
 		case OTG_STATE_A_HOST:
 		case OTG_STATE_B_PERIPHERAL:
 			set_bit(ID, &motg->inputs);
