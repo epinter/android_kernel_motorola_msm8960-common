@@ -246,6 +246,62 @@ static ssize_t mmi_battery_show_uid(struct device *dev,
 }
 static DEVICE_ATTR(uid, 0444, mmi_battery_show_uid, NULL);
 
+static ssize_t mmi_battery_read_eeprom_file(struct file *filp,
+					  struct kobject *kobj,
+					  struct bin_attribute *bin_attr,
+					  char *buf, loff_t off, size_t count)
+{
+	struct platform_device *pdev =
+		to_platform_device(container_of(kobj, struct device, kobj));
+	struct mmi_battery_info *dev_info = platform_get_drvdata(pdev);
+	int size = (EEPROM_SIZE < count) ? EEPROM_SIZE : count;
+	int retval = 0;
+
+	if (dev_info->cell_info.batt_valid != MMI_BATTERY_UNKNOWN) {
+		memcpy(buf, dev_info->eeprom, size);
+		retval = size;
+	}
+
+
+	return retval;
+}
+
+static ssize_t mmi_battery_read_uid_file(struct file *filp, struct kobject *kobj,
+				  struct bin_attribute *bin_attr,
+				  char *buf, loff_t off, size_t count)
+{
+	struct platform_device *pdev =
+		to_platform_device(container_of(kobj, struct device, kobj));
+	struct mmi_battery_info *dev_info = platform_get_drvdata(pdev);
+	int size = (UID_SIZE < count) ? UID_SIZE : count;
+	int retval = 0;
+
+	if (dev_info->cell_info.batt_valid != MMI_BATTERY_UNKNOWN) {
+		memcpy(buf, dev_info->uid, size);
+		retval = size;
+	}
+
+	return retval;
+}
+
+static struct bin_attribute mmi_battery_eeprom_attr = {
+	.attr = {
+		.name = "eeprom.bin",
+		.mode = S_IRUGO,
+	},
+	.size = EEPROM_SIZE,
+	.read = mmi_battery_read_eeprom_file,
+};
+
+static struct bin_attribute mmi_battery_uid_attr = {
+	.attr = {
+		.name = "uid.bin",
+		.mode = S_IRUGO,
+	},
+	.size = UID_SIZE,
+	.read = mmi_battery_read_uid_file,
+};
+
 static int __devinit mmi_battery_probe(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -283,12 +339,30 @@ static int __devinit mmi_battery_probe(struct platform_device *pdev)
 		goto fail_free_is_valid;
 	}
 
+	ret = sysfs_create_bin_file(&dev_info->dev->kobj,
+				    &mmi_battery_eeprom_attr);
+	if (ret) {
+		pr_err("Failed to create eeprom_bin attribute : %d\n", ret);
+		goto error_create_eeprom_file;
+	}
+
+	ret = sysfs_create_bin_file(&dev_info->dev->kobj,
+				    &mmi_battery_uid_attr);
+	if (ret) {
+		pr_err("Failed to create uid_bin attribute : %d\n", ret);
+		goto error_create_uid_file;
+	}
+
 	the_batt = dev_info;
 
 	INIT_DELAYED_WORK(&dev_info->work,  mmi_battery_eeprom_read_work);
 	schedule_delayed_work(&dev_info->work, msecs_to_jiffies(100));
 	return 0;
 
+error_create_uid_file:
+	sysfs_remove_bin_file(&dev_info->dev->kobj, &mmi_battery_eeprom_attr);
+error_create_eeprom_file:
+	device_remove_file(dev_info->dev, &dev_attr_uid);
 fail_free_is_valid:
 	device_remove_file(dev_info->dev, &dev_attr_is_valid);
 fail_free_cap:
@@ -305,6 +379,8 @@ static int __devexit mmi_battery_remove(struct platform_device *pdev)
 	device_remove_file(dev_info->dev, &dev_attr_uid);
 	device_remove_file(dev_info->dev, &dev_attr_is_valid);
 	device_remove_file(dev_info->dev, &dev_attr_capacity);
+	sysfs_remove_bin_file(&dev_info->dev->kobj, &mmi_battery_eeprom_attr);
+	sysfs_remove_bin_file(&dev_info->dev->kobj, &mmi_battery_uid_attr);
 	kfree(dev_info);
 	return 0;
 }
