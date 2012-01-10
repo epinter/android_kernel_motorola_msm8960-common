@@ -936,6 +936,7 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 		client->dev.platform_data;
 	uint8_t reg_val;
 	int ret;
+	char *backlight_name;
 
 	pr_debug("%s: started\n", __func__);
 	if (!i2c_check_functionality(client->adapter,
@@ -988,6 +989,15 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 
 	mutex_init(&lock);
 
+	if (pdata->ctrl_a_usage == LM3532_BACKLIGHT_DEVICE)
+		backlight_name = pdata->ctrl_a_name;
+	else if (pdata->ctrl_b_usage == LM3532_BACKLIGHT_DEVICE)
+		backlight_name = pdata->ctrl_b_name;
+	else if (pdata->ctrl_c_usage == LM3532_BACKLIGHT_DEVICE)
+		backlight_name = pdata->ctrl_c_name;
+	else
+		backlight_name = "lcd-backlight";
+
 	if (data->revid == LM3532_REV1) {
 		/* backlight must use LM3532_CNTRL_A and LM3532_LED_D1
 		   since rev1 i2c read does not work */
@@ -1003,7 +1013,7 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 
 		INIT_DELAYED_WORK(&data->work, lm3532_bl_work);
 
-		bl = backlight_device_register(dev_driver_string(&client->dev),
+		bl = backlight_device_register(backlight_name,
 			&client->dev, data, &lm3532_bl_ops, NULL);
 		if (IS_ERR(bl)) {
 			dev_err(&client->dev, "failed to register backlight\n");
@@ -1022,7 +1032,7 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 
 	INIT_DELAYED_WORK(&data->work, lm3532_bl_work);
 
-	bl = backlight_device_register(dev_driver_string(&client->dev),
+	bl = backlight_device_register(backlight_name,
 			&client->dev, data, &lm3532_bl_ops, NULL);
 	if (IS_ERR(bl)) {
 		dev_err(&client->dev, "failed to register backlight\n");
