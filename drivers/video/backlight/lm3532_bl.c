@@ -195,6 +195,16 @@ static struct lm3532_reg {
 	{"REVISION_REG",        LM3532_REVISION},
 };
 
+/* Trace register writes */
+static unsigned trace_write;
+module_param(trace_write, uint, 0664);
+#define pr_write(fmt,args...) if (trace_write) printk(KERN_INFO fmt, ##args)
+
+/* Trace brightness changes */
+static unsigned trace_brightness;
+module_param(trace_brightness, uint, 0664);
+#define pr_brightness(fmt,args...) if (trace_brightness) printk(KERN_INFO fmt, ##args)
+
 static int lm3532_read(struct i2c_client *client, int reg, uint8_t *val)
 {
 	int ret;
@@ -212,7 +222,7 @@ static int lm3532_read(struct i2c_client *client, int reg, uint8_t *val)
 
 static int lm3532_write(struct i2c_client *client, u8 reg, u8 val)
 {
-	pr_debug("%s: write reg 0x%02x, value 0x%02x\n",
+	pr_write("%s: write reg 0x%02x, value 0x%02x\n",
 		__func__, reg, val);
 	return i2c_smbus_write_byte_data(client, reg, val);
 }
@@ -271,7 +281,7 @@ static void lm3532_led_set(struct led_classdev *led_cdev,
 {
 	struct lm3532_led *led;
 
-	pr_info("%s: %d\n", __func__, value);
+	pr_brightness("%s: %d\n", __func__, value);
 	mutex_lock(&lock);
 
 	led = container_of(led_cdev, struct lm3532_led, cdev);
@@ -457,7 +467,7 @@ static int lm3532_bl_update_status(struct backlight_device *bl)
 {
 	int brightness = bl->props.brightness;
 
-	pr_info("%s: br=%d, power=%d, fb_blank=%d\n",
+	pr_brightness("%s: br=%d, power=%d, fb_blank=%d\n",
 		__func__, brightness, bl->props.power, bl->props.fb_blank);
 	if (bl->props.power != FB_BLANK_UNBLANK)
 		brightness = 0;
