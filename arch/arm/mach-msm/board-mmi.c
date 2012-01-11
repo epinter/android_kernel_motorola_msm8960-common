@@ -225,7 +225,10 @@ static struct pm8xxx_gpio_init *pm8921_gpios = pm8921_gpios_vanquish;
 static unsigned pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_vanquish);
 static struct pm8xxx_keypad_platform_data *keypad_data = &mmi_keypad_data;
 static int keypad_mode = MMI_KEYPAD_RESET;
-/* Ulpi register setting  to increase eye digram strength for qinara HW */
+/* Motorola ULPI default register settings
+ * TXPREEMPAMPTUNE[5:4] = 11 (3x preemphasis current)
+ * TXVREFTUNE[3:0] = 1111 increasing the DC level
+ */
 static int phy_settings[] = {0x34, 0x82, 0x3f, 0x81, -1};
 
 bool camera_single_mclk;
@@ -2167,6 +2170,8 @@ static void __init msm8960_mmi_init(void)
 {
 	struct msm_watchdog_pdata *mmi_watchdog_pdata;
 
+	msm_otg_pdata.phy_init_seq = phy_settings;
+
 	if (mbm_protocol_version == 0)
 		pr_err("ERROR: ATAG MBM_PROTOCOL_VERSION is not present."
 			" Bootloader update is required\n");
@@ -2378,10 +2383,6 @@ MACHINE_END
 
 static __init void qinara_init(void)
 {
-	/* For qinara HW, to improve the signal strength
-	 * extra settings to ulpi_registers are needed
-	 */
-	msm_otg_pdata.phy_init_seq = phy_settings;
 #ifdef CONFIG_EMU_DETECTION
 	mot_setup_gsbi12_clk();
 	if (system_rev < HWREV_P1B2)
