@@ -1720,6 +1720,11 @@ static __init void register_i2c_devices_from_dt(int bus)
 		if (prop && (len == sizeof(u32))) {
 			/* must match type identifiers defined in DT schema */
 			switch (*(u32 *)prop) {
+			case 0x00000019: /* Generic_Motsoc1 */
+				info.platform_data =
+					&msm_camera_sensor_motsoc1_data;
+				break;
+
 			case 0x00040002: /* Cypress_CYTTSP3 */
 				info.platform_data = &ts_platform_data_cyttsp3;
 				mot_setup_touch_cyttsp3();
@@ -1755,6 +1760,16 @@ static __init void register_i2c_devices_from_dt(int bus)
 			case 0x000270000: /* Melfas_MMS100 */
 				info.platform_data = &touch_pdata;
 				melfas_ts_platform_init();
+				break;
+
+			case 0x00280000: /* Aptina_MT9M114 */
+				info.platform_data =
+					&msm_camera_sensor_mt9m114_data;
+				break;
+
+			case 0x00290000: /* Omnivision_OV8820 */
+				info.platform_data =
+					&msm_camera_sensor_ov8820_data;
 				break;
 			}
 		}
