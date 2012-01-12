@@ -129,6 +129,7 @@
 #include "rpm_log.h"
 #include "smd_private.h"
 #include "pm-boot.h"
+#include "msm_watchdog.h"
 
 /* Initial PM8921 GPIO configurations */
 static struct pm8xxx_gpio_init pm8921_gpios_teufel_m1[] = {
@@ -2129,6 +2130,8 @@ static uint32_t mbm_protocol_version;
 
 static void __init msm8960_mmi_init(void)
 {
+	struct msm_watchdog_pdata *mmi_watchdog_pdata;
+
 	if (mbm_protocol_version == 0)
 		pr_err("ERROR: ATAG MBM_PROTOCOL_VERSION is not present."
 			" Bootloader update is required\n");
@@ -2158,6 +2161,9 @@ static void __init msm8960_mmi_init(void)
 
 	/* Init the bus, but no devices at this time */
 	msm8960_spi_init(&msm8960_qup_spi_gsbi1_pdata, NULL, 0);
+	mmi_watchdog_pdata = msm8960_device_watchdog.dev.platform_data;
+	mmi_watchdog_pdata->bark_time = 41000;
+	mmi_watchdog_pdata->pet_time = 40000;
 
 	msm8960_i2c_init(400000);
 	msm8960_gfx_init();
