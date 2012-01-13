@@ -60,8 +60,6 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 {
 	struct dsi_buf *dsi_tx_buf;
 
-	pr_info("%s\n", __func__);
-
 	if (mot_panel == NULL) {
 		pr_err("%s: Invalid mot_panel\n", __func__);
 		return -1;
@@ -77,8 +75,6 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 static int panel_disable(struct msm_fb_data_type *mfd)
 {
 	struct dsi_buf *dsi_tx_buf;
-
-	pr_info("%s\n", __func__);
 
 	if (mot_panel == NULL) {
 		pr_err("%s: Invalid mot_panel\n", __func__);
@@ -99,7 +95,7 @@ static int __init mipi_cmd_mot_auo_qhd_430_init(void)
 	int ret;
 	struct msm_panel_info *pinfo;
 
-	pr_info("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 
 	if (msm_fb_detect_client("mipi_mot_cmd_auo_qhd_430"))
 		return 0;

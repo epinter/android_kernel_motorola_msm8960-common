@@ -311,8 +311,6 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 {
 	struct dsi_buf *dsi_tx_buf;
 
-	pr_info("%s\n", __func__);
-
 	if (mot_panel == NULL) {
 		pr_err("%s: Invalid mot_panel\n", __func__);
 		return -1;
@@ -334,16 +332,12 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 
 	usleep(5000);
 
-	pr_info("%s completed\n", __func__);
-
 	return 0;
 }
 
 static int panel_disable(struct msm_fb_data_type *mfd)
 {
 	struct dsi_buf *dsi_tx_buf;
-
-	pr_info("%s\n", __func__);
 
 	if (mot_panel == NULL) {
 		pr_err("%s: Invalid mot_panel\n", __func__);
