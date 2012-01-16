@@ -1224,6 +1224,19 @@ struct platform_device msm8960_camera_sensor_mt9m114 = {
 };
 #endif
 
+#ifdef CONFIG_DW9714_ACT
+static struct i2c_board_info dw9714_actuator_i2c_info = {
+	I2C_BOARD_INFO("dw9714_act", 0x18),
+};
+
+static struct msm_actuator_info dw9714_actuator_info = {
+	.board_info = &dw9714_actuator_i2c_info,
+	.bus_id = MSM_8960_GSBI4_QUP_I2C_BUS_ID,
+	.vcm_pwd = 0,
+	.vcm_enable = 1,
+};
+#endif
+
 #ifdef CONFIG_OV8820
 static struct msm_camera_sensor_flash_data flash_ov8820 = {
 	.flash_type	= MSM_CAMERA_FLASH_NONE,
@@ -1245,6 +1258,9 @@ static struct msm_camera_sensor_info msm_camera_sensor_ov8820_data = {
 	.gpio_conf = &msm_camif_gpio_conf_mclk0,
 	.csi_if	= 1,
 	.camera_type = BACK_CAMERA_2D,
+#ifdef CONFIG_DW9714_ACT
+	.actuator_info = &dw9714_actuator_info,
+#endif
 };
 
 struct platform_device msm8960_camera_sensor_ov8820 = {
