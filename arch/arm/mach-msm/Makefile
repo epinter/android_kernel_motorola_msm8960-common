@@ -280,11 +280,11 @@ obj-$(CONFIG_MACH_MSM8960_MTP) += board-8960-all.o board-8960-regulator.o
 obj-$(CONFIG_MACH_MSM8960_FLUID) += board-8960-all.o board-8960-regulator.o
 obj-$(CONFIG_MACH_MSM8960_MMI) += \
 	board-msm8960-common.o \
-	board-msm8960-mmi.o \
-	board-mmi-msm8960-regulator.o \
+	board-mmi.o \
+	board-mmi-regulator.o \
 	board-mmi-sensors.o \
 	board-mmi-keypad.o \
-	pm8921.o \
+	board-mmi-pmic.o \
 	board-mmi-cyttsp3.o \
 	board-mmi-atmxt.o \
 	board-mmi-vibrator.o \
