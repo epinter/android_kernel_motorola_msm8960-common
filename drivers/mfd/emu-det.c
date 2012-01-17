@@ -1331,7 +1331,7 @@ static void detection_work(bool caused_by_irq)
 	case CONFIG:
 		if (!data->otg_enabled) {
 			data->otg_enabled = true;
-			pm_runtime_get(data->trans->dev);
+			pm_runtime_get_sync(data->trans->dev);
 		}
 		gsbi_ctrl_reg_restore();
 		memset(&data->sense, 0, sizeof(data->sense));
