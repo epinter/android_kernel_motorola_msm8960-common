@@ -103,8 +103,6 @@ static int  read_tag (struct seq_file *file, void *v)
 	struct utag_node *mytag = proc->tag;
 	uint32_t type = mytag->type;
 
-	pr_err("%s %#x %s\n", __func__, type, mytag->name);
-
 	if (UTAG_END == type) {
 		proc_dump_tags (file);
 		return 0;
@@ -153,8 +151,6 @@ static ssize_t write_tag (struct file *file, const char __user *buffer,
 	struct proc_node *proc = (struct  proc_node *) PDE(inode)->data;
 	struct utag_node *mytag = proc->tag;
 	uint32_t type = mytag->type;
-
-	pr_info("%s %#x %s length %d\n", __func__, type, mytag->name, (count-1));
 
 	if(UTAG_END == type)
 		return count;

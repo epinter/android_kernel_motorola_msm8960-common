@@ -23,8 +23,6 @@ enum utag_error replace_first_utag(struct utag *head, uint32_t type,
   while (cur) {
     if (cur->type == type) {
       void *oldpayload = cur->payload;
-    pr_err("%s line %d Found tag %#x with size %d new size %d\n",
-    		__func__, __LINE__, cur->type, cur->size, size);
 
       cur->payload = kmalloc(size, GFP_KERNEL);
       if (!cur->payload) {
@@ -49,7 +47,6 @@ enum utag_error replace_first_utag(struct utag *head, uint32_t type,
    * If specified type wasn't found, insert a new tag immediately after
    * the head.
    */
-    pr_err("%s line %d Found tag %#x with size %d\n", __func__, __LINE__, cur->type, cur->size);
   cur = kmalloc(sizeof(struct utag), GFP_KERNEL);
   if (!cur)
     return UTAG_ERR_OUT_OF_MEMORY;
