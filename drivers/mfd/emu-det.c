@@ -177,17 +177,17 @@ static bool in_range(int voltage, int idx)
 #define PORTSC_LS_DP	(1<<11)
 #define PORTSC_LS_SE1	(PORTSC_LS_DM | PORTSC_LS_DP)
 
-#define MUXMODE_USB	0
-#define MUXMODE_UART	1
-#define MUXMODE_AUDIO	2
+#define MUXMODE_USB	1
+#define MUXMODE_UART	2
+#define MUXMODE_AUDIO	3
 
-#define DRVMODE_USB	MUXMODE_USB
-#define DRVMODE_UART	MUXMODE_UART
-#define DRVMODE_AUDIO	MUXMODE_AUDIO
-#define DRVMODE_FACTORY	3
-#define DRVMODE_NORMAL	4
-#define DRVMODE_GPIO	5
-#define DRVMODE_GSBI	6
+#define MODE_NORMAL	0
+#define MODE_F_USB	1
+#define MODE_F_UART	2
+#define MODE_F_AUDIO	3
+
+#define GPIO_MODE_GPIO	0
+#define GPIO_MODE_GSBI	1
 
 static int debug_mask = PRINT_ERROR | PRINT_DEBUG |
 	PRINT_STATUS | PRINT_TRANSITION /*| PRINT_PARANOIC*/;
@@ -521,7 +521,7 @@ static struct mmi_emu_det_platform_data *emu_pdata;
 static struct emu_det_data *the_emud;
 static DEFINE_MUTEX(switch_access);
 static char buffer[512];
-static bool factory_mode;
+static int driver_mode;
 
 /*
 static char *irq_names[23] = {"NA", "NA", "NA", "NA", "NA",
@@ -648,9 +648,9 @@ static struct msm_gpiomux_config gsbi12_gpio_configs[] = {
 static void whisper_gpio_mode(int mode)
 {
 	switch (mode) {
-	case DRVMODE_FACTORY:
+	case GPIO_MODE_GPIO:
 		gsbi12_gpio_mode.func = GPIOMUX_FUNC_GPIO; break;
-	case DRVMODE_NORMAL:
+	case GPIO_MODE_GSBI:
 		gsbi12_gpio_mode.func = GPIOMUX_FUNC_1; break;
 	}
 	msm_gpiomux_install(gsbi12_gpio_configs,
@@ -1318,7 +1318,7 @@ static void detection_work(bool caused_by_irq)
 
 	static unsigned long last_run;
 
-	if (factory_mode)
+	if (driver_mode != MODE_NORMAL)
 		return;
 
 	pr_emu_det(STATUS, "state %s, time since last run %d ms\n",
@@ -1406,8 +1406,11 @@ static void detection_work(bool caused_by_irq)
 			chgdet_disable(0x8);
 			data->state = IDENTIFY;
 			pr_emu_det(DEBUG, "fall through to IDENTIFY ...\n");
-		} else
+		} else {
+			queue_delayed_work(data->wq, &data->timer_work,
+							CHG_SEC_DET_TIME);
 			break;
+		}
 
 	case IDENTIFY:
 		data->state = CONFIG;
@@ -1728,7 +1731,7 @@ put_on_schedule:
 	pr_emu_det(DEBUG, "irq=%d(%d), usbsts: 0x%08x, otgsc: 0x%08x\n",
 				irq, count, usbsts, otgsc);
 	count = 0;
-	if (!factory_mode)
+	if (driver_mode == MODE_NORMAL)
 		queue_delayed_work(emud->wq, &emud->irq_work, 0);
 
 	return IRQ_HANDLED;
@@ -2178,8 +2181,8 @@ static DEVICE_ATTR(debug_mask, 0644, debug_mask_show, debug_mask_store);
 
 static ssize_t mode_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	pr_emu_det(DEBUG, "mode=%d\n", (int)factory_mode);
-	return snprintf(buf, PAGE_SIZE, "%d\n", (int)factory_mode);
+	pr_emu_det(DEBUG, "mode=%d\n", driver_mode);
+	return snprintf(buf, PAGE_SIZE, "%d\n", driver_mode);
 }
 
 static ssize_t mode_store(struct device *dev, struct device_attribute *attr,
@@ -2187,33 +2190,30 @@ static ssize_t mode_store(struct device *dev, struct device_attribute *attr,
  {
 	int value = (int)simple_strtoul(buf, NULL, 0);
 	switch (value) {
-	case DRVMODE_USB:
-		pr_emu_det(TRANSITION, "USB mode\n");
+	case MODE_F_USB:
+		pr_emu_det(TRANSITION, "FACTORY (MUX-USB) mode\n");
+		driver_mode = MODE_F_USB;
+		whisper_gpio_mode(GPIO_MODE_GPIO);
 		mux_ctrl_mode(MUXMODE_USB);
 		break;
-	case DRVMODE_UART:
-		pr_emu_det(TRANSITION, "UART mode\n");
+	case MODE_F_UART:
+		pr_emu_det(TRANSITION, "FACTORY (MUX-UART) mode\n");
+		driver_mode = MODE_F_UART;
+		whisper_gpio_mode(GPIO_MODE_GPIO);
 		mux_ctrl_mode(MUXMODE_UART);
 		break;
-	case DRVMODE_AUDIO:
-		pr_emu_det(TRANSITION, "AUDIO mode\n");
+	case MODE_F_AUDIO:
+		pr_emu_det(TRANSITION, "FACTORY (MUX-AUDIO) mode\n");
+		driver_mode = MODE_F_AUDIO;
+		whisper_gpio_mode(GPIO_MODE_GPIO);
 		mux_ctrl_mode(MUXMODE_AUDIO);
 		break;
-	case DRVMODE_FACTORY:
-		pr_emu_det(TRANSITION, "FACTORY mode\n");
-		factory_mode = true;
-	case DRVMODE_GPIO:
-		pr_emu_det(TRANSITION, "GPIO mode\n");
-		whisper_gpio_mode(DRVMODE_FACTORY);
-		break;
-	case DRVMODE_NORMAL:
-		pr_emu_det(TRANSITION, "NORMAL mode\n");
-		factory_mode = false;
+	case MODE_NORMAL:
+		pr_emu_det(TRANSITION, "NORMAL (MUX-AUTO) mode\n");
+		driver_mode = MODE_NORMAL;
+		whisper_gpio_mode(GPIO_MODE_GSBI);
+		mux_ctrl_mode(MUXMODE_USB);
 		detection_work(true);
-	case DRVMODE_GSBI:
-		pr_emu_det(TRANSITION, "GSBI12 mode\n");
-		whisper_gpio_mode(DRVMODE_NORMAL);
-		break;
 	default:
 		pr_emu_det(ERROR, "unsupported mode\n");
 		break;
@@ -2249,7 +2249,7 @@ static void emu_det_vbus_state(int online)
 	if (!online)
 		emu_id_protection_on();
 */
-	if (!factory_mode)
+	if (driver_mode == MODE_NORMAL)
 		queue_delayed_work(emud->wq, &emud->irq_work,
 					msecs_to_jiffies(50));
 }
