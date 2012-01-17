@@ -196,7 +196,7 @@ static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 	/* External 5V regulator enable; shared by HDMI and USB_OTG switches. */
 	PM8XXX_MPP_INIT(7, D_OUTPUT, PM8921_MPP_DIG_LEVEL_S4, DOUT_CTRL_HIGH),
 	PM8XXX_MPP_INIT(PM8XXX_AMUX_MPP_8, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH8,
-															DOUT_CTRL_LOW),
+								DOUT_CTRL_LOW),
 	PM8XXX_MPP_INIT(11, D_BI_DIR, PM8921_MPP_DIG_LEVEL_S4, BI_PULLUP_1KOHM),
 	PM8XXX_MPP_INIT(12, D_BI_DIR, PM8921_MPP_DIG_LEVEL_L17, BI_PULLUP_OPEN),
 };
@@ -1127,42 +1127,7 @@ static struct lm3556_platform_data camera_flash_3556 = {
 };
 #endif /* CONFIG_LEDS_LM3556 */
 
-#if (defined CONFIG_LEDS_LM3559 || defined CONFIG_LEDS_LM3556)
-static struct i2c_board_info msm_camera_flash_boardinfo[] __initdata = {
-#ifdef CONFIG_LEDS_LM3559
-	{
-	I2C_BOARD_INFO("lm3559_led", 0x53),
-	.platform_data = &camera_flash_3559,
-	},
-#endif /* CONFIG_LEDS_LM3559 */
-#ifdef CONFIG_LEDS_LM3556
-	{
-	I2C_BOARD_INFO("lm3556_led", 0x63),
-	.platform_data = &camera_flash_3556,
-	},
-#endif /* CONFIG_LEDS_LM3556 */
-};
-#endif
-
 #ifdef CONFIG_MSM_CAMERA
-
-static struct i2c_board_info msm_camera_boardinfo[] __initdata = {
-#ifdef CONFIG_MOTSOC1
-	{
-	I2C_BOARD_INFO("motsoc1", 0x1F),
-	},
-#endif
-#ifdef CONFIG_MT9M114
-	{
-	I2C_BOARD_INFO("mt9m114", 0x48),
-	},
-#endif
-#ifdef CONFIG_OV8820
-	{
-	I2C_BOARD_INFO("ov8820", 0x6C >> 2),
-	},
-#endif
-};
 
 #ifdef CONFIG_MOTSOC1
 static struct msm_camera_sensor_flash_data flash_motsoc1 = {
@@ -1187,12 +1152,6 @@ static struct msm_camera_sensor_info msm_camera_sensor_motsoc1_data = {
 	.camera_type          = BACK_CAMERA_2D,
 };
 
-struct platform_device msm8960_camera_sensor_motsoc1 = {
-	.name    = "msm_camera_motsoc1",
-	.dev     = {
-		.platform_data = &msm_camera_sensor_motsoc1_data,
-	},
-};
 #endif
 #ifdef CONFIG_MT9M114
 static struct msm_camera_sensor_flash_data flash_mt9m114 = {
@@ -1217,12 +1176,6 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9m114_data = {
 	.camera_type          = FRONT_CAMERA_2D,
 };
 
-struct platform_device msm8960_camera_sensor_mt9m114 = {
-	.name    = "msm_camera_mt9m114",
-	.dev     = {
-		.platform_data = &msm_camera_sensor_mt9m114_data,
-	},
-};
 #endif
 
 #ifdef CONFIG_DW9714_ACT
@@ -1264,31 +1217,26 @@ static struct msm_camera_sensor_info msm_camera_sensor_ov8820_data = {
 #endif
 };
 
-struct platform_device msm8960_camera_sensor_ov8820 = {
-	.name	= "msm_camera_ov8820",
-	.dev	= {
-		.platform_data = &msm_camera_sensor_ov8820_data,
-	},
-};
 #endif
+
 void __init msm8960_init_cam(void)
 {
 	int i;
-	struct platform_device *cam_dev[] = {
+	struct msm_camera_sensor_info *cam_data[] = {
 #ifdef CONFIG_MOTSOC1
-		&msm8960_camera_sensor_motsoc1,
+		&msm_camera_sensor_motsoc1_data,
 #endif
 #ifdef CONFIG_MT9M114
-		&msm8960_camera_sensor_mt9m114,
+		&msm_camera_sensor_mt9m114_data,
 #endif
 #ifdef CONFIG_OV8820
-		&msm8960_camera_sensor_ov8820,
+		&msm_camera_sensor_ov8820_data,
 #endif
 	};
 
-	for (i = 0; i < ARRAY_SIZE(cam_dev); i++) {
+	for (i = 0; i < ARRAY_SIZE(cam_data); i++) {
 		struct msm_camera_sensor_info *s_info;
-		s_info = cam_dev[i]->dev.platform_data;
+		s_info = cam_data[i];
 		if (camera_single_mclk &&
 				s_info->camera_type == FRONT_CAMERA_2D) {
 			if (s_info->gpio_conf->cam_gpio_tbl_size != 1)
@@ -1300,8 +1248,6 @@ void __init msm8960_init_cam(void)
 				s_info->gpio_conf->cam_gpio_tbl[0] = 5;
 			}
 		}
-		msm_get_cam_resources(s_info);
-		platform_device_register(cam_dev[i]);
 	}
 
 	platform_device_register(&msm8960_device_csiphy0);
@@ -1540,12 +1486,7 @@ static struct msm_pm_boot_platform_data msm_pm_boot_pdata __initdata = {
 enum i2c_type {
 	TOUCHSCREEN_MELFAS100_TS = 0,
 	TOUCHSCREEN_CYTTSP3,
-	TOUCHSCREEN_ATMEL,
-	CAMERA_MSM,
-	ALS_CT406,
 	BACKLIGHT_LM3532,
-	NFC_PN544,
-	CAMERA_FLASH_MSM
 };
 
 struct i2c_registry {
@@ -1562,14 +1503,6 @@ struct pn544_i2c_platform_data pn544_pdata = {
 		.firmware_gpio = -1,
 };
 
-static struct i2c_board_info pn544_i2c_boardinfo[] __initdata = {
-	{
-		I2C_BOARD_INFO("pn544", 0x28),
-		.platform_data = &pn544_pdata,
-		.irq = MSM_GPIO_TO_INT(GPIO_NFC_IRQ),
-	},
-};
-
 static void __init msm8960_pn544_init(void)
 {
 	printk(KERN_DEBUG "msm8960_pn544_init: is called, set gpio numbers.\n");
@@ -1578,16 +1511,6 @@ static void __init msm8960_pn544_init(void)
 	pn544_pdata.firmware_gpio = GPIO_NFC_FW_UPDATE;
 }
 #endif /* CONFIG_PN544 */
-
-#ifdef CONFIG_INPUT_CT406
-static struct i2c_board_info ct406_i2c_boardinfo[] __initdata = {
-	{
-		I2C_BOARD_INFO("ct406", 0x39),
-		.platform_data = &mp_ct406_pdata,
-		.irq = MSM_GPIO_TO_INT(CT406_IRQ_GPIO),
-	},
-};
-#endif
 
 #ifdef CONFIG_BACKLIGHT_LM3532
 static struct i2c_board_info lm3532_i2c_boardinfo[] __initdata = {
@@ -1617,15 +1540,6 @@ static struct i2c_board_info cyttsp_i2c_boardinfo[] __initdata = {
 	},
 };
 #endif
-#ifdef CONFIG_TOUCHSCREEN_ATMXT
-static struct i2c_board_info atmxt_i2c_boardinfo[] __initdata = {
-	{
-		I2C_BOARD_INFO(ATMXT_I2C_NAME, 0x4A),
-		.platform_data = &ts_platform_data_atmxt,
-		.irq = MSM_GPIO_TO_INT(ATMXT_GPIO_INTR),
-	},
-};
-#endif
 
 static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 #ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
@@ -1644,38 +1558,6 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		ARRAY_SIZE(cyttsp_i2c_boardinfo),
 	},
 #endif
-#ifdef CONFIG_TOUCHSCREEN_ATMXT
-	[TOUCHSCREEN_ATMEL] = {
-		0,
-		MSM_8960_GSBI3_QUP_I2C_BUS_ID,
-		atmxt_i2c_boardinfo,
-		ARRAY_SIZE(atmxt_i2c_boardinfo),
-	},
-#endif
-#ifdef CONFIG_MSM_CAMERA
-	[CAMERA_MSM] = {
-		0,
-		MSM_8960_GSBI4_QUP_I2C_BUS_ID,
-		msm_camera_boardinfo,
-		ARRAY_SIZE(msm_camera_boardinfo),
-	},
-#endif
-#if (defined CONFIG_LEDS_LM3559 || defined CONFIG_LEDS_LM3556)
-	[CAMERA_FLASH_MSM] = {
-		0,
-		MSM_8960_GSBI4_QUP_I2C_BUS_ID,
-		msm_camera_flash_boardinfo,
-		ARRAY_SIZE(msm_camera_flash_boardinfo),
-	},
-#endif
-#ifdef CONFIG_INPUT_CT406
-	[ALS_CT406] = {
-		0,
-		MSM_8960_GSBI10_QUP_I2C_BUS_ID,
-		ct406_i2c_boardinfo,
-		ARRAY_SIZE(ct406_i2c_boardinfo),
-	},
-#endif
 #ifdef CONFIG_BACKLIGHT_LM3532
 	[BACKLIGHT_LM3532] = {
 		0,
@@ -1684,14 +1566,6 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		ARRAY_SIZE(lm3532_i2c_boardinfo),
 	},
 #endif
-#ifdef CONFIG_PN544
-    [NFC_PN544] = {
-        0,
-        MSM_8960_GSBI10_QUP_I2C_BUS_ID,
-        pn544_i2c_boardinfo,
-        ARRAY_SIZE(pn544_i2c_boardinfo),
-    },
-#endif /* CONFIG_PN544 */
 };
 
 #define ENABLE_I2C_DEVICE(device)                        \
@@ -1774,7 +1648,7 @@ static __init void register_i2c_devices_from_dt(int bus)
 				mot_setup_touch_atmxt();
 				break;
 
-			case 0x000270000: /* Melfas_MMS100 */
+			case 0x00270000: /* Melfas_MMS100 */
 				info.platform_data = &touch_pdata;
 				melfas_ts_platform_init();
 				break;
@@ -1817,67 +1691,6 @@ static void __init register_i2c_devices(void)
 	register_i2c_devices_from_dt(MSM_8960_GSBI3_QUP_I2C_BUS_ID);
 	register_i2c_devices_from_dt(MSM_8960_GSBI4_QUP_I2C_BUS_ID);
 	register_i2c_devices_from_dt(MSM_8960_GSBI10_QUP_I2C_BUS_ID);
-}
-
-#ifdef CONFIG_USB_ANDROID_DIAG
-static struct platform_device msm8960_usb_diag_device = {
-	.name	= "usb_diag",
-	.id	= 0,
-	.dev	= {
-		.platform_data = &usb_diag_pdata,
-	},
-};
-#endif
-
-static struct platform_device usbnet_device = {
-	.name = "usbnet",
-};
-
-#define BOOT_MODE_MAX_LEN 64
-static char boot_mode[BOOT_MODE_MAX_LEN + 1];
-int __init board_boot_mode_init(char *s)
-{
-	strncpy(boot_mode, s, BOOT_MODE_MAX_LEN);
-	boot_mode[BOOT_MODE_MAX_LEN] = '\0';
-	return 1;
-}
-__setup("androidboot.mode=", board_boot_mode_init);
-
-static int boot_mode_is_factory(void)
-{
-	return !strncmp(boot_mode, "factory", BOOT_MODE_MAX_LEN);
-}
-
-#define USB_SERIAL_LENGTH 16
-static char usb_serial_num[USB_SERIAL_LENGTH + 1];
-static int __init board_serialno_setup(char *serialno)
-{
-	strncpy(usb_serial_num, serialno, USB_SERIAL_LENGTH);
-	usb_serial_num[USB_SERIAL_LENGTH] = '\0';
-	return 1;
-}
-__setup("androidboot.serialno=", board_serialno_setup);
-
-static __init void mot_init_usb(void)
-{
-	if (!strncmp(boot_mode, "bp-tools", BOOT_MODE_MAX_LEN)) {
-#ifdef CONFIG_USB_ANDROID_DIAG
-		platform_device_register(&msm8960_usb_diag_device);
-#endif
-		/* XXX
-		platform_device_register(&usb_gadget_fserial_device);
-		platform_device_register(&rndis_device);
-		*/
-		platform_device_register(&usbnet_device);
-	}
-	else if(!strncmp(boot_mode, "factory", BOOT_MODE_MAX_LEN)) {
-		platform_device_register(&usbnet_device);
-	}
-	else {
-		/* XXX platform_device_register(&rndis_device); */
-		/* MTP goes here */
-		platform_device_register(&usbnet_device);
-	}
 }
 
 static unsigned sdc_detect_gpio = 20;
@@ -2174,10 +1987,6 @@ static void __init msm8960_mmi_init(void)
 	if (msm8960_i2c_devices[TOUCHSCREEN_CYTTSP3].enabled)
 		mot_setup_touch_cyttsp3();
 #endif
-#ifdef CONFIG_TOUCHSCREEN_ATMXT
-	if (msm8960_i2c_devices[TOUCHSCREEN_ATMEL].enabled)
-		mot_setup_touch_atmxt();
-#endif
 #ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
 	if (msm8960_i2c_devices[TOUCHSCREEN_MELFAS100_TS].enabled)
 		melfas_ts_platform_init();
@@ -2193,9 +2002,6 @@ static void __init msm8960_mmi_init(void)
 
 	pm8921_gpio_mpp_init(pm8921_gpios, pm8921_gpios_size,
 							pm8921_mpps, ARRAY_SIZE(pm8921_mpps));
-
-	mot_init_usb();
-
 #ifdef CONFIG_EMU_DETECTION
 	msm8960_init_usb();
 	mot_init_emu_detection(otg_control_data);
@@ -2400,30 +2206,6 @@ MACHINE_START(VANQUISH, "Vanquish")
 	.handle_irq = gic_handle_irq,
 	.timer = &msm_timer,
 	.init_machine = vanquish_init,
-	.init_early = mmi_init_early,
-	.init_very_early = msm8960_early_memory,
-MACHINE_END
-
-static __init void volta_init(void)
-{
-	ENABLE_I2C_DEVICE(TOUCHSCREEN_CYTTSP3);
-	ENABLE_I2C_DEVICE(CAMERA_MSM);
-	ENABLE_I2C_DEVICE(ALS_CT406);
-	ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
-
-	/* Setup correct button backlight LED name */
-	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
-
-	msm8960_mmi_init();
-}
-
-MACHINE_START(VOLTA, "Volta")
-    .map_io = msm8960_map_io,
-    .reserve = msm8960_reserve,
-    .init_irq = msm8960_init_irq,
-	.handle_irq = gic_handle_irq,
-    .timer = &msm_timer,
-    .init_machine = volta_init,
 	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
 MACHINE_END
