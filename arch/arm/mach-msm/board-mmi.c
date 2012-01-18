@@ -1103,7 +1103,6 @@ error:
 
 #ifdef CONFIG_LEDS_LM3559
 static struct lm3559_platform_data camera_flash_3559;
-static unsigned short flash_hw_enable;
 
 static struct lm3559_platform_data camera_flash_3559 = {
 	.flags = (LM3559_PRIVACY | LM3559_TORCH |
@@ -1135,7 +1134,6 @@ static struct lm3559_platform_data camera_flash_3559 = {
 
 #ifdef CONFIG_LEDS_LM3556
 static struct lm3556_platform_data camera_flash_3556;
-static unsigned short flash_hw_enable;
 
 static struct lm3556_platform_data camera_flash_3556 = {
 	.flags = (LM3556_TORCH | LM3556_FLASH |
@@ -1291,18 +1289,6 @@ void __init msm8960_init_cam(void)
 	platform_device_register(&msm8960_device_vpe);
 }
 #endif
-
-static void __init msm8960_init_cam_flash(unsigned short hw_enable)
-{
-#ifdef CONFIG_LEDS_LM3559
-	if (hw_enable)
-		camera_flash_3559.hw_enable = hw_enable;
-#endif /* CONFIG_LEDS_LM3559 */
-#ifdef CONFIG_LEDS_LM3556
-	if (hw_enable)
-		camera_flash_3556.hw_enable = hw_enable;
-#endif /* CONFIG_LEDS_LM3556 */
-}
 
 static int msm_fb_detect_panel(const char *name)
 {
@@ -1656,6 +1642,11 @@ static __init void register_i2c_devices_from_dt(int bus)
 				break;
 
 			case 0x000B0003: /* National_LM3559 */
+				prop = of_get_property(child, "enable_gpio",
+						&len);
+				if (prop && (len == sizeof(u32)))
+					camera_flash_3559.hw_enable =
+						*(u32 *)prop;
 				info.platform_data = &camera_flash_3559;
 				break;
 
@@ -1664,6 +1655,11 @@ static __init void register_i2c_devices_from_dt(int bus)
 				break;
 
 			case 0x000B0006: /* National_LM3556 */
+				prop = of_get_property(child, "enable_gpio",
+						&len);
+				if (prop && (len == sizeof(u32)))
+					camera_flash_3556.hw_enable =
+						*(u32 *)prop;
 				info.platform_data = &camera_flash_3556;
 				break;
 
@@ -2047,7 +2043,6 @@ static void __init msm8960_mmi_init(void)
 #ifdef CONFIG_MSM_CAMERA
 	msm8960_init_cam();
 #endif
-	msm8960_init_cam_flash(flash_hw_enable);
 	msm8960_init_mmc(sdc_detect_gpio);
 	acpuclk_init(&acpuclk_8960_soc_data);
 	register_i2c_devices();
@@ -2152,8 +2147,6 @@ static __init void teufel_init(void)
 		pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_teufel_m2);
 	}
 
-	flash_hw_enable = 2;
-
 	if (is_smd()) {
 		ENABLE_I2C_DEVICE(TOUCHSCREEN_MELFAS100_TS);
 	} else {
@@ -2198,7 +2191,6 @@ static __init void qinara_init(void)
 	if (system_rev < HWREV_P1B2)
 		otg_control_data = NULL;
 #endif
-	flash_hw_enable = 2;
 
 	/* Setup correct button backlight LED name */
 	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
@@ -2227,7 +2219,6 @@ static __init void vanquish_init(void)
 	if (system_rev < HWREV_P1B2)
 		otg_control_data = NULL;
 #endif
-	flash_hw_enable = 2;
 
 	if (system_rev >= HWREV_P2) {
 		pm8921_gpios = pm8921_gpios_vanquish_p2;
@@ -2256,7 +2247,6 @@ MACHINE_END
 
 static __init void becker_init(void)
 {
-	flash_hw_enable = 2;
 	strncpy(panel_name, "mipi_mot_cmd_auo_qhd_430", PANEL_NAME_MAX_LEN);
 
 	/* Setup correct button backlight LED name */

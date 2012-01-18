@@ -49,7 +49,7 @@ struct lm3556_platform_data {
 	u8 flag_reg_def;
 	u8 torch_enable_val;
 	u8 flash_enable_val;
-	unsigned short hw_enable;
+	u32 hw_enable;
 } __packed;
 
 #endif	/* __KERNEL__ */

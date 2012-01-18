@@ -61,7 +61,7 @@ struct lm3559_platform_data {
 	u8 pwm_val;
 	u8 msg_ind_val;
 	u8 msg_ind_blink_val;
-	unsigned short hw_enable;
+	u32 hw_enable;
 } __packed;
 
 #endif	/* __KERNEL__ */
