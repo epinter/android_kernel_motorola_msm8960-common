@@ -1203,6 +1203,9 @@ static void msm_hsusb_vbus_power(struct msm_otg *motg, bool on)
 	int ret;
 	static bool vbus_is_on;
 
+	if (motg->pdata->otg_control == OTG_ACCY_CONTROL)
+		return;
+
 	if (vbus_is_on == on)
 		return;
 
