@@ -1595,6 +1595,155 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 
 #endif /* CONFIG_I2C */
 
+static __init u16 dt_get_u16_or_die(struct device_node *node, const char *name)
+{
+	int len = 0;
+	const void *prop;
+
+	prop = of_get_property(node, name, &len);
+	BUG_ON(!prop || (len != sizeof(u16)));
+
+	return *(u16 *)prop;
+}
+
+static __init u8 dt_get_u8_or_die(struct device_node *node, const char *name)
+{
+	int len = 0;
+	const void *prop;
+
+	prop = of_get_property(node, name, &len);
+	BUG_ON(!prop || (len != sizeof(u8)));
+
+	return *(u8 *)prop;
+}
+
+static __init void load_pm8921_gpios_from_dt(void)
+{
+	struct device_node *parent, *child;
+	int count = 0, index = 0;
+
+	parent = of_find_node_by_path("/System@0/PowerIC@0");
+	if (!parent)
+		goto out;
+
+	/* count the child GPIO nodes */
+	for_each_child_of_node(parent, child) {
+		int len = 0;
+		const void *prop;
+
+		prop = of_get_property(child, "type", &len);
+		if (prop && (len == sizeof(u32))) {
+			/* must match type identifiers defined in DT schema */
+			switch (*(u32 *)prop) {
+			case 0x001E0006: /* Disable */
+			case 0x001E0007: /* Output */
+			case 0x001E0008: /* Input */
+			case 0x001E0009: /* Output, Func */
+			case 0x001E000A: /* Output, Vin */
+			case 0x001E000B: /* Paired Input, Vin */
+			case 0x001E000C: /* Paired Output, Vin */
+				count++;
+				break;
+			}
+		}
+	}
+
+	/* if no GPIO entries were found, just use the defaults */
+	if (!count)
+		goto out;
+
+	/* allocate the space */
+	pm8921_gpios = kmalloc(sizeof(struct pm8xxx_gpio_init) * count,
+			GFP_KERNEL);
+	pm8921_gpios_size = count;
+
+	/* fill out the array */
+	for_each_child_of_node(parent, child) {
+		int len = 0;
+		const void *type_prop;
+
+		type_prop = of_get_property(child, "type", &len);
+		if (type_prop && (len == sizeof(u32))) {
+			const void *gpio_prop;
+			u16 gpio;
+
+			gpio_prop = of_get_property(child, "gpio", &len);
+			if (!gpio_prop || (len != sizeof(u16)))
+				continue;
+
+			gpio = *(u16 *)gpio_prop;
+
+			/* must match type identifiers defined in DT schema */
+			switch (*(u32 *)type_prop) {
+			case 0x001E0006: /* Disable */
+				pm8921_gpios[index++] =
+					(struct pm8xxx_gpio_init)
+					PM8XXX_GPIO_DISABLE(gpio);
+				break;
+
+			case 0x001E0007: /* Output */
+				pm8921_gpios[index++] =
+					(struct pm8xxx_gpio_init)
+					PM8XXX_GPIO_OUTPUT(gpio,
+						dt_get_u16_or_die(child,
+							"value"));
+				break;
+
+			case 0x001E0008: /* Input */
+				pm8921_gpios[index++] =
+					(struct pm8xxx_gpio_init)
+					PM8XXX_GPIO_INPUT(gpio,
+						dt_get_u8_or_die(child,
+							"pull"));
+				break;
+
+			case 0x001E0009: /* Output, Func */
+				pm8921_gpios[index++] =
+					(struct pm8xxx_gpio_init)
+					PM8XXX_GPIO_OUTPUT_FUNC(
+						gpio, dt_get_u16_or_die(child,
+							"value"),
+						dt_get_u8_or_die(child,
+							"func"));
+				break;
+
+			case 0x001E000A: /* Output, Vin */
+				pm8921_gpios[index++] =
+					(struct pm8xxx_gpio_init)
+					PM8XXX_GPIO_OUTPUT_VIN(
+						gpio, dt_get_u16_or_die(child,
+							"value"),
+						dt_get_u8_or_die(child,
+							"vin"));
+				break;
+
+			case 0x001E000B: /* Paired Input, Vin */
+				pm8921_gpios[index++] =
+					(struct pm8xxx_gpio_init)
+					PM8XXX_GPIO_PAIRED_IN_VIN(
+						gpio, dt_get_u8_or_die(child,
+							"vin"));
+				break;
+
+			case 0x001E000C: /* Paired Output, Vin */
+				pm8921_gpios[index++] =
+					(struct pm8xxx_gpio_init)
+					PM8XXX_GPIO_PAIRED_OUT_VIN(
+						gpio, dt_get_u8_or_die(child,
+							"vin"));
+				break;
+			}
+		}
+	}
+
+	BUG_ON(index != count);
+
+	of_node_put(parent);
+
+out:
+	return;
+}
+
 static __init void register_i2c_devices_from_dt(int bus)
 {
 	char path[18];
@@ -2030,6 +2179,7 @@ static void __init msm8960_mmi_init(void)
 		msm_num_footswitch_devices);
 	msm8960_add_common_devices(msm_fb_detect_panel);
 
+	load_pm8921_gpios_from_dt();
 	pm8921_gpio_mpp_init(pm8921_gpios, pm8921_gpios_size,
 							pm8921_mpps, ARRAY_SIZE(pm8921_mpps));
 #ifdef CONFIG_EMU_DETECTION
