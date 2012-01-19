@@ -175,6 +175,24 @@ static struct pm8xxx_gpio_init pm8921_gpios_vanquish[] = {
 			PM_GPIO_VIN_L17),	/* DISP_RESET_N on P1C+ */
 };
 
+
+/* Initial PM8921 GPIO configurations vanquish P2 */
+static struct pm8xxx_gpio_init pm8921_gpios_vanquish_p2[] = {
+	PM8XXX_GPIO_DISABLE(6),				 /* Disable unused */
+	PM8XXX_GPIO_DISABLE(7),				 /* Disable NFC */
+	PM8XXX_GPIO_INPUT(16,	    PM_GPIO_PULL_UP_30), /* SD_CARD_WP */
+	PM8XXX_GPIO_PAIRED_OUT_VIN(21, PM_GPIO_VIN_L17), /* Whisper TX 2.7V */
+	PM8XXX_GPIO_PAIRED_IN_VIN(22,  PM_GPIO_VIN_S4),	 /* Whisper TX 1.8V */
+	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Red LED */
+	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2),	 /* Green LED */
+	PM8XXX_GPIO_OUTPUT_FUNC(26, 0, PM_GPIO_FUNC_2),	 /* Blue LED */
+	PM8XXX_GPIO_INPUT(20,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
+	PM8XXX_GPIO_PAIRED_IN_VIN(41,  PM_GPIO_VIN_L17), /* Whisper TX 2.7V */
+	PM8XXX_GPIO_PAIRED_OUT_VIN(42, PM_GPIO_VIN_S4),	 /* Whisper TX 1.8V */
+	PM8XXX_GPIO_OUTPUT(43,	PM_GPIO_PULL_UP_1P5),	 /* DISP_RESET_N */
+	PM8XXX_GPIO_OUTPUT(37,	PM_GPIO_PULL_UP_1P5), /* DISP_RESET_N on P2 */
+};
+
 static struct pm8xxx_gpio_init pm8921_gpios_asanti[] = {
 	PM8XXX_GPIO_DISABLE(6),				 /* Disable unused */
 	PM8XXX_GPIO_DISABLE(7),				 /* Disable NFC */
@@ -565,10 +583,13 @@ static int mipi_dsi_panel_power(int on)
 	pr_info("%s: state : %d\n", __func__, on);
 
 	if (!dsi_power_on) {
-
-		if (is_smd() && system_rev >= HWREV_P1) {
-			reg_vddio = regulator_get(&msm_mipi_dsi1_device.dev,
-				"disp_vddio");
+		if (is_smd() && system_rev >= HWREV_P2) {
+			/* Vanquish P2 is not using VREG_L17 */
+			reg_vddio = NULL;
+		} else if (is_smd() && system_rev >= HWREV_P1) {
+				reg_vddio = regulator_get(
+						&msm_mipi_dsi1_device.dev,
+						"disp_vddio");
 		} else {
 			reg_vddio = regulator_get(&msm_mipi_dsi1_device.dev,
 				"dsi_vdc");
@@ -605,11 +626,12 @@ static int mipi_dsi_panel_power(int on)
 			}
 		}
 
-		rc = regulator_set_voltage(reg_vddio, 2700000, 2700000);
-		if (rc) {
-
-			pr_err("set_voltage l8 failed, rc=%d\n", rc);
-			return -EINVAL;
+		if (NULL != reg_vddio) {
+			rc = regulator_set_voltage(reg_vddio, 2700000, 2700000);
+			if (rc) {
+				pr_err("set_voltage l8 failed, rc=%d\n", rc);
+				return -EINVAL;
+			}
 		}
 
 		rc = regulator_set_voltage(reg_l23, 1800000, 1800000);
@@ -741,10 +763,13 @@ static int mipi_dsi_panel_power(int on)
 		dsi_power_on = true;
 	}
 	if (on) {
-		rc = regulator_set_optimum_mode(reg_vddio, 100000);
-		if (rc < 0) {
-			pr_err("set_optimum_mode l8 failed, rc=%d\n", rc);
-			return -EINVAL;
+		if (NULL != reg_vddio) {
+			rc = regulator_set_optimum_mode(reg_vddio, 100000);
+			if (rc < 0) {
+				pr_err("set_optimum_mode l8 failed, rc=%d\n",
+						rc);
+				return -EINVAL;
+			}
 		}
 		rc = regulator_set_optimum_mode(reg_l23, 100000);
 		if (rc < 0) {
@@ -765,10 +790,12 @@ static int mipi_dsi_panel_power(int on)
 			}
 		}
 
-		rc = regulator_enable(reg_vddio);
-		if (rc) {
-			pr_err("enable l8 failed, rc=%d\n", rc);
-			return -ENODEV;
+		if (NULL != reg_vddio) {
+			rc = regulator_enable(reg_vddio);
+			if (rc) {
+				pr_err("enable l8 failed, rc=%d\n", rc);
+				return -ENODEV;
+			}
 		}
 
 		rc = regulator_enable(reg_l23);
@@ -810,10 +837,12 @@ static int mipi_dsi_panel_power(int on)
 			pr_err("disable reg_l2 failed, rc=%d\n", rc);
 			return -ENODEV;
 		}
-		rc = regulator_disable(reg_vddio);
-		if (rc) {
-			pr_err("disable reg_l8 failed, rc=%d\n", rc);
-			return -ENODEV;
+		if (NULL != reg_vddio) {
+			rc = regulator_disable(reg_vddio);
+			if (rc) {
+				pr_err("disable reg_l8 failed, rc=%d\n", rc);
+				return -ENODEV;
+			}
 		}
 		rc = regulator_disable(reg_l23);
 		if (rc) {
@@ -827,10 +856,13 @@ static int mipi_dsi_panel_power(int on)
 				return -ENODEV;
 			}
 		}
-		rc = regulator_set_optimum_mode(reg_vddio, 100);
-		if (rc < 0) {
-			pr_err("set_optimum_mode l8 failed, rc=%d\n", rc);
-			return -EINVAL;
+		if (NULL != reg_vddio) {
+			rc = regulator_set_optimum_mode(reg_vddio, 100);
+			if (rc < 0) {
+				pr_err("set_optimum_mode l8 failed, rc=%d\n",
+						rc);
+				return -EINVAL;
+			}
 		}
 		rc = regulator_set_optimum_mode(reg_l23, 100);
 		if (rc < 0) {
@@ -2195,6 +2227,10 @@ static __init void vanquish_init(void)
 #endif
 	flash_hw_enable = 2;
 
+	if (system_rev >= HWREV_P2) {
+		pm8921_gpios = pm8921_gpios_vanquish_p2;
+		pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_vanquish_p2);
+	}
 	use_mdp_vsync = MDP_VSYNC_DISABLED;
 	msm8960_mmi_init();
 }
