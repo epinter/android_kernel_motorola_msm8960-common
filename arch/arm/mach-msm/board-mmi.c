@@ -1533,6 +1533,7 @@ struct pn544_i2c_platform_data pn544_pdata = {
 		.irq_gpio = -1,
 		.ven_gpio = -1,
 		.firmware_gpio = -1,
+		.ven_polarity = 0,
 };
 
 static void __init msm8960_pn544_init(void)
@@ -1542,6 +1543,7 @@ static void __init msm8960_pn544_init(void)
 	pn544_pdata.irq_gpio = GPIO_NFC_IRQ;
 	pn544_pdata.firmware_gpio = GPIO_NFC_FW_UPDATE;
 }
+
 #endif /* CONFIG_PN544 */
 
 #ifdef CONFIG_BACKLIGHT_LM3532
@@ -2233,6 +2235,12 @@ static __init void vanquish_init(void)
 	}
 	use_mdp_vsync = MDP_VSYNC_DISABLED;
 	msm8960_mmi_init();
+#ifdef CONFIG_PN544
+	if (system_rev < HWREV_P2) {
+		pr_debug(KERN_DEBUG "msm8960_pn544_init: reverse ven_polarity.\n");
+		pn544_pdata.ven_polarity = 1;
+	}
+#endif
 }
 
 MACHINE_START(VANQUISH, "Vanquish")

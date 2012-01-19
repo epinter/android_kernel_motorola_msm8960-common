@@ -54,6 +54,7 @@ struct pn544_dev	{
 	unsigned int 		ven_gpio;
 	unsigned int 		firmware_gpio;
 	unsigned int		irq_gpio;
+	int			ven_polarity;
 	bool			irq_enabled;
 	spinlock_t		irq_enabled_lock; /* irq lock for reading */
 };
@@ -195,37 +196,48 @@ static int pn544_dev_open(struct inode *inode, struct file *filp)
 
 static int pn544_dev_ioctl(struct pn544_dev *pn544_dev, unsigned int cmd, unsigned long arg)
 {
+	int ven_logic_high = 1;
+	int ven_logic_low = 0;
+
+	if (pn544_dev->ven_polarity == 1) {
+		ven_logic_high = 0;
+		ven_logic_low = 1;
+	}
+	pr_debug("%s ven_logic_high=0x%08x.\n", __func__, ven_logic_high);
+	pr_debug("%s ven_logic_low=0x%08x.\n", __func__, ven_logic_low);
+
 	switch (cmd) {
 	case PN544_SET_PWR:
 		if (arg == 2) {
 			/* power on with firmware download (requires hw reset)
 			 */
 			pr_info("%s : power on with firmware update.\n", __func__);
-			gpio_set_value(pn544_dev->ven_gpio, 0);
+			gpio_set_value(pn544_dev->ven_gpio, ven_logic_high);
 			msleep(10);
 			gpio_set_value(pn544_dev->firmware_gpio, 1);
 			msleep(10);
-			gpio_set_value(pn544_dev->ven_gpio, 1);
+			gpio_set_value(pn544_dev->ven_gpio, ven_logic_low);
 			msleep(10);
-			gpio_set_value(pn544_dev->ven_gpio, 0);
+			gpio_set_value(pn544_dev->ven_gpio, ven_logic_high);
 			msleep(10);
 		} else if (arg == 1) {
 			/* power on */
+			msleep(2000);
 			pr_info("%s : normal power on\n", __func__);
 			gpio_set_value(pn544_dev->firmware_gpio, 0);
             msleep(10);
-			gpio_set_value(pn544_dev->ven_gpio, 0);
+			gpio_set_value(pn544_dev->ven_gpio, ven_logic_high);
 			msleep(10);
-			gpio_set_value(pn544_dev->ven_gpio, 1);
+			gpio_set_value(pn544_dev->ven_gpio, ven_logic_low);
 			msleep(10);
-			gpio_set_value(pn544_dev->ven_gpio, 0);
+			gpio_set_value(pn544_dev->ven_gpio, ven_logic_high);
 			msleep(10);
 		} else if (arg == 0) {
 			/* power off */
 			pr_info("%s : power off\n", __func__);
 			gpio_set_value(pn544_dev->firmware_gpio, 0);
             msleep(10);
-			gpio_set_value(pn544_dev->ven_gpio, 1);
+			gpio_set_value(pn544_dev->ven_gpio, ven_logic_low);
 			msleep(10);
 		} else {
 			pr_err("%s : bad arg %lu\n", __func__, arg);
@@ -239,6 +251,7 @@ static int pn544_dev_ioctl(struct pn544_dev *pn544_dev, unsigned int cmd, unsign
 
 	return 0;
 }
+
 
 static const struct file_operations pn544_dev_fops = {
 	.owner	= THIS_MODULE,
@@ -349,6 +362,8 @@ static int pn544_probe(struct i2c_client *client,
 	int ret;
 	struct pn544_i2c_platform_data *platform_data;
 	struct pn544_dev *pn544_dev;
+	int ven_logic_high = 1;
+	int ven_logic_low = 0;
 
 	pr_info("%s : Probing pn544 driver\n", __func__);
 
@@ -373,13 +388,18 @@ static int pn544_probe(struct i2c_client *client,
 	}
 	gpio_direction_input(platform_data->irq_gpio);
 
+	if (platform_data->ven_polarity == 1) {
+		ven_logic_high = 0;
+		ven_logic_low = 1;
+	}
+
     msm_gpiomux_install(&pn544_ven_reset_gpio_config, 1);
 	ret = gpio_request(platform_data->ven_gpio, "nfc_ven");
 	if (ret) {
 		pr_err("%s : gpio_request platform_data->ven_gpio failed.\n", __func__);
 		goto err_ven;
 	}
-	gpio_direction_output(platform_data->ven_gpio, 1);
+	gpio_direction_output(platform_data->ven_gpio, ven_logic_low);
 
     msm_gpiomux_install(&pn544_fw_update_reset_gpio_config, 1);
 	ret = gpio_request(platform_data->firmware_gpio, "nfc_firm");
@@ -400,6 +420,7 @@ static int pn544_probe(struct i2c_client *client,
 	pn544_dev->irq_gpio = platform_data->irq_gpio;
 	pn544_dev->ven_gpio  = platform_data->ven_gpio;
 	pn544_dev->firmware_gpio = platform_data->firmware_gpio;
+	pn544_dev->ven_polarity = platform_data->ven_polarity;
 	pn544_dev->client   = client;
 
 	/* init mutex and queues */

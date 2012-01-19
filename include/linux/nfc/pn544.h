@@ -35,5 +35,6 @@ struct pn544_i2c_platform_data {
 	int irq_gpio;
 	int ven_gpio;
 	int firmware_gpio;
+	int ven_polarity;
 };
 #endif /* __KERNEL__ */
