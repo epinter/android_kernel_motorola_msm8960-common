@@ -120,8 +120,8 @@
 #include "spm.h"
 #include "board-8960.h"
 #include "board-mmi.h"
-#include "pm.h"
-#include "cpuidle.h"
+#include <mach/pm.h>
+#include <mach/cpuidle.h>
 #include "rpm_resources.h"
 #include "mpm.h"
 #include "acpuclock.h"
