@@ -569,6 +569,29 @@ static int is_smd(void) {
 	return !strncmp(panel_name, "mipi_mot_video_smd_hd_465", PANEL_NAME_MAX_LEN);
 }
 
+static __init void load_panel_name_from_dt(void)
+{
+	struct device_node *chosen;
+	int len = 0;
+	const void *prop;
+
+	chosen = of_find_node_by_path("/Chosen@0");
+	if (!chosen)
+		goto out;
+
+	prop = of_get_property(chosen, "panel_name", &len);
+	if (prop && len) {
+		strlcpy(panel_name, (const char *)prop,
+				len > PANEL_NAME_MAX_LEN + 1
+				? PANEL_NAME_MAX_LEN + 1 : len);
+	}
+
+	of_node_put(chosen);
+
+out:
+	return;
+}
+
 static bool dsi_power_on;
 static bool use_mdp_vsync = MDP_VSYNC_ENABLED;
 
@@ -2134,6 +2157,9 @@ static void __init msm8960_mmi_init(void)
 		pr_err("meminfo_init() failed!\n");
 
 	msm8960_init_rpm();
+
+	/* load panel_name from device tree, if present */
+	load_panel_name_from_dt();
 
 	pmic_reset_irq = PM8921_IRQ_BASE + PM8921_RESOUT_IRQ;
 	regulator_suppress_info_printing();
