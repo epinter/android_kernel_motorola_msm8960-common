@@ -23,6 +23,7 @@
 #define LM3556_LED_DEV "torch-flash"
 
 #define LM3556_NAME "lm3556_led"
+#define LM3556_NAME_LEN		(sizeof(LM3556_NAME)-1)
 
 #ifdef __KERNEL__
 
@@ -31,6 +32,15 @@
 #define LM3556_TORCH		(1 << 1)
 #define LM3556_FLASH		(1 << 2)
 
+
+#define LM3556_TORCH_OFF	0
+#define LM3556_LOW_TORCH_INTENSITY	63
+#define LM3556_MED_LOW_TORCH_INTENSITY	127
+#define LM3556_MED_TORCH_INTENSITY	191
+#define LM3556_HIGH_TORCH_INTENSITY	255
+
+#define LM3556_TORCH_MODE	0
+#define LM3556_STROBE_MODE	1
 
 struct lm3556_platform_data {
 	uint32_t flags;
@@ -51,6 +61,8 @@ struct lm3556_platform_data {
 	u8 flash_enable_val;
 	u32 hw_enable;
 } __packed;
+
+int lm3556_led_write(unsigned long, uint8_t);
 
 #endif	/* __KERNEL__ */
 

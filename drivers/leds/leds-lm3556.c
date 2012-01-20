@@ -59,6 +59,8 @@ struct lm3556_data {
 	int flash_light_brightness;
 };
 
+static struct lm3556_data *torch_data;
+
 struct lm3556_reg {
 	const char *name;
 	uint8_t reg;
@@ -77,7 +79,7 @@ struct lm3556_reg {
 	{ "CONFIG_REG",	LM3556_CONF_REG},
 };
 
-int lm3556_read_reg(struct lm3556_data *torch_data, uint8_t reg, uint8_t * val)
+int lm3556_read_reg(uint8_t reg, uint8_t *val)
 {
 	int err = -1;
 	int i = 0;
@@ -105,7 +107,7 @@ int lm3556_read_reg(struct lm3556_data *torch_data, uint8_t reg, uint8_t * val)
 	return 0;
 }
 
-int lm3556_write_reg(struct lm3556_data *torch_data, uint8_t reg, uint8_t val)
+int lm3556_write_reg(uint8_t reg, uint8_t val)
 {
 	int err = -1;
 	int i = 0;
@@ -133,15 +135,12 @@ int lm3556_write_reg(struct lm3556_data *torch_data, uint8_t reg, uint8_t val)
 static ssize_t ld_lm3556_registers_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	struct i2c_client *client = container_of(dev->parent, struct i2c_client,
-			dev);
-	struct lm3556_data *flash_data = i2c_get_clientdata(client);
 	unsigned i, n, reg_count;
 	uint8_t value;
 
 	reg_count = sizeof(lm3556_regs) / sizeof(lm3556_regs[0]);
 	for (i = 0, n = 0; i < reg_count; i++) {
-		lm3556_read_reg(flash_data, lm3556_regs[i].reg, &value);
+		lm3556_read_reg(lm3556_regs[i].reg, &value);
 		n += scnprintf(buf + n, PAGE_SIZE - n,
 				"%-20s = 0x%02X\n",
 				lm3556_regs[i].name,
@@ -154,9 +153,6 @@ static ssize_t ld_lm3556_registers_store(struct device *dev,
 		struct device_attribute *attr,
 		const char *buf, size_t count)
 {
-	struct i2c_client *client = container_of(dev->parent,
-			struct i2c_client, dev);
-	struct lm3556_data *flash_data = i2c_get_clientdata(client);
 	unsigned i, reg_count, value;
 	int error;
 	char name[30];
@@ -175,8 +171,7 @@ static ssize_t ld_lm3556_registers_store(struct device *dev,
 	reg_count = sizeof(lm3556_regs) / sizeof(lm3556_regs[0]);
 	for (i = 0; i < reg_count; i++) {
 		if (!strcmp(name, lm3556_regs[i].name)) {
-			error = lm3556_write_reg(flash_data,
-					lm3556_regs[i].reg,
+			error = lm3556_write_reg(lm3556_regs[i].reg,
 					value);
 			if (error) {
 				pr_err("%s:Failed to write register %s\n",
@@ -195,15 +190,179 @@ static DEVICE_ATTR(registers, 0644, ld_lm3556_registers_show,
 		ld_lm3556_registers_store);
 
 
+int lm3556_led_write(unsigned long flash_val, uint8_t mode)
+{
+	int err;
+	uint8_t err_flags;
+	uint8_t val = 0;
+	uint8_t temp_val = 0;
+
+	switch (mode) {
+	case LM3556_TORCH_MODE:
+		if (flash_val) {
+			uint8_t prev_flash_val;
+			uint8_t torch_brightness = 0;
+
+			temp_val = flash_val / LM3556_TORCH_STEP;
+
+			val |= temp_val << 4;
+
+			err = lm3556_read_reg(LM3556_CURRENT_CTRL_REG,
+					&prev_flash_val);
+			if (err) {
+				pr_err("%s: Reading 0x%X failed %i\n",
+						__func__,
+						LM3556_CURRENT_CTRL_REG,
+						err);
+				return -EIO;
+			}
+
+			prev_flash_val &= 0x0f;
+			torch_brightness = (val | prev_flash_val);
+
+			err = lm3556_write_reg(LM3556_CURRENT_CTRL_REG,
+							torch_brightness);
+
+			if (err) {
+				pr_err("%s: Writing to 0x%X failed %i\n",
+						__func__,
+						LM3556_CURRENT_CTRL_REG,
+						err);
+				return -EIO;
+			}
+
+			err = lm3556_write_reg(LM3556_ENABLE_REG,
+					torch_data->pdata->torch_enable_val);
+			if (err) {
+				pr_err("%s: Writing to 0x%X failed %i\n",
+						__func__, LM3556_ENABLE_REG,
+						err);
+				return -EIO;
+			}
+
+		} else {
+			err = lm3556_read_reg(LM3556_ENABLE_REG, &val);
+			if (err) {
+				pr_err("%s: Reading 0x%X failed %i\n",
+						__func__, LM3556_ENABLE_REG,
+						err);
+			return -EIO;
+			}
+			/* Do not turn off the message indicator if on */
+			temp_val = (val & 0x01);
+			err = lm3556_write_reg(LM3556_ENABLE_REG,
+					temp_val);
+			if (err) {
+				pr_err("%s: Writing to 0x%X failed %i\n",
+						__func__,
+						LM3556_ENABLE_REG, err);
+				return -EIO;
+			}
+		}
+		torch_data->flash_light_brightness = flash_val;
+		break;
+
+	case LM3556_STROBE_MODE:
+		err = lm3556_read_reg(LM3556_FLAGS_REG, &err_flags);
+		if (err) {
+			pr_err("%s: Reading the status failed for %i\n",
+					__func__, err);
+			return -EIO;
+		}
+
+		if (torch_data->pdata->flags & LM3556_ERROR_CHECK) {
+			if (err_flags & (THERMAL_SHUTDOWN_FAULT |
+						THERMAL_MONITOR_FAULT |
+						LED_FAULT |
+						VOLTAGE_MONITOR_FAULT |
+						UNDER_VOLTAGE_FAULT)) {
+				pr_err("%s: Error indicated by chip 0x%X\n",
+						__func__, err_flags);
+				return err_flags;
+			}
+		}
+		if (flash_val) {
+			uint8_t prev_torch_val;
+			uint8_t strobe_brightness = 0;
+
+			val = flash_val / LM3556_STROBE_STEP;
+
+			err = lm3556_read_reg(LM3556_CURRENT_CTRL_REG,
+					&prev_torch_val);
+			if (err) {
+				pr_err("%s: Reading 0x%X failed %i\n",
+						__func__,
+						LM3556_CURRENT_CTRL_REG,
+						err);
+				return -EIO;
+			}
+
+			prev_torch_val = (prev_torch_val & 0x70);
+			val = (val & 0x0f);
+			strobe_brightness = (val | prev_torch_val);
+
+			err = lm3556_write_reg(LM3556_CURRENT_CTRL_REG,
+					strobe_brightness);
+
+			if (err) {
+				pr_err("%s: Writing to 0x%X failed %i\n",
+						__func__,
+						LM3556_CURRENT_CTRL_REG,
+						err);
+				return -EIO;
+			}
+
+			err = lm3556_write_reg(LM3556_ENABLE_REG,
+					torch_data->pdata->flash_enable_val);
+			if (err) {
+				pr_err("%s: Writing to 0x%X failed %i\n",
+						__func__,
+						LM3556_ENABLE_REG, err);
+				return -EIO;
+			}
+
+			err = lm3556_write_reg(LM3556_FLASH_FEAT_REG,
+				torch_data->pdata->flash_features_reg_def);
+
+			if (err) {
+				pr_err("%s: Writing to 0x%X failed %i\n",
+						__func__,
+						LM3556_FLASH_FEAT_REG,
+						err);
+				return -EIO;
+			}
+		} else {
+			err = lm3556_read_reg(LM3556_ENABLE_REG,
+					&val);
+			if (err) {
+				pr_err("%s: Reading 0x%X failed %i\n",
+						__func__, LM3556_ENABLE_REG,
+						err);
+				return -EIO;
+			}
+			/* Do not turn off the message indicator if on */
+			temp_val = (val & 0x01);
+			lm3556_write_reg(LM3556_ENABLE_REG,
+					temp_val);
+			if (err) {
+				pr_err("%s: Writing to 0x%X failed %i\n",
+						__func__, LM3556_ENABLE_REG,
+						err);
+				return -EIO;
+			}
+		}
+
+		torch_data->camera_strobe_brightness = flash_val;
+		break;
+	}
+	return 0;
+}
+EXPORT_SYMBOL(lm3556_led_write);
+
 static ssize_t lm3556_torch_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	struct i2c_client *client = container_of(dev->parent,
-			struct i2c_client, dev);
-	struct lm3556_data *torch_data = i2c_get_clientdata(client);
-
 	sprintf(buf, "%d\n", torch_data->flash_light_brightness);
-
 	return sizeof(buf);
 }
 
@@ -213,69 +372,17 @@ static ssize_t lm3556_torch_store(struct device *dev,
 {
 	int err;
 	unsigned long torch_val = LED_OFF;
-	uint8_t val = 0;
-	uint8_t temp_val;
-	uint8_t flash_val;
-	struct i2c_client *client = container_of(dev->parent,
-			struct i2c_client, dev);
-	struct lm3556_data *torch_data = i2c_get_clientdata(client);
 
 	err = strict_strtoul(buf, 10, &torch_val);
 	if (err) {
 		pr_err("%s: Invalid parameter sent\n", __func__);
 		return -EINVAL;
 	}
+	err = lm3556_led_write(torch_val, LM3556_TORCH_MODE);
 
-	if (torch_val) {
-		temp_val = torch_val / LM3556_TORCH_STEP;
-		val |= temp_val << 4;
+	if (err)
+		return err;
 
-		err = lm3556_read_reg(torch_data, LM3556_CURRENT_CTRL_REG,
-					&flash_val);
-		if (err) {
-			pr_err("%s: Reading 0x%X failed %i\n",
-					__func__, LM3556_CURRENT_CTRL_REG, err);
-			return -EIO;
-		}
-
-		flash_val &= 0x0f;
-		val |= flash_val;
-
-		err = lm3556_write_reg(torch_data, LM3556_CURRENT_CTRL_REG,
-				val);
-
-		if (err) {
-			pr_err("%s: Writing to 0x%X failed %i\n",
-					__func__, LM3556_CURRENT_CTRL_REG, err);
-			return -EIO;
-		}
-
-		err = lm3556_write_reg(torch_data, LM3556_ENABLE_REG,
-				torch_data->pdata->torch_enable_val);
-		if (err) {
-			pr_err("%s: Writing to 0x%X failed %i\n",
-					__func__, LM3556_ENABLE_REG, err);
-			return -EIO;
-		}
-
-	} else {
-		err = lm3556_read_reg(torch_data, LM3556_ENABLE_REG, &val);
-		if (err) {
-			pr_err("%s: Reading 0x%X failed %i\n",
-					__func__, LM3556_ENABLE_REG, err);
-			return -EIO;
-		}
-		/* Do not turn off the message indicator if on */
-		temp_val = (val & 0x01);
-		err = lm3556_write_reg(torch_data, LM3556_ENABLE_REG,
-				temp_val);
-		if (err) {
-			pr_err("%s: Writing to 0x%X failed %i\n",
-					__func__, LM3556_ENABLE_REG, err);
-			return -EIO;
-		}
-	}
-	torch_data->flash_light_brightness = torch_val;
 	return sizeof(buf);
 }
 
@@ -284,12 +391,7 @@ static DEVICE_ATTR(flash_light, 0644, lm3556_torch_show, lm3556_torch_store);
 static ssize_t lm3556_strobe_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	struct i2c_client *client = container_of(dev->parent,
-			struct i2c_client, dev);
-	struct lm3556_data *torch_data = i2c_get_clientdata(client);
-
 	sprintf(buf, "%d\n", torch_data->camera_strobe_brightness);
-
 	return sizeof(buf);
 }
 
@@ -300,92 +402,17 @@ static ssize_t lm3556_strobe_store(struct device *dev,
 {
 	int err;
 	unsigned long strobe_val = 0;
-	uint8_t err_flags;
-	uint8_t val;
-	uint8_t temp_val;
-	uint8_t strobe_brightness;
-	struct i2c_client *client = container_of(dev->parent,
-			struct i2c_client, dev);
-	struct lm3556_data *torch_data = i2c_get_clientdata(client);
 
 	err = strict_strtoul(buf, 10, &strobe_val);
 	if (err) {
 		pr_err("%s: Invalid parameter sent\n", __func__);
 		return -EINVAL;
 	}
-	err = lm3556_read_reg(torch_data, LM3556_FLAGS_REG, &err_flags);
-	if (err) {
-		pr_err("%s: Reading the status failed for %i\n",
-				__func__, err);
-		return -EIO;
-	}
-	if (torch_data->pdata->flags & LM3556_ERROR_CHECK) {
-		if (err_flags & (THERMAL_SHUTDOWN_FAULT |
-					THERMAL_MONITOR_FAULT |
-					LED_FAULT | VOLTAGE_MONITOR_FAULT |
-					UNDER_VOLTAGE_FAULT)) {
-			pr_err("%s: Error indicated by the chip 0x%X\n",
-					__func__, err_flags);
-			return err_flags;
-		}
-	}
-	if (strobe_val) {
-		val = strobe_val / LM3556_STROBE_STEP;
+	err = lm3556_led_write(strobe_val, LM3556_STROBE_MODE);
 
-		err = lm3556_read_reg(torch_data, LM3556_CURRENT_CTRL_REG,
-				&temp_val);
-		if (err) {
-			pr_err("%s: Reading 0x%X failed %i\n",
-					__func__, LM3556_CURRENT_CTRL_REG, err);
-			return -EIO;
-		}
+	if (err)
+		return err;
 
-		temp_val = (temp_val & 0x70);
-		val = (val & 0x0f);
-		strobe_brightness = (val | temp_val);
-
-		err = lm3556_write_reg(torch_data, LM3556_CURRENT_CTRL_REG,
-				strobe_brightness);
-		if (err) {
-			pr_err("%s: Writing to 0x%X failed %i\n",
-					__func__, LM3556_CURRENT_CTRL_REG, err);
-			return -EIO;
-		}
-
-		err = lm3556_write_reg(torch_data, LM3556_ENABLE_REG,
-				torch_data->pdata->flash_enable_val);
-		if (err) {
-			pr_err("%s: Writing to 0x%X failed %i\n",
-					__func__, LM3556_ENABLE_REG, err);
-			return -EIO;
-		}
-
-		err = lm3556_write_reg(torch_data, LM3556_FLASH_FEAT_REG,
-				torch_data->pdata->flash_features_reg_def);
-		if (err) {
-			pr_err("%s: Writing to 0x%X failed %i\n",
-					__func__, LM3556_FLASH_FEAT_REG, err);
-			return -EIO;
-		}
-	} else {
-		err = lm3556_read_reg(torch_data, LM3556_ENABLE_REG,
-				&val);
-		if (err) {
-			pr_err("%s: Reading 0x%X failed %i\n",
-					__func__, LM3556_ENABLE_REG, err);
-			return -EIO;
-		}
-		/* Do not turn off the message indicator if on */
-		temp_val = (val & 0x01);
-		lm3556_write_reg(torch_data, LM3556_ENABLE_REG,
-				temp_val);
-		if (err) {
-			pr_err("%s: Writing to 0x%X failed %i\n",
-					__func__, LM3556_ENABLE_REG, err);
-			return -EIO;
-		}
-	}
-	torch_data->camera_strobe_brightness = strobe_val;
 	return sizeof(buf);
 }
 
@@ -398,11 +425,8 @@ static ssize_t lm3556_strobe_err_show(struct device *dev,
 {
 	int err;
 	uint8_t err_flags;
-	struct i2c_client *client = container_of(dev->parent,
-			struct i2c_client, dev);
-	struct lm3556_data *torch_data = i2c_get_clientdata(client);
 
-	err = lm3556_read_reg(torch_data, LM3556_FLAGS_REG, &err_flags);
+	err = lm3556_read_reg(LM3556_FLAGS_REG, &err_flags);
 	if (err) {
 		pr_err("%s: Reading the status failed for %i\n",
 				__func__, err);
@@ -416,12 +440,12 @@ static ssize_t lm3556_strobe_err_show(struct device *dev,
 
 static DEVICE_ATTR(strobe_err, 0644, lm3556_strobe_err_show, NULL);
 
-int lm3556_init_registers(struct lm3556_data *torch_data)
+int lm3556_init_registers(void)
 {
 	int err;
 	uint8_t si_filter_time_val;
 
-	err = lm3556_read_reg(torch_data, LM3556_SI_REV_AND_FILTER_TIME_REG,
+	err = lm3556_read_reg(LM3556_SI_REV_AND_FILTER_TIME_REG,
 			&si_filter_time_val);
 	if (err) {
 		pr_err("%s: Reading 0x%X failed %i\n",
@@ -431,29 +455,29 @@ int lm3556_init_registers(struct lm3556_data *torch_data)
 	}
 	si_filter_time_val |=  torch_data->pdata->si_rev_filter_time_def;
 
-	if (lm3556_write_reg(torch_data, LM3556_SI_REV_AND_FILTER_TIME_REG,
+	if (lm3556_write_reg(LM3556_SI_REV_AND_FILTER_TIME_REG,
 				si_filter_time_val) ||
-			lm3556_write_reg(torch_data, LM3556_IVFM_MODE_REG,
+			lm3556_write_reg(LM3556_IVFM_MODE_REG,
 				torch_data->pdata->ivfm_reg_def) ||
-			lm3556_write_reg(torch_data, LM3556_NTC_SET_REG,
+			lm3556_write_reg(LM3556_NTC_SET_REG,
 				torch_data->pdata->ntc_reg_def) ||
-			lm3556_write_reg(torch_data, LM3556_IND_RAMP_TIME_REG,
+			lm3556_write_reg(LM3556_IND_RAMP_TIME_REG,
 				torch_data->pdata->ind_ramp_time_reg_def) ||
-			lm3556_write_reg(torch_data, LM3556_IND_BLINK_REG,
+			lm3556_write_reg(LM3556_IND_BLINK_REG,
 				torch_data->pdata->ind_blink_reg_def) ||
-			lm3556_write_reg(torch_data, LM3556_IND_PERIOD_CNT_REG,
+			lm3556_write_reg(LM3556_IND_PERIOD_CNT_REG,
 				torch_data->pdata->ind_period_cnt_reg_def) ||
-			lm3556_write_reg(torch_data, LM3556_TORCH_RAMP_TIME_REG,
+			lm3556_write_reg(LM3556_TORCH_RAMP_TIME_REG,
 				torch_data->pdata->torch_ramp_time_reg_def) ||
-			lm3556_write_reg(torch_data, LM3556_CONF_REG,
+			lm3556_write_reg(LM3556_CONF_REG,
 				torch_data->pdata->config_reg_def) ||
-			lm3556_write_reg(torch_data, LM3556_FLASH_FEAT_REG,
+			lm3556_write_reg(LM3556_FLASH_FEAT_REG,
 				torch_data->pdata->flash_features_reg_def) ||
-			lm3556_write_reg(torch_data, LM3556_CURRENT_CTRL_REG,
+			lm3556_write_reg(LM3556_CURRENT_CTRL_REG,
 				torch_data->pdata->current_cntrl_reg_def) ||
-			lm3556_write_reg(torch_data, LM3556_ENABLE_REG,
+			lm3556_write_reg(LM3556_ENABLE_REG,
 				torch_data->pdata->enable_reg_def) ||
-			lm3556_write_reg(torch_data, LM3556_FLAGS_REG,
+			lm3556_write_reg(LM3556_FLAGS_REG,
 				torch_data->pdata->flag_reg_def)) {
 					pr_err("%s:Register init failed\n",
 							__func__);
@@ -466,7 +490,6 @@ static int lm3556_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
 	struct lm3556_platform_data *pdata = client->dev.platform_data;
-	struct lm3556_data *torch_data;
 	int err = -1;
 	if (pdata == NULL) {
 		err = -ENODEV;
@@ -517,7 +540,7 @@ static int lm3556_probe(struct i2c_client *client,
 
 	i2c_set_clientdata(client, torch_data);
 
-	err = lm3556_init_registers(torch_data);
+	err = lm3556_init_registers();
 	if (err < 0)
 		goto err_reg_init_reg_failed;
 
@@ -610,8 +633,6 @@ error1:
 
 static int lm3556_remove(struct i2c_client *client)
 {
-	struct lm3556_data *torch_data = i2c_get_clientdata(client);
-
 	if (torch_data->pdata->flags & LM3556_FLASH) {
 		device_remove_file(torch_data->led_dev.dev,
 				&dev_attr_camera_strobe);

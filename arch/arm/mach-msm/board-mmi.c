@@ -1195,8 +1195,28 @@ static struct msm_actuator_info dw9714_actuator_info = {
 #endif
 
 #ifdef CONFIG_OV8820
+
+#ifdef CONFIG_MSM_CAMERA_FLASH
+static struct msm_camera_sensor_flash_src flash_src_ov8820 = {
+	.flash_sr_type  = MSM_CAMERA_FLASH_SRC_LED,
+	._fsrc  = {
+		.led_src = {
+#ifdef CONFIG_LEDS_LM3556
+			.led_name = LM3556_NAME,
+			.led_name_len = LM3556_NAME_LEN,
+#endif
+		},
+	},
+};
+#endif
+
 static struct msm_camera_sensor_flash_data flash_ov8820 = {
+#ifdef CONFIG_MSM_CAMERA_FLASH
+	.flash_type     = MSM_CAMERA_FLASH_LED,
+	.flash_src      = &flash_src_ov8820,
+#else
 	.flash_type	= MSM_CAMERA_FLASH_NONE,
+#endif
 };
 
 static struct msm_camera_sensor_platform_info sensor_board_info_ov8820 = {
