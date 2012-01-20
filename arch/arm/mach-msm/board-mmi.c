@@ -1618,6 +1618,26 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 
 #endif /* CONFIG_I2C */
 
+static __init void config_emu_det_from_dt(void)
+{
+	struct device_node *chosen;
+	int len = 0;
+	const void *prop;
+
+	chosen = of_find_node_by_path("/Chosen@0");
+	if (!chosen)
+		goto out;
+
+	prop = of_get_property(chosen, "disable_emu_detection", &len);
+	if (prop && (len == sizeof(u8)) && *(u8 *)prop)
+		otg_control_data = NULL;
+
+	of_node_put(chosen);
+
+out:
+	return;
+}
+
 static __init u16 dt_get_u16_or_die(struct device_node *node, const char *name)
 {
 	int len = 0;
@@ -2208,11 +2228,11 @@ static void __init msm8960_mmi_init(void)
 	load_pm8921_gpios_from_dt();
 	pm8921_gpio_mpp_init(pm8921_gpios, pm8921_gpios_size,
 							pm8921_mpps, ARRAY_SIZE(pm8921_mpps));
+	msm8960_init_usb();
+
 #ifdef CONFIG_EMU_DETECTION
-	msm8960_init_usb();
+	config_emu_det_from_dt();
 	mot_init_emu_detection(otg_control_data);
-#else
-	msm8960_init_usb();
 #endif
 
 	platform_add_devices(mmi_devices, ARRAY_SIZE(mmi_devices));
