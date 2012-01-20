@@ -3861,7 +3861,7 @@ static int pm8921_charging_reboot(struct notifier_block *nb,
 				  unsigned long event, void *unused)
 {
 	struct pm8xxx_adc_chan_result res;
-#define VBUS_OFF_THRESHOLD 2000
+#define VBUS_OFF_THRESHOLD 2000000
 	/*
 	 * Hack to power down when both VBUS and BPLUS are present.
 	 * This targets factory environment, where we need to power down
