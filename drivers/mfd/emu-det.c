@@ -223,7 +223,6 @@ EXPORT_SYMBOL_GPL(emu_det_register_notify);
 	DEF(WHISPER_SMART), \
 	DEF(CHARGER_INDUCTIVE), \
 	DEF(USB_ADAPTER), \
-	DEF(WHISPER_PPD_UNKNOWN), \
 	DEF(WHISPER_SMART_LD2_OPEN), \
 	DEF(WHISPER_SMART_LD2_CLOSE), \
 	DEF(STATE_MAX) }
@@ -341,69 +340,6 @@ enum emu_det_sense_bits BITS;
 static char *bit_names[] = BITS;
 #undef DEF
 
-/***********************************************************************
-#define SENSE_USB           (CPCAP_BIT_ID_FLOAT_S  | \
-			     CPCAP_BIT_CHRGCURR1_S | \
-			     CPCAP_BIT_SESSVLD_S)
-
-#define SENSE_FACTORY       (CPCAP_BIT_ID_FLOAT_S  | \
-			     CPCAP_BIT_ID_GROUND_S | \
-			     CPCAP_BIT_SESSVLD_S)
-
-#define SENSE_FACTORY_MASK   (~(CPCAP_BIT_DP_S_LS | \
-			      CPCAP_BIT_CHRGCURR1_S))
-
-#define SENSE_CHARGER_FLOAT (CPCAP_BIT_ID_FLOAT_S  | \
-			     CPCAP_BIT_CHRGCURR1_S | \
-			     CPCAP_BIT_SESSVLD_S   | \
-			     CPCAP_BIT_SE1_S       | \
-			     CPCAP_BIT_DM_S_LS     | \
-			     CPCAP_BIT_DP_S_LS)
-
-#define SENSE_CHARGER       (CPCAP_BIT_CHRGCURR1_S | \
-			     CPCAP_BIT_SESSVLD_S   | \
-			     CPCAP_BIT_SE1_S       | \
-			     CPCAP_BIT_DM_S_LS     | \
-			     CPCAP_BIT_DP_S_LS)
-
-#define SENSE_WHISPER_SPD    (CPCAP_BIT_CHRGCURR1_S | \
-			      CPCAP_BIT_SESSVLD_S)
-
-#define SENSE_CHARGER_IND   (CPCAP_BIT_ID_FLOAT_S  | \
-			     CPCAP_BIT_CHRGCURR1_S | \
-			     CPCAP_BIT_SESSVLD_S   | \
-			     CPCAP_BIT_DP_S_LS     | \
-			     GPIO_BIT_SWST1)
-
-#define SENSE_CHARGER_MASK  (CPCAP_BIT_ID_GROUND_S | \
-			     CPCAP_BIT_SESSVLD_S)
-
-#define SENSE_WHISPER_PPD   (CPCAP_BIT_CHRGCURR1_S | \
-			     CPCAP_BIT_DP_S_LS)
-
-#define SENSE_WHISPER_PPD_MASK   (CPCAP_BIT_ID_FLOAT_S | \
-				  CPCAP_BIT_SESSVLD_S)
-
-#define SENSE_WHISPER_CABLE (CPCAP_BIT_CHRGCURR1_S)
-
-#define SENSE_WHISPER_SMART (CPCAP_BIT_ID_GROUND_S | \
-			     CPCAP_BIT_SESSVLD_S   | \
-			     CPCAP_BIT_CHRGCURR1_S | \
-			     CPCAP_BIT_DP_S_LS)
-
-#define SENSE_WHISPER_LD2   (CPCAP_BIT_ID_GROUND_S | \
-			     CPCAP_BIT_SESSVLD_S   | \
-			     CPCAP_BIT_CHRGCURR1_S | \
-			     CPCAP_BIT_SE1_S       | \
-			     CPCAP_BIT_DM_S_LS     | \
-			     CPCAP_BIT_DP_S_LS)
-
-#define SENSE_USB_ADAPTER      (CPCAP_BIT_ID_GROUND_S)
-#define SENSE_USB_ADAPTER_MASK      (~(CPCAP_BIT_CHRGCURR1_S | \
-				CPCAP_BIT_SE1_S | \
-				CPCAP_BIT_DP_S_LS))
-********************************************************************/
-
 #define SENSE_USB           (test_bit(FLOAT_BIT, &data->sense) && \
 			     test_bit(SESS_VLD_BIT, &data->sense) && \
 			    !test_bit(CHG_DET_BIT, &data->sense))
@@ -502,31 +438,6 @@ static struct emu_det_data *the_emud;
 static DEFINE_MUTEX(switch_access);
 static char buffer[512];
 static int driver_mode;
-
-/*
-static char *irq_names[23] = {"NA", "NA", "NA", "NA", "NA",
-	"NA", "NA", "NA", "NA", "NA", "NA",
-	"CPCAP_IRQ_VBUSOV",
-	"CPCAP_IRQ_RVRS_CHRG",
-	"CPCAP_IRQ_CHRG_DET",
-	"CPCAP_IRQ_IDFLOAT",
-	"CPCAP_IRQ_IDGND",
-	"CPCAP_IRQ_SE1",
-	"CPCAP_IRQ_SESSEND",
-	"CPCAP_IRQ_SESSVLD",
-	"CPCAP_IRQ_VBUSVLD",
-	"CPCAP_IRQ_CHRG_CURR1",
-	"CPCAP_IRQ_CHRG_CURR2",
-	"CPCAP_IRQ_RVRS_MODE"};
-
-static char *accy_devices[] = {
-	"cpcap_usb_charger",
-	"cpcap_factory",
-	"cpcap_charger",
-	"cpcap_whisper_ppd",
-	"cpcap_whisper_smart",
-};
-*/
 
 static ssize_t dock_print_name(struct switch_dev *switch_dev, char *buf)
 {
@@ -1158,7 +1069,6 @@ static int get_sense(bool do_adc)
 	if (do_adc)
 		sense_emu_id(&lsense);
 
-	atomic_set(&emud->last_irq, 0);
 	emud->sense = lsense;
 	pr_emu_det(STATUS, "%s\n", print_sense_bits(&lsense));
 
@@ -1355,10 +1265,13 @@ static void detection_work(bool caused_by_irq)
 		if (!data->otg_enabled) {
 			data->otg_enabled = true;
 			pm_runtime_get_sync(data->trans->dev);
+			/* Avoid resetting the phy while the OTG driver is still
+			 * host mode and when the phy is still powered on. This
+			 * seems to cause issues with the HC dying and unhandled IRQs */
+			data->trans->init(data->trans); /* reset PHY */
 		}
 		gsbi_ctrl_reg_restore();
 		memset(&data->sense, 0, sizeof(data->sense));
-		data->trans->init(data->trans); /* reset PHY */
 		phy_block_on();
 		otgsc_enable();
 		chgdet_enable(0);
@@ -1680,18 +1593,6 @@ static void detection_work(bool caused_by_irq)
 			notify_accy(ACCY_USB_DEVICE);
 		} else
 			data->state = WHISPER_SMART_LD2_CLOSE;
-		break;
-
-	case WHISPER_PPD_UNKNOWN:
-		pr_emu_det(STATUS, "detection_work: PPD_UNKNOWN\n");
-		last_irq = get_sense(true);
-
-		if (SENSE_DISCONNECT ||
-		    (last_irq == data->emu_irq[EMU_SCI_OUT_IRQ]) ||
-		    (last_irq == data->emu_irq[SEMU_PPD_DET_IRQ])) {
-			data->state = CONFIG;
-			queue_delayed_work(data->wq, &data->timer_work, 0);
-		}
 		break;
 
 	default:
