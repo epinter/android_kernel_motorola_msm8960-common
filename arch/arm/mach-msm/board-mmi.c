@@ -1275,6 +1275,30 @@ static struct msm_camera_sensor_info msm_camera_sensor_ov8820_data = {
 
 #endif
 
+#ifdef CONFIG_OV7736
+static struct msm_camera_sensor_flash_data flash_ov7736 = {
+	.flash_type = MSM_CAMERA_FLASH_NONE,
+};
+
+static struct msm_camera_sensor_platform_info sensor_board_info_ov7736 = {
+	.mount_angle  = 0,
+	.sensor_reset = 0,
+	.sensor_pwd   = 0,
+	.vcm_pwd      = 0,
+	.vcm_enable   = 0,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_ov7736_data = {
+	.sensor_name          = "ov7736",
+	.pdata                = &msm_camera_csi_device_data[1],
+	.flash_data           = &flash_ov7736,
+	.sensor_platform_info = &sensor_board_info_ov7736,
+	.gpio_conf            = &msm_camif_gpio_conf_mclk1,
+	.csi_if               = 1,
+	.camera_type          = FRONT_CAMERA_2D,
+};
+#endif
+
 void __init msm8960_init_cam(void)
 {
 	int i;
@@ -1287,6 +1311,9 @@ void __init msm8960_init_cam(void)
 #endif
 #ifdef CONFIG_OV8820
 		&msm_camera_sensor_ov8820_data,
+#endif
+#ifdef CONFIG_OV7736
+		&msm_camera_sensor_ov7736_data,
 #endif
 	};
 
@@ -1886,6 +1913,10 @@ static __init void register_i2c_devices_from_dt(int bus)
 			case 0x00290000: /* Omnivision_OV8820 */
 				info.platform_data =
 					&msm_camera_sensor_ov8820_data;
+				break;
+			case 0x00290001: /* Omnivision_OV7736 */
+				info.platform_data =
+					&msm_camera_sensor_ov7736_data;
 				break;
 			}
 		}

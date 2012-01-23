@@ -17,3 +17,4 @@ obj-$(CONFIG_WEBCAM_OV9726) += ov9726_v4l2.o
 obj-$(CONFIG_OV7692) += ov7692_v4l2.o
 obj-$(CONFIG_VX6953) += vx6953.o
 obj-$(CONFIG_OV8820) += ov8820_v4l2.o
+obj-$(CONFIG_OV7736) += ov7736_v4l2.o

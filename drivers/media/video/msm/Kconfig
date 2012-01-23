@@ -214,6 +214,13 @@ config OV8820
 	---help---
 	Omnivision 8M Bayer Sensor
 
+config OV7736
+	bool "Sensor ov7736 (Omnivision VGA)"
+	depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
+	default n
+	---help---
+		Omnivision VGA YUV Camera
+
 config VB6801
 	bool "Sensor vb6801"
 	depends on MSM_CAMERA && !ARCH_MSM8X60 && !MSM_CAMERA_V4L2

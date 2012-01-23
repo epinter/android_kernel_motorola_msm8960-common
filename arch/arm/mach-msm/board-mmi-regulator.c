@@ -39,6 +39,7 @@ VREG_CONSUMERS(L2) = {
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"4-0048"),
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"4-001f"),
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"4-0036"),
+	REGULATOR_SUPPLY("mipi_csi_vdd",	"4-003c"),
 };
 VREG_CONSUMERS(L3) = {
 	REGULATOR_SUPPLY("8921_l3",		NULL),
