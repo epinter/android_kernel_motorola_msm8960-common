@@ -124,10 +124,7 @@ static struct touch_settings tsett3;
 static uint16_t absVals[] = {
 		0x35, 20, 1003, 0, 0,
 		0x36, 10, 944, 0, 0,
-/*
 		0x3A, 0, 255, 0, 0,
-*/
-		0x30, 0, 255, 0, 0,
 		0x32, 0, 20, 0, 0,
 		0x39, 1, 10, 0, 0
 };
