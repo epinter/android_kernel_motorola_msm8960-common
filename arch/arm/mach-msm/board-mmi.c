@@ -1561,6 +1561,8 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 
 #endif /* CONFIG_I2C */
 
+static void __init set_emu_detection_resource(const char *res_name, int value);
+
 static __init void config_emu_det_from_dt(void)
 {
 	struct device_node *chosen;
@@ -1574,6 +1576,10 @@ static __init void config_emu_det_from_dt(void)
 	prop = of_get_property(chosen, "disable_emu_detection", &len);
 	if (prop && (len == sizeof(u8)) && *(u8 *)prop)
 		otg_control_data = NULL;
+
+	prop = of_get_property(chosen, "emu_id_enable_gpio", &len);
+	if (prop && (len == sizeof(u32)))
+		set_emu_detection_resource("EMU_ID_EN_GPIO", *(u32 *)prop);
 
 	of_node_put(chosen);
 
@@ -2305,11 +2311,6 @@ static __init void teufel_init(void)
 		ENABLE_I2C_DEVICE(TOUCHSCREEN_CYTTSP3);
 		ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
 	}
-
-#ifdef CONFIG_EMU_DETECTION
-	if (system_rev > HWREV_P2)
-		set_emu_detection_resource("EMU_ID_EN_GPIO", 94);
-#endif
 
 	/* Setup correct button backlight LED name */
 	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
