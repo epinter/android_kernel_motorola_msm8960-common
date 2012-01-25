@@ -507,11 +507,11 @@ static int32_t ov8820_regulator_off(struct regulator *reg, char *regname)
 	int32_t rc = 0;
 
 	if (reg) {
-		pr_err("motsoc1_regulator_off: %s\n", regname);
+		pr_err("ov8820_regulator_off: %s\n", regname);
 
 		rc = regulator_disable(reg);
 		if (rc) {
-			pr_err("motsoc1: failed to disable %s (%d)\n",
+			pr_err("ov8820: failed to disable %s (%d)\n",
 					regname, rc);
 			goto reg_off_done;
 		}

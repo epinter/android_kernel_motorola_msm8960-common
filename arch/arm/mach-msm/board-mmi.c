@@ -1185,30 +1185,6 @@ static struct lm3556_platform_data camera_flash_3556 = {
 
 #ifdef CONFIG_MSM_CAMERA
 
-#ifdef CONFIG_MOTSOC1
-static struct msm_camera_sensor_flash_data flash_motsoc1 = {
-	.flash_type = MSM_CAMERA_FLASH_NONE,
-};
-
-static struct msm_camera_sensor_platform_info sensor_board_info_motsoc1 = {
-	.mount_angle  = 90,
-	.sensor_reset = 0,
-	.sensor_pwd   = 0,
-	.vcm_pwd      = 0,
-	.vcm_enable   = 0,
-};
-
-static struct msm_camera_sensor_info msm_camera_sensor_motsoc1_data = {
-	.sensor_name          = "motsoc1",
-	.pdata                = &msm_camera_csi_device_data[0],
-	.flash_data           = &flash_motsoc1,
-	.sensor_platform_info = &sensor_board_info_motsoc1,
-	.gpio_conf            = &msm_camif_gpio_conf_mclk0,
-	.csi_if               = 1,
-	.camera_type          = BACK_CAMERA_2D,
-};
-
-#endif
 #ifdef CONFIG_MT9M114
 static struct msm_camera_sensor_flash_data flash_mt9m114 = {
 	.flash_type = MSM_CAMERA_FLASH_NONE,
@@ -1303,9 +1279,6 @@ void __init msm8960_init_cam(void)
 {
 	int i;
 	struct msm_camera_sensor_info *cam_data[] = {
-#ifdef CONFIG_MOTSOC1
-		&msm_camera_sensor_motsoc1_data,
-#endif
 #ifdef CONFIG_MT9M114
 		&msm_camera_sensor_mt9m114_data,
 #endif
@@ -1853,11 +1826,6 @@ static __init void register_i2c_devices_from_dt(int bus)
 		if (prop && (len == sizeof(u32))) {
 			/* must match type identifiers defined in DT schema */
 			switch (*(u32 *)prop) {
-			case 0x00000019: /* Generic_Motsoc1 */
-				info.platform_data =
-					&msm_camera_sensor_motsoc1_data;
-				break;
-
 			case 0x00040002: /* Cypress_CYTTSP3 */
 				info.platform_data = &ts_platform_data_cyttsp3;
 				mot_setup_touch_cyttsp3();
