@@ -1628,6 +1628,35 @@ out:
 	return;
 }
 
+static __init void config_keyboard_from_dt(void)
+{
+	struct device_node *chosen;
+	int len = 0;
+	const void *prop;
+
+	chosen = of_find_node_by_path("/Chosen@0");
+	if (!chosen)
+		goto out;
+
+	prop = of_get_property(chosen, "qwerty_keyboard", &len);
+	if (prop && (len == sizeof(u8)) && *(u8 *)prop) {
+		keypad_data = &mmi_qwerty_keypad_data;
+		keypad_mode = MMI_KEYPAD_RESET|MMI_KEYPAD_SLIDER;
+
+		/* Enable keyboard backlight */
+		strncpy((char *)&mp_lm3532_pdata.ctrl_b_name,
+				"keyboard-backlight",
+				sizeof(mp_lm3532_pdata.ctrl_b_name)-1);
+		mp_lm3532_pdata.led2_controller = LM3532_CNTRL_B;
+		mp_lm3532_pdata.ctrl_b_usage = LM3532_LED_DEVICE;
+	}
+
+	of_node_put(chosen);
+
+out:
+	return;
+}
+
 static __init u32 dt_get_u32_or_die(struct device_node *node, const char *name)
 {
 	int len = 0;
@@ -2242,6 +2271,8 @@ static void __init msm8960_mmi_init(void)
 
 	msm8960_init_rpm();
 
+	config_keyboard_from_dt();
+
 	config_gsbi12_clk_from_dt();
 
 	/* load panel_name from device tree, if present */
@@ -2458,27 +2489,13 @@ MACHINE_START(BECKER, "Becker")
     .init_very_early = msm8960_early_memory,
 MACHINE_END
 
-static __init void asanti_init(void)
-{
-	keypad_data = &mmi_qwerty_keypad_data;
-	keypad_mode = MMI_KEYPAD_RESET|MMI_KEYPAD_SLIDER;
-
-	/* Enable keyboard backlight */
-	strncpy((char *)&mp_lm3532_pdata.ctrl_b_name, "keyboard-backlight",
-		sizeof(mp_lm3532_pdata.ctrl_b_name)-1);
-	mp_lm3532_pdata.led2_controller = LM3532_CNTRL_B;
-	mp_lm3532_pdata.ctrl_b_usage = LM3532_LED_DEVICE;
-
-	msm8960_mmi_init();
-}
-
 MACHINE_START(ASANTI, "Asanti")
 	.map_io = msm8960_map_io,
 	.reserve = msm8960_reserve,
 	.init_irq = msm8960_init_irq,
 	.handle_irq = gic_handle_irq,
 	.timer = &msm_timer,
-	.init_machine = asanti_init,
+	.init_machine = msm8960_mmi_init,
 	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
 MACHINE_END
