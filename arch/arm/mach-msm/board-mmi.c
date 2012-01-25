@@ -2435,6 +2435,9 @@ static void __init mmi_init_early(void)
 
 static __init void teufel_init(void)
 {
+	/* need panel_name early so that is_smd below will be correct */
+	load_pm8921_gpios_from_dt();
+
 	if (is_smd()) {
 		ENABLE_I2C_DEVICE(TOUCHSCREEN_MELFAS100_TS);
 	} else {
