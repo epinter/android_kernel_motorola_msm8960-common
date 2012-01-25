@@ -169,6 +169,10 @@ static int phy_settings[] = {0x34, 0x82, 0x3f, 0x81, -1};
 
 bool camera_single_mclk;
 
+/*
+ * HACK: Ideally all clocks would be configured directly from the device tree.
+ * Don't use this as a template for future device tree changes.
+ */
 static void __init config_camera_single_mclk_from_dt(void)
 {
 	struct device_node *chosen;
@@ -528,6 +532,12 @@ static int is_smd(void) {
 	return !strncmp(panel_name, "mipi_mot_video_smd_hd_465", PANEL_NAME_MAX_LEN);
 }
 
+/*
+ * HACK: Ideally instead of basing code decisions on a string specifying the
+ * name of the device, the device tree would contain a structure composed of
+ * individual configuratble items that could be use in code to make decisions.
+ * Don't use this as a template for future device tree changes.
+ */
 static __init void load_panel_name_from_dt(void)
 {
 	struct device_node *chosen;
@@ -1585,6 +1595,10 @@ out:
 	return;
 }
 
+/*
+ * HACK: Ideally all clocks would be configured directly from the device tree.
+ * Don't use this as a template for future device tree changes.
+ */
 static __init void config_gsbi12_clk_from_dt(void)
 {
 #ifdef CONFIG_EMU_DETECTION
@@ -1607,6 +1621,10 @@ out:
 	return;
 }
 
+/*
+ * HACK: Ideally all pinmuxes would be configured directly from the device
+ * tree. Don't use this as a template for future device tree changes.
+ */
 static __init void config_mdp_vsync_from_dt(void)
 {
 	struct device_node *chosen;
@@ -1628,6 +1646,11 @@ out:
 	return;
 }
 
+/*
+ * HACK: Ideally the complete keypad description could be pulled out of the
+ * device tree. The LED configuration here should probably be moved elsewhere.
+ * Don't use this as a template for future device tree changes.
+ */
 static __init void config_keyboard_from_dt(void)
 {
 	struct device_node *chosen;
