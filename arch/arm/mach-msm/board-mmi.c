@@ -173,6 +173,26 @@ static int phy_settings[] = {0x34, 0x82, 0x3f, 0x81, -1};
 
 bool camera_single_mclk;
 
+static void __init config_camera_single_mclk_from_dt(void)
+{
+	struct device_node *chosen;
+	int len = 0;
+	const void *prop;
+
+	chosen = of_find_node_by_path("/Chosen@0");
+	if (!chosen)
+		goto out;
+
+	prop = of_get_property(chosen, "camera_single_mclk", &len);
+	if (prop && (len == sizeof(u8)))
+		camera_single_mclk = *(u8 *)prop;
+
+	of_node_put(chosen);
+
+out:
+	return;
+}
+
 #define BOOT_MODE_MAX_LEN 64
 static char boot_mode[BOOT_MODE_MAX_LEN + 1];
 int __init board_boot_mode_init(char *s)
@@ -2151,6 +2171,9 @@ static void __init msm8960_mmi_init(void)
 	/* load panel_name from device tree, if present */
 	load_panel_name_from_dt();
 
+	/* needs to happen before msm_clock_init */
+	config_camera_single_mclk_from_dt();
+
 	pmic_reset_irq = PM8921_IRQ_BASE + PM8921_RESOUT_IRQ;
 	regulator_suppress_info_printing();
 	if (msm_xo_init())
@@ -2315,8 +2338,6 @@ static __init void teufel_init(void)
 	/* Setup correct button backlight LED name */
 	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
 
-	camera_single_mclk = true;
-
 	msm8960_mmi_init();
 }
 
@@ -2339,9 +2360,6 @@ static __init void qinara_init(void)
 
 	/* Setup correct button backlight LED name */
 	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
-
-	if (system_rev < HWREV_P2)
-		camera_single_mclk = true;
 
 	msm8960_mmi_init();
 }
