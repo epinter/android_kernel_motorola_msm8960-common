@@ -149,22 +149,6 @@ static struct pm8xxx_gpio_init pm8921_gpios_vanquish[] = {
 			PM_GPIO_VIN_L17),	/* DISP_RESET_N on P1C+ */
 };
 
-static struct pm8xxx_gpio_init pm8921_gpios_asanti[] = {
-	PM8XXX_GPIO_DISABLE(6),				 /* Disable unused */
-	PM8XXX_GPIO_DISABLE(7),				 /* Disable NFC */
-	PM8XXX_GPIO_INPUT(16,	    PM_GPIO_PULL_UP_30), /* SD_CARD_WP */
-	PM8XXX_GPIO_PAIRED_OUT_VIN(21, PM_GPIO_VIN_L17), /* Whisper TX 2.7V */
-	PM8XXX_GPIO_PAIRED_IN_VIN(22,  PM_GPIO_VIN_S4),  /* Whisper TX 1.8V */
-	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Red LED */
-	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2),	 /* Green LED */
-	PM8XXX_GPIO_OUTPUT_FUNC(26, 0, PM_GPIO_FUNC_2),	 /* Blue LED */
-	PM8XXX_GPIO_INPUT(20,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
-	PM8XXX_GPIO_PAIRED_IN_VIN(41,  PM_GPIO_VIN_L17), /* Whisper TX 2.7V */
-	PM8XXX_GPIO_PAIRED_OUT_VIN(42, PM_GPIO_VIN_S4),  /* Whisper TX 1.8V */
-	PM8XXX_GPIO_OUTPUT(43, 1),			 /* DISP_RESET_N */
-	PM8XXX_GPIO_INPUT(33,	    PM_GPIO_PULL_UP_30), /* Volume Down key */
-};
-
 /* Initial PM8921 MPP configurations */
 static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 	/* External 5V regulator enable; shared by HDMI and USB_OTG switches. */
@@ -2402,10 +2386,6 @@ MACHINE_END
 
 static __init void asanti_init(void)
 {
-	strncpy(panel_name, "mipi_mot_cmd_auo_qhd_430", PANEL_NAME_MAX_LEN);
-	otg_control_data = NULL;
-	pm8921_gpios = pm8921_gpios_asanti;
-	pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_asanti);
 	keypad_data = &mmi_qwerty_keypad_data;
 	keypad_mode = MMI_KEYPAD_RESET|MMI_KEYPAD_SLIDER;
 
