@@ -32,9 +32,17 @@
 
 #ifdef __KERNEL__
 struct pn544_i2c_platform_data {
+	/*
+	 * WARNING: Device tree schema needs to be updated if the layout of
+	 * this struct changes.
+	 */
 	int irq_gpio;
 	int ven_gpio;
 	int firmware_gpio;
 	int ven_polarity;
+	/*
+	 * WARNING: Device tree schema needs to be updated if the layout of
+	 * this struct changes.
+	 */
 };
 #endif /* __KERNEL__ */

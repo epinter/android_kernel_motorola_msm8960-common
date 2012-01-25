@@ -93,10 +93,6 @@
 #include <linux/i2c/lm3532.h>
 #endif
 
-#ifdef CONFIG_PN544
-#include <linux/nfc/pn544.h>
-#endif
-
 #ifdef CONFIG_WCD9310_CODEC
 #include <linux/slimbus/slimbus.h>
 #include <linux/mfd/wcd9310/core.h>
@@ -1500,24 +1496,6 @@ struct i2c_registry {
 	int                    len;
 };
 
-#ifdef CONFIG_PN544
-struct pn544_i2c_platform_data pn544_pdata = {
-		.irq_gpio = -1,
-		.ven_gpio = -1,
-		.firmware_gpio = -1,
-		.ven_polarity = 0,
-};
-
-static void __init msm8960_pn544_init(void)
-{
-	printk(KERN_DEBUG "msm8960_pn544_init: is called, set gpio numbers.\n");
-	pn544_pdata.ven_gpio = GPIO_NFC_VEN;
-	pn544_pdata.irq_gpio = GPIO_NFC_IRQ;
-	pn544_pdata.firmware_gpio = GPIO_NFC_FW_UPDATE;
-}
-
-#endif /* CONFIG_PN544 */
-
 #ifdef CONFIG_BACKLIGHT_LM3532
 static struct i2c_board_info lm3532_i2c_boardinfo[] __initdata = {
 	{
@@ -1894,6 +1872,12 @@ static __init void register_i2c_devices_from_dt(int bus)
 		if (prop && (len == sizeof(u8)))
 			info.irq = MSM_GPIO_TO_INT(*(u8 *)prop);
 
+		prop = of_get_property(child, "platform_data", &len);
+		if (prop && len) {
+			info.platform_data = kmemdup(prop, len, GFP_KERNEL);
+			BUG_ON(!info.platform_data);
+		}
+
 		prop = of_get_property(child, "type", &len);
 		if (prop && (len == sizeof(u32))) {
 			/* must match type identifiers defined in DT schema */
@@ -1923,12 +1907,6 @@ static __init void register_i2c_devices_from_dt(int bus)
 					camera_flash_3556.hw_enable =
 						*(u32 *)prop;
 				info.platform_data = &camera_flash_3556;
-				break;
-
-			case 0x00190001: /* NXP_PN544 */
-#ifdef CONFIG_PN544
-				info.platform_data = &pn544_pdata;
-#endif
 				break;
 
 			case 0x00250001: /* TAOS_CT406 */
@@ -2342,10 +2320,6 @@ static void __init msm8960_mmi_init(void)
 	msm8960_init_slim();
 	msm8960_init_dsps();
 
-#ifdef CONFIG_PN544	/* NFC */
-	msm8960_pn544_init();
-#endif
-
 	msm8960_sensors_init();
 	msm8960_pm_init(RPM_APCC_CPU0_WAKE_UP_IRQ);
 	mot_tcmd_export_gpio();
@@ -2462,24 +2436,13 @@ MACHINE_START(QINARA, "Qinara")
 	.init_very_early = msm8960_early_memory,
 MACHINE_END
 
-static __init void vanquish_init(void)
-{
-	msm8960_mmi_init();
-#ifdef CONFIG_PN544
-	if (system_rev < HWREV_P2) {
-		pr_debug(KERN_DEBUG "msm8960_pn544_init: reverse ven_polarity.\n");
-		pn544_pdata.ven_polarity = 1;
-	}
-#endif
-}
-
 MACHINE_START(VANQUISH, "Vanquish")
 	.map_io = msm8960_map_io,
 	.reserve = msm8960_reserve,
 	.init_irq = msm8960_init_irq,
 	.handle_irq = gic_handle_irq,
 	.timer = &msm_timer,
-	.init_machine = vanquish_init,
+	.init_machine = msm8960_mmi_init,
 	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
 MACHINE_END
