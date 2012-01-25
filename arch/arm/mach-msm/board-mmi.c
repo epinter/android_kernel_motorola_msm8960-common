@@ -1629,6 +1629,27 @@ out:
 	return;
 }
 
+static __init void config_mdp_vsync_from_dt(void)
+{
+	struct device_node *chosen;
+	int len = 0;
+	const void *prop;
+
+	chosen = of_find_node_by_path("/Chosen@0");
+	if (!chosen)
+		goto out;
+
+	prop = of_get_property(chosen, "use_mdp_vsync", &len);
+	if (prop && (len == sizeof(u8)))
+		use_mdp_vsync = *(u8*)prop ? MDP_VSYNC_ENABLED
+			: MDP_VSYNC_DISABLED;
+
+	of_node_put(chosen);
+
+out:
+	return;
+}
+
 static __init u32 dt_get_u32_or_die(struct device_node *node, const char *name)
 {
 	int len = 0;
@@ -2261,6 +2282,7 @@ static void __init msm8960_mmi_init(void)
 	msm8960_init_regulators();
 	msm_clock_init(&msm8960_clock_init_data);
 
+	config_mdp_vsync_from_dt();
 	gpiomux_init(use_mdp_vsync);
 	mot_gpiomux_init(keypad_mode);
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
@@ -2442,7 +2464,6 @@ MACHINE_END
 
 static __init void vanquish_init(void)
 {
-	use_mdp_vsync = MDP_VSYNC_DISABLED;
 	msm8960_mmi_init();
 #ifdef CONFIG_PN544
 	if (system_rev < HWREV_P2) {
