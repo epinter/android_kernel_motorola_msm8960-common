@@ -1607,6 +1607,28 @@ out:
 	return;
 }
 
+static __init void config_gsbi12_clk_from_dt(void)
+{
+#ifdef CONFIG_EMU_DETECTION
+	struct device_node *chosen;
+	int len = 0;
+	const void *prop;
+
+	chosen = of_find_node_by_path("/Chosen@0");
+	if (!chosen)
+		goto out;
+
+	prop = of_get_property(chosen, "setup_gsbi12_clock", &len);
+	if (prop && (len == sizeof(u8)) && *(u8 *)prop)
+		mot_setup_gsbi12_clk();
+
+	of_node_put(chosen);
+
+out:
+#endif
+	return;
+}
+
 static __init u32 dt_get_u32_or_die(struct device_node *node, const char *name)
 {
 	int len = 0;
@@ -2221,6 +2243,8 @@ static void __init msm8960_mmi_init(void)
 
 	msm8960_init_rpm();
 
+	config_gsbi12_clk_from_dt();
+
 	/* load panel_name from device tree, if present */
 	load_panel_name_from_dt();
 
@@ -2405,32 +2429,19 @@ MACHINE_START(TEUFEL, "Teufel")
 	.init_very_early = msm8960_early_memory,
 MACHINE_END
 
-static __init void qinara_init(void)
-{
-#ifdef CONFIG_EMU_DETECTION
-	mot_setup_gsbi12_clk();
-#endif
-
-	msm8960_mmi_init();
-}
-
 MACHINE_START(QINARA, "Qinara")
 	.map_io = msm8960_map_io,
 	.reserve = msm8960_reserve,
 	.init_irq = msm8960_init_irq,
 	.handle_irq = gic_handle_irq,
 	.timer = &msm_timer,
-	.init_machine = qinara_init,
+	.init_machine = msm8960_mmi_init,
 	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
 MACHINE_END
 
 static __init void vanquish_init(void)
 {
-#ifdef CONFIG_EMU_DETECTION
-	mot_setup_gsbi12_clk();
-#endif
-
 	use_mdp_vsync = MDP_VSYNC_DISABLED;
 	msm8960_mmi_init();
 #ifdef CONFIG_PN544
