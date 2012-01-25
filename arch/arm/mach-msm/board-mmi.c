@@ -1859,6 +1859,26 @@ static void __init register_i2c_devices(void)
 
 static unsigned sdc_detect_gpio = 20;
 
+static __init void config_sdc_from_dt(void)
+{
+	struct device_node *node;
+	int len = 0;
+	const void *prop;
+
+	node = of_find_node_by_path("/System@0/SDHC@0/SDHCSLOT@3");
+	if (!node)
+		goto out;
+
+	prop = of_get_property(node, "pm8921,gpio", &len);
+	if (prop && (len == sizeof(u32)))
+		sdc_detect_gpio = *(u32 *)prop;
+
+	of_node_put(node);
+
+out:
+	return;
+}
+
 static struct gpiomux_setting mdp_disp_suspend_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
@@ -2183,6 +2203,7 @@ static void __init msm8960_mmi_init(void)
 #ifdef CONFIG_MSM_CAMERA
 	msm8960_init_cam();
 #endif
+	config_sdc_from_dt();
 	msm8960_init_mmc(sdc_detect_gpio);
 	acpuclk_init(&acpuclk_8960_soc_data);
 	register_i2c_devices();
@@ -2278,9 +2299,6 @@ static void __init mmi_init_early(void)
 
 static __init void teufel_init(void)
 {
-	if (system_rev <= HWREV_M1)
-		sdc_detect_gpio = 22;
-
 	if (is_smd()) {
 		ENABLE_I2C_DEVICE(TOUCHSCREEN_MELFAS100_TS);
 	} else {
