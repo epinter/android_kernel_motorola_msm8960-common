@@ -1607,6 +1607,17 @@ out:
 	return;
 }
 
+static __init u32 dt_get_u32_or_die(struct device_node *node, const char *name)
+{
+	int len = 0;
+	const void *prop;
+
+	prop = of_get_property(node, name, &len);
+	BUG_ON(!prop || (len != sizeof(u32)));
+
+	return *(u32 *)prop;
+}
+
 static __init u16 dt_get_u16_or_die(struct device_node *node, const char *name)
 {
 	int len = 0;
@@ -1749,6 +1760,58 @@ static __init void load_pm8921_gpios_from_dt(void)
 	}
 
 	BUG_ON(index != count);
+
+	of_node_put(parent);
+
+out:
+	return;
+}
+
+static __init void load_pm8921_leds_from_dt(void)
+{
+	struct device_node *parent, *child;
+
+	parent = of_find_node_by_path("/System@0/PowerIC@0");
+	if (!parent)
+		goto out;
+
+	for_each_child_of_node(parent, child) {
+		int len = 0;
+		const void *prop;
+
+		prop = of_get_property(child, "type", &len);
+		if (prop && (len == sizeof(u32))) {
+			/* Qualcomm_PM8921_LED as defined in DT schema */
+			if (0x001E000E == *(u32 *)prop) {
+				unsigned index;
+				struct led_info *led_info;
+
+				index = dt_get_u32_or_die(child, "index");
+
+				led_info = kzalloc(sizeof(struct led_info),
+						GFP_KERNEL);
+				BUG_ON(!led_info);
+
+				prop = of_get_property(child, "name", &len);
+				BUG_ON(!prop);
+
+				led_info->name = kstrndup((const char *)prop,
+						len, GFP_KERNEL);
+				BUG_ON(!led_info->name);
+
+				prop = of_get_property(child,
+						"default_trigger", &len);
+				BUG_ON(!prop);
+
+				led_info->default_trigger = kstrndup(
+						(const char *)prop,
+						len, GFP_KERNEL);
+				BUG_ON(!led_info->default_trigger);
+
+				pm8xxx_set_led_info(index, led_info);
+			}
+		}
+	}
 
 	of_node_put(parent);
 
@@ -2138,16 +2201,6 @@ static struct msm_spi_platform_data msm8960_qup_spi_gsbi1_pdata = {
 	.max_clock_speed = 15060000,
 };
 
-static struct led_info msm8960_mmi_button_backlight = {
-	.name = "button-backlight",
-	.default_trigger = "none",
-};
-
-static struct led_info msm8960_shift_key_backlight = {
-	.name = "shift-key-light",
-	.default_trigger = "none",
-};
-
 #define EXPECTED_MBM_PROTOCOL_VERSION 1
 static uint32_t mbm_protocol_version;
 
@@ -2170,6 +2223,9 @@ static void __init msm8960_mmi_init(void)
 
 	/* load panel_name from device tree, if present */
 	load_panel_name_from_dt();
+
+	/* configure pm8921 leds */
+	load_pm8921_leds_from_dt();
 
 	/* needs to happen before msm_clock_init */
 	config_camera_single_mclk_from_dt();
@@ -2335,9 +2391,6 @@ static __init void teufel_init(void)
 		ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
 	}
 
-	/* Setup correct button backlight LED name */
-	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
-
 	msm8960_mmi_init();
 }
 
@@ -2357,9 +2410,6 @@ static __init void qinara_init(void)
 #ifdef CONFIG_EMU_DETECTION
 	mot_setup_gsbi12_clk();
 #endif
-
-	/* Setup correct button backlight LED name */
-	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
 
 	msm8960_mmi_init();
 }
@@ -2402,21 +2452,13 @@ MACHINE_START(VANQUISH, "Vanquish")
 	.init_very_early = msm8960_early_memory,
 MACHINE_END
 
-static __init void becker_init(void)
-{
-	/* Setup correct button backlight LED name */
-	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
-
-	msm8960_mmi_init();
-}
-
 MACHINE_START(BECKER, "Becker")
     .map_io = msm8960_map_io,
     .reserve = msm8960_reserve,
     .init_irq = msm8960_init_irq,
 	.handle_irq = gic_handle_irq,
     .timer = &msm_timer,
-    .init_machine = becker_init,
+	.init_machine = msm8960_mmi_init,
 	.init_early = mmi_init_early,
     .init_very_early = msm8960_early_memory,
 MACHINE_END
@@ -2431,9 +2473,6 @@ static __init void asanti_init(void)
 		sizeof(mp_lm3532_pdata.ctrl_b_name)-1);
 	mp_lm3532_pdata.led2_controller = LM3532_CNTRL_B;
 	mp_lm3532_pdata.ctrl_b_usage = LM3532_LED_DEVICE;
-
-	/* Setup correct shift key light LED name */
-	pm8xxx_set_led_info(1, &msm8960_shift_key_backlight);
 
 	msm8960_mmi_init();
 }
