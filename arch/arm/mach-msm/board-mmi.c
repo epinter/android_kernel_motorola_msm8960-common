@@ -149,24 +149,6 @@ static struct pm8xxx_gpio_init pm8921_gpios_vanquish[] = {
 			PM_GPIO_VIN_L17),	/* DISP_RESET_N on P1C+ */
 };
 
-
-/* Initial PM8921 GPIO configurations vanquish P2 */
-static struct pm8xxx_gpio_init pm8921_gpios_vanquish_p2[] = {
-	PM8XXX_GPIO_DISABLE(6),				 /* Disable unused */
-	PM8XXX_GPIO_DISABLE(7),				 /* Disable NFC */
-	PM8XXX_GPIO_INPUT(16,	    PM_GPIO_PULL_UP_30), /* SD_CARD_WP */
-	PM8XXX_GPIO_PAIRED_OUT_VIN(21, PM_GPIO_VIN_L17), /* Whisper TX 2.7V */
-	PM8XXX_GPIO_PAIRED_IN_VIN(22,  PM_GPIO_VIN_S4),	 /* Whisper TX 1.8V */
-	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Red LED */
-	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2),	 /* Green LED */
-	PM8XXX_GPIO_OUTPUT_FUNC(26, 0, PM_GPIO_FUNC_2),	 /* Blue LED */
-	PM8XXX_GPIO_INPUT(20,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
-	PM8XXX_GPIO_PAIRED_IN_VIN(41,  PM_GPIO_VIN_L17), /* Whisper TX 2.7V */
-	PM8XXX_GPIO_PAIRED_OUT_VIN(42, PM_GPIO_VIN_S4),	 /* Whisper TX 1.8V */
-	PM8XXX_GPIO_OUTPUT(43,	PM_GPIO_PULL_UP_1P5),	 /* DISP_RESET_N */
-	PM8XXX_GPIO_OUTPUT(37,	PM_GPIO_PULL_UP_1P5), /* DISP_RESET_N on P2 */
-};
-
 static struct pm8xxx_gpio_init pm8921_gpios_asanti[] = {
 	PM8XXX_GPIO_DISABLE(6),				 /* Disable unused */
 	PM8XXX_GPIO_DISABLE(7),				 /* Disable NFC */
@@ -2376,14 +2358,8 @@ static __init void vanquish_init(void)
 {
 #ifdef CONFIG_EMU_DETECTION
 	mot_setup_gsbi12_clk();
-	if (system_rev < HWREV_P1B2)
-		otg_control_data = NULL;
 #endif
 
-	if (system_rev >= HWREV_P2) {
-		pm8921_gpios = pm8921_gpios_vanquish_p2;
-		pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_vanquish_p2);
-	}
 	use_mdp_vsync = MDP_VSYNC_DISABLED;
 	msm8960_mmi_init();
 #ifdef CONFIG_PN544
