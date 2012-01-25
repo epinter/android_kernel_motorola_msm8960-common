@@ -2383,8 +2383,6 @@ MACHINE_END
 
 static __init void becker_init(void)
 {
-	strncpy(panel_name, "mipi_mot_cmd_auo_qhd_430", PANEL_NAME_MAX_LEN);
-
 	/* Setup correct button backlight LED name */
 	pm8xxx_set_led_info(1, &msm8960_mmi_button_backlight);
 
