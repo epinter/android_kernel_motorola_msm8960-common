@@ -131,32 +131,6 @@
 #include "pm-boot.h"
 #include "msm_watchdog.h"
 
-/* Initial PM8921 GPIO configurations */
-static struct pm8xxx_gpio_init pm8921_gpios_teufel_m1[] = {
-	PM8XXX_GPIO_DISABLE(6),				 			/* Disable unused */
-	PM8XXX_GPIO_DISABLE(7),				 			/* Disable NFC */
-	PM8XXX_GPIO_INPUT(16,	    PM_GPIO_PULL_UP_30), /* SD_CARD_WP */
-	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Red LED */
-	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2),	 /* Green LED */
-	PM8XXX_GPIO_OUTPUT_FUNC(26, 0, PM_GPIO_FUNC_2),	 /* Blue LED */
-	PM8XXX_GPIO_INPUT(22,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
-	PM8XXX_GPIO_OUTPUT(43, 1),			 		/* DISP_RESET_N */
-	PM8XXX_GPIO_OUTPUT(42, 0),                      /* USB 5V reg enable */
-};
-
-/* Initial PM8921 GPIO configurations */
-static struct pm8xxx_gpio_init pm8921_gpios_teufel_m2[] = {
-	PM8XXX_GPIO_DISABLE(6),				 			/* Disable unused */
-	PM8XXX_GPIO_DISABLE(7),				 			/* Disable NFC */
-	PM8XXX_GPIO_INPUT(16,	    PM_GPIO_PULL_UP_30), /* SD_CARD_WP */
-	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Red LED */
-	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2),	 /* Green LED */
-	PM8XXX_GPIO_OUTPUT_FUNC(26, 0, PM_GPIO_FUNC_2),	 /* Blue LED */
-	PM8XXX_GPIO_INPUT(20,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
-	PM8XXX_GPIO_OUTPUT(43,	    0),			 		/* DISP_RESET_N */
-	PM8XXX_GPIO_OUTPUT(42, 0),                      /* USB 5V reg enable */
-};
-
 /* Initial PM8921 GPIO configurations vanquish, quinara */
 static struct pm8xxx_gpio_init pm8921_gpios_vanquish[] = {
 	PM8XXX_GPIO_DISABLE(6),				 			/* Disable unused */
@@ -2338,14 +2312,8 @@ static void __init mmi_init_early(void)
 
 static __init void teufel_init(void)
 {
-	if (system_rev <= HWREV_M1) {
+	if (system_rev <= HWREV_M1)
 		sdc_detect_gpio = 22;
-		pm8921_gpios = pm8921_gpios_teufel_m1;
-		pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_teufel_m1);
-	} else {
-		pm8921_gpios = pm8921_gpios_teufel_m2;
-		pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_teufel_m2);
-	}
 
 	if (is_smd()) {
 		ENABLE_I2C_DEVICE(TOUCHSCREEN_MELFAS100_TS);
@@ -2355,9 +2323,7 @@ static __init void teufel_init(void)
 	}
 
 #ifdef CONFIG_EMU_DETECTION
-	if (system_rev <= HWREV_P2)
-		otg_control_data = NULL;
-	else
+	if (system_rev > HWREV_P2)
 		set_emu_detection_resource("EMU_ID_EN_GPIO", 94);
 #endif
 
