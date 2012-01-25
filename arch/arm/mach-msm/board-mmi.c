@@ -2350,8 +2350,6 @@ static __init void qinara_init(void)
 {
 #ifdef CONFIG_EMU_DETECTION
 	mot_setup_gsbi12_clk();
-	if (system_rev < HWREV_P1B2)
-		otg_control_data = NULL;
 #endif
 
 	/* Setup correct button backlight LED name */
