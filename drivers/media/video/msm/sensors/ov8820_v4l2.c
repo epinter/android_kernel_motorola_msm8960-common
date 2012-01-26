@@ -669,7 +669,8 @@ static int32_t ov8820_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 		pr_err("%s: chip id does not match\n", __func__);
 		return -ENODEV;
 	}
-	return rc;
+	pr_info("ov8820: match_id success\n");
+	return 0;
 }
 
 static int __init msm_sensor_init_module(void)
