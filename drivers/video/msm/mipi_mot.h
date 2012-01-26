@@ -63,9 +63,12 @@
 struct mipi_mot_panel {
 
 	struct msm_panel_info pinfo;
-
+	struct msm_fb_data_type *mfd;
 	struct dsi_buf *mot_tx_buf;
 	struct dsi_buf *mot_rx_buf;
+	struct mutex lock;
+	boolean acl_support_present;
+	boolean acl_enabled;
 
 	int (*panel_enable) (struct msm_fb_data_type *mfd);
 	int (*panel_disable) (struct msm_fb_data_type *mfd);
@@ -76,6 +79,7 @@ struct mipi_mot_panel {
 	u16 (*get_manufacture_id)(struct msm_fb_data_type *mfd);
 	u16 (*get_controller_ver)(struct msm_fb_data_type *mfd);
 	u16 (*get_controller_drv_ver)(struct msm_fb_data_type *mfd);
+	void (*enable_acl) (struct msm_fb_data_type *mfd);
 };
 
 int mipi_mot_device_register(struct msm_panel_info *pinfo, u32 channel,

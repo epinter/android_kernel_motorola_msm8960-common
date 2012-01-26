@@ -44,6 +44,15 @@ static char display_on[2] = {DCS_CMD_SET_DISPLAY_ON, 0x00};
 
 static char MTP_key_enable_1[3] = {0xf0, 0x5a, 0x5a};
 static char MTP_key_enable_2[3] = {0xf1, 0x5a, 0x5a};
+static char ACL_param_setting[29] = {
+	0xc1, 0x47, 0x53, 0x13, 0x53,
+	0x00, 0x00, 0x02, 0xcf, 0x00,
+	0x00, 0x04, 0xff, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x01, 0x03, 0x07, 0x0c,
+	0x12, 0x19, 0x1f, 0x26
+};
+static char ACL_enable_disable_settings[2] = {0xc0, 0x00};
 
 static char  panel_condition_set[39] = {
 	0xf8, 0x01, 0x30, 0x00, 0x00,
@@ -269,6 +278,12 @@ static struct dsi_cmd_desc mot_video_on_cmds1[] = {
 			sizeof(exit_sleep), exit_sleep},
 };
 
+static struct dsi_cmd_desc mot_acl_enable_disable[] = {
+	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
+		sizeof(ACL_enable_disable_settings),
+					ACL_enable_disable_settings}
+};
+
 static struct dsi_cmd_desc mot_video_on_cmds2[] = {
 	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
 		sizeof(panel_condition_set), panel_condition_set},
@@ -292,7 +307,13 @@ static struct dsi_cmd_desc mot_video_on_cmds2[] = {
 			etc_condition_set_power_control},
 	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
 		sizeof(elvss_set[0]), elvss_set[0]},
-
+	/* This is the ACL parameter setting */
+	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
+		sizeof(ACL_param_setting), ACL_param_setting},
+	/* This is for enabling or disabling the ACL */
+	{DTYPE_DCS_LWRITE, 1, 0, 0, DEFAULT_DELAY,
+		sizeof(ACL_enable_disable_settings),
+					ACL_enable_disable_settings},
 };
 
 static struct dsi_cmd_desc mot_video_on_cmds3[] = {
@@ -306,6 +327,23 @@ static struct dsi_cmd_desc mot_display_off_cmds[] = {
 	{DTYPE_DCS_WRITE, 1, 0, 0, 120,
 		sizeof(enter_sleep), enter_sleep}
 };
+
+static void enable_acl(struct msm_fb_data_type *mfd)
+{
+	struct dsi_buf *dsi_tx_buf;
+	/* Write the value only if the display is enable and powerd on */
+	if ((mfd->op_enable != 0) && (mfd->panel_power_on != 0)) {
+		dsi_tx_buf = mot_panel->mot_tx_buf;
+		mutex_lock(&mfd->dma->ov_mutex);
+		mdp4_dsi_cmd_dma_busy_wait(mfd);
+		mdp4_dsi_blt_dmap_busy_wait(mfd);
+		mipi_set_tx_power_mode(0);
+		ACL_enable_disable_settings[1] = mot_panel->acl_enabled;
+		mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_acl_enable_disable,
+					ARRAY_SIZE(mot_acl_enable_disable));
+		mutex_unlock(&mfd->dma->ov_mutex);
+	}
+}
 
 static int panel_enable(struct msm_fb_data_type *mfd)
 {
@@ -322,7 +360,7 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 					ARRAY_SIZE(mot_video_on_cmds1));
 
 	usleep(5000);
-
+	ACL_enable_disable_settings[1] = mot_panel->acl_enabled;
 	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_video_on_cmds2,
 					ARRAY_SIZE(mot_video_on_cmds2));
 	msleep(120);
@@ -466,10 +504,13 @@ static int __init mipi_video_mot_hd_pt_init(void)
 	pinfo->mipi.dma_trigger = DSI_CMD_TRIGGER_SW;
 	pinfo->mipi.frame_rate = 60;
 	pinfo->mipi.dsi_phy_db = &dsi_video_mode_phy_db;
+	mot_panel->acl_support_present = TRUE;
+	mot_panel->acl_enabled = FALSE; /* By default the ACL is disabled. */
 
 	mot_panel->panel_enable = panel_enable;
 	mot_panel->panel_disable = panel_disable;
 	mot_panel->set_backlight = panel_set_backlight;
+	mot_panel->enable_acl = enable_acl;
 
 	ret = mipi_mot_device_register(pinfo, MIPI_DSI_PRIM, MIPI_DSI_PANEL_HD);
 	if (ret)

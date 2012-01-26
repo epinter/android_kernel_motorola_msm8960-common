@@ -87,6 +87,66 @@ end:
         return controller_drv_ver;
 }
 
+static ssize_t panel_acl_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	u8 data = 0xff;
+
+	if (mot_panel.acl_support_present == FALSE) {
+		pr_err("%s: panel doesn't support ACL\n", __func__);
+		data = -EPERM;
+		goto err;
+	}
+
+	mutex_lock(&mot_panel.lock);
+	if (mot_panel.acl_enabled)
+		data = 1;
+	else
+		data = 0;
+	mutex_unlock(&mot_panel.lock);
+err:
+	return sprintf(buf, "%d\n", ((u32) data));
+}
+
+static ssize_t panel_acl_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned long acl_val = 0;
+	unsigned long r = 0;
+
+	if (mot_panel.mfd == 0) {
+		r = -ENODEV;
+		goto end;
+	}
+	if (mot_panel.acl_support_present == TRUE) {
+		r = strict_strtoul(buf, 0, &acl_val);
+		if ((r) || ((acl_val != 0) && (acl_val != 1))) {
+			pr_err("%s: Invalid ACL value = %lu\n",
+							__func__, acl_val);
+			r = -EINVAL;
+			goto end;
+		}
+		mutex_lock(&mot_panel.lock);
+		if (mot_panel.acl_enabled != acl_val) {
+			mot_panel.acl_enabled = acl_val;
+			mot_panel.enable_acl(mot_panel.mfd);
+		}
+		mutex_unlock(&mot_panel.lock);
+	}
+
+end:
+	return r ? r : count;
+}
+static DEVICE_ATTR(acl_mode, S_IRUGO | S_IWGRP,
+					panel_acl_show, panel_acl_store);
+static struct attribute *acl_attrs[] = {
+	&dev_attr_acl_mode.attr,
+	NULL,
+};
+static struct attribute_group acl_attr_group = {
+	.attrs = acl_attrs,
+};
+
 static int mipi_mot_lcd_on(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd;
@@ -168,6 +228,7 @@ err:
 static int __devinit mipi_mot_lcd_probe(struct platform_device *pdev)
 {
 	struct platform_device *lcd_dev;
+	int ret = 0;
 
 	if (pdev->id == 0)
 		mipi_mot_pdata = pdev->dev.platform_data;
@@ -176,11 +237,41 @@ static int __devinit mipi_mot_lcd_probe(struct platform_device *pdev)
 	if (!lcd_dev)
 		pr_err("%s: Failed to add lcd device\n", __func__);
 
+	mutex_init(&mot_panel.lock);
+	if (mot_panel.acl_support_present == TRUE) {
+		mot_panel.mfd = platform_get_drvdata(lcd_dev);
+		if (!mot_panel.mfd) {
+			pr_err("%s: invalid mfd\n", __func__);
+			ret = -ENODEV;
+			goto err;
+		}
+		ret = sysfs_create_group(&mot_panel.mfd->fbi->dev->kobj,
+                                                       &acl_attr_group);
+		if (ret < 0) {
+			pr_err("%s: acl_mode file creation failed\n", __func__);
+			goto err;
+		}
+		/* Set the default ACL value to the LCD */
+		mot_panel.enable_acl(mot_panel.mfd);
+	}
+	return 0;
+err:
+	return ret;
+}
+
+static int __devexit mipi_mot_lcd_remove(struct platform_device *pdev)
+{
+	if (mot_panel.acl_support_present == TRUE) {
+		sysfs_remove_group(&mot_panel.mfd->fbi->dev->kobj,
+							&acl_attr_group);
+	}
+	mutex_destroy(&mot_panel.lock);
 	return 0;
 }
 
 static struct platform_driver this_driver = {
 	.probe  = mipi_mot_lcd_probe,
+	.remove = mipi_mot_lcd_remove,
 	.driver = {
 		.name   = "mipi_mot",
 	},
