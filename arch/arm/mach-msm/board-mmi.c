@@ -28,6 +28,7 @@
 #include <linux/slimbus/slimbus.h>
 #include <linux/bootmem.h>
 #include <linux/msm_kgsl.h>
+#include <linux/mmc/msm_sdcc_raw.h>
 #ifdef CONFIG_ANDROID_PMEM
 #include <linux/android_pmem.h>
 #endif
@@ -2293,6 +2294,8 @@ static void __init msm8960_mmi_init(void)
 		pr_err("meminfo_init() failed!\n");
 
 	msm8960_init_rpm();
+
+	msm_init_apanic();
 
 	config_keyboard_from_dt();
 
