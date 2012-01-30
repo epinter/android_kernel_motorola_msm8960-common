@@ -125,8 +125,11 @@ static int __init mipi_cmd_mot_auo_qhd_450_init(void)
 	pinfo->bl_min = 1;
 	pinfo->fb_num = 2;
 	pinfo->clk_rate = 400000000;
-	pinfo->lcd.vsync_enable = FALSE;
-	pinfo->lcd.hw_vsync_mode = FALSE;
+	pinfo->lcd.vsync_enable = TRUE;
+	pinfo->lcd.hw_vsync_mode = TRUE;
+	pinfo->lcd.v_back_porch = 10;
+	pinfo->lcd.v_front_porch = 10;
+	pinfo->lcd.v_pulse_width = 5;
 	pinfo->lcd.refx100 = 6000; /* adjust refx100 to prevent tearing */
 
 	pinfo->mipi.mode = DSI_CMD_MODE;
@@ -140,9 +143,9 @@ static int __init mipi_cmd_mot_auo_qhd_450_init(void)
 	pinfo->mipi.t_clk_post = 0x19;
 	pinfo->mipi.t_clk_pre = 0x2e;
 	pinfo->mipi.stream = 0;	/* dma_p */
-	pinfo->mipi.mdp_trigger = DSI_CMD_TRIGGER_SW;
+	pinfo->mipi.mdp_trigger = DSI_CMD_TRIGGER_NONE;
 	pinfo->mipi.dma_trigger = DSI_CMD_TRIGGER_SW;
-	pinfo->mipi.te_sel = 0; /* TE from vsycn gpio */
+	pinfo->mipi.te_sel = 1; /* TE from vsycn gpio */
 	pinfo->mipi.interleave_max = 1;
 	pinfo->mipi.insert_dcs_cmd = TRUE;
 	pinfo->mipi.wr_mem_continue = 0x3c;
