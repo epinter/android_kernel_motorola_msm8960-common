@@ -158,6 +158,10 @@ static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 
 static u32 fdt_start_address; /* flattened device tree address */
 
+extern unsigned int k_atag_tcmd_raw_cid[4];
+extern unsigned int k_atag_tcmd_raw_csd[4];
+extern unsigned char k_atag_tcmd_raw_ecsd[512];
+
 static struct pm8xxx_gpio_init *pm8921_gpios = pm8921_gpios_vanquish;
 static unsigned pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_vanquish);
 static struct pm8xxx_keypad_platform_data *keypad_data = &mmi_keypad_data;
@@ -1428,6 +1432,80 @@ static void init_mmi_unit_info(void){
 		mui->system_serial_low, mui->machine, mui->barcode);
 }
 
+static ssize_t cid_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "0x%08X 0x%08X 0x%08X 0x%08X\n",
+		       k_atag_tcmd_raw_cid[0], k_atag_tcmd_raw_cid[1],
+		       k_atag_tcmd_raw_cid[2], k_atag_tcmd_raw_cid[3]);
+}
+
+static ssize_t csd_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "0x%08X 0x%08X 0x%08X 0x%08X\n",
+		       k_atag_tcmd_raw_csd[0], k_atag_tcmd_raw_csd[1],
+		       k_atag_tcmd_raw_csd[2], k_atag_tcmd_raw_csd[3]);
+}
+
+static ssize_t ecsd_show(struct kobject *kobj, struct kobj_attribute *attr,
+			 char *buf)
+{
+	char *d = buf;
+	char b[8];
+	int i = 0;
+
+	while (i < 512) {
+		snprintf(b, 8, "%02X", k_atag_tcmd_raw_ecsd[i]);
+		*d++ = b[0];
+		*d++ = b[1];
+		*d++ = ' ';
+		i++;
+	}
+	*d++ = 10;
+	*d = 0;
+
+	return (512*3) + 1;
+}
+
+static struct kobj_attribute cid_attribute =
+	__ATTR(cid, 0666, cid_show, NULL);
+
+static struct kobj_attribute csd_attribute =
+	__ATTR(csd, 0666, csd_show, NULL);
+
+static struct kobj_attribute ecsd_attribute =
+	__ATTR(ecsd, 0666, ecsd_show, NULL);
+
+static struct attribute *emmc_attrs[] = {
+	&cid_attribute.attr,
+	&csd_attribute.attr,
+	&ecsd_attribute.attr,
+	NULL
+};
+
+static struct attribute_group emmc_attr_group = {
+	.attrs = emmc_attrs,
+};
+
+static int emmc_version_init(void)
+{
+	static struct kobject *emmc_kobj;
+	int retval;
+
+	emmc_kobj = kobject_create_and_add("emmc", NULL);
+	if (!emmc_kobj) {
+		pr_err("%s: failed to create /sys/emmc\n", __func__);
+		return -ENOMEM;
+	}
+
+	retval = sysfs_create_group(emmc_kobj, &emmc_attr_group);
+	if (retval)
+		pr_err("%s: failed for entries under /sys/emmc\n", __func__);
+
+	return retval;
+}
+
 static struct {
 	unsigned mr5;
 	unsigned mr6;
@@ -1505,7 +1583,7 @@ static ssize_t sysfsram_info_show(struct kobject *kobj,
 		return snprintf(buf, 20, "smem_alloc failed\n");
 
 	vid = smem_ddr_info->mr5 & 0xFF;
-	if (vid <= (sizeof(vendors)/sizeof(vendors[0])))
+	if (vid < (sizeof(vendors)/sizeof(vendors[0])))
 		vname = vendors[vid];
 	else if (vid == 0xFE)
 		vname = "Numonyx";
@@ -2555,6 +2633,7 @@ static void __init msm8960_mmi_init(void)
 
 	init_mmi_unit_info();
 	init_mmi_ram_info();
+	emmc_version_init();
 }
 
 static int __init mot_parse_atag_baseband(const struct tag *tag)

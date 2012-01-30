@@ -202,6 +202,13 @@ struct tag_cid_recover_boot {
 
 #endif /*  CONFIG_BOOTINFO */
 
+#define ATAG_EMMC_VERSION 0xf1000416
+struct tag_emmc_version {
+	unsigned int raw_cid[4];
+	unsigned int raw_csd[4];
+	unsigned char raw_ecsd[512];
+};
+
 struct tag {
 	struct tag_header hdr;
 	union {
@@ -238,6 +245,7 @@ struct tag {
 		struct tag_battery_status_at_boot      battery_status_at_boot;
 		struct tag_cid_recover_boot            cid_recover_boot;
 #endif /*  CONFIG_BOOTINFO */
+		struct tag_emmc_version emmc_version;
 	} u;
 };
 
