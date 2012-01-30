@@ -599,7 +599,7 @@ static struct pm8xxx_misc_platform_data pm8xxx_misc_pdata = {
 #ifdef CONFIG_MACH_MSM8960_MMI
 static struct pm8921_bms_platform_data pm8921_bms_pdata __devinitdata = {
 	.r_sense		= 10,
-	.i_test			= 2500,
+	.i_test			= 0,
 	.v_failure		= 3200,
 	.calib_delay_ms		= 600000,
 	.max_voltage_uv		= MAX_VOLTAGE_MV * 1000,

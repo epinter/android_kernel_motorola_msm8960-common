@@ -17,15 +17,15 @@
 
 /* EB20 Tables and Charging Parameters */
 static struct single_row_lut mmi_eb20_fcc_temp = {
-	.x	= {25},
-	.y	= {1750},
-	.cols	= 1,
+	.x	= {-10, 23, 60},
+	.y	= {1775, 1775, 1775},
+	.cols	= 3,
 };
 
 static struct single_row_lut mmi_eb20_fcc_sf = {
-	.x	= {100, 200, 300, 400, 500},
-	.y	= {100, 100, 100, 100, 100},
-	.cols	= 5,
+	.x	= {1, 100, 200, 300, 400, 500},
+	.y	= {100, 97, 95, 93, 91, 90},
+	.cols	= 6,
 };
 
 static struct pc_sf_lut mmi_eb20_pc_sf = {
@@ -48,44 +48,48 @@ static struct pc_sf_lut mmi_eb20_pc_sf = {
 };
 
 static struct pc_temp_ocv_lut mmi_eb20_pc_temp_ocv = {
-	.rows		= 25,
-	.cols		= 1,
-	.temp		= {25},
+	.rows		= 29,
+	.cols		= 3,
+	.temp		= {-10, 23, 60},
 	.percent	= {100, 95, 90, 85, 80, 75, 70, 65, 60, 55,
 				50, 45, 40, 35, 30, 25, 20, 15, 10,
-				5, 4, 3, 2, 1, 0
+				9, 8, 7, 6, 5, 4, 3, 2, 1, 0
 	},
 	.ocv		= {
-			{4350},
-			{4275},
-			{4223},
-			{4169},
-			{4115},
-			{4065},
-			{4009},
-			{3963},
-			{3922},
-			{3885},
-			{3854},
-			{3828},
-			{3805},
-			{3786},
-			{3769},
-			{3753},
-			{3732},
-			{3693},
-			{3660},
-			{3600},
-			{3567},
-			{3514},
-			{3435},
-			{3322},
-			{3050}
+			{4321, 4321, 4321},
+			{4270, 4270, 4270},
+			{4212, 4212, 4212},
+			{4155, 4155, 4155},
+			{4099, 4099, 4099},
+			{4046, 4046, 4046},
+			{3994, 3994, 3994},
+			{3945, 3945, 3945},
+			{3904, 3904, 3904},
+			{3868, 3868, 3868},
+			{3837, 3837, 3837},
+			{3810, 3810, 3810},
+			{3786, 3786, 3786},
+			{3765, 3765, 3765},
+			{3746, 3746, 3746},
+			{3729, 3729, 3729},
+			{3707, 3707, 3707},
+			{3674, 3674, 3674},
+			{3645, 3645, 3645},
+			{3639, 3639, 3639},
+			{3630, 3630, 3630},
+			{3618, 3618, 3618},
+			{3605, 3605, 3605},
+			{3585, 3585, 3585},
+			{3555, 3555, 3555},
+			{3507, 3507, 3507},
+			{3441, 3441, 3441},
+			{3348, 3348, 3348},
+			{3200, 3200, 3200}
 	},
 };
 
 static struct pm8921_bms_battery_data  mmi_eb20_metering_data = {
-	.fcc			= 1750,
+	.fcc			= 1775,
 	.fcc_temp_lut		= &mmi_eb20_fcc_temp,
 	.fcc_sf_lut		= &mmi_eb20_fcc_sf,
 	.pc_temp_ocv_lut	= &mmi_eb20_pc_temp_ocv,
@@ -99,7 +103,7 @@ static struct pm8921_charger_battery_data mmi_eb20_charging_data = {
 	.term_current			= 80,
 	.cool_temp			= 0,
 	.warm_temp			= 45,
-	.max_bat_chg_current		= 1750,
+	.max_bat_chg_current		= 1775,
 	.cool_bat_chg_current		= 0,
 	.warm_bat_chg_current		= 0,
 	.cool_bat_voltage		= 3800,
@@ -116,7 +120,7 @@ static struct mmi_battery_cell mmi_eb20_cell_data = {
 
 /* EB20 Preliminary Tables and Charging Parameters */
 static struct pm8921_bms_battery_data  mmi_eb20_pre_metering_data = {
-	.fcc			= 1750,
+	.fcc			= 1775,
 	.fcc_temp_lut		= &mmi_eb20_fcc_temp,
 	.fcc_sf_lut		= &mmi_eb20_fcc_sf,
 	.pc_temp_ocv_lut	= &mmi_eb20_pc_temp_ocv,
@@ -130,7 +134,7 @@ static struct pm8921_charger_battery_data mmi_eb20_pre_charging_data = {
 	.term_current			= 80,
 	.cool_temp			= 0,
 	.warm_temp			= 45,
-	.max_bat_chg_current		= 1750,
+	.max_bat_chg_current		= 1775,
 	.cool_bat_chg_current		= 0,
 	.warm_bat_chg_current		= 0,
 	.cool_bat_voltage		= 3800,
@@ -147,15 +151,15 @@ static struct mmi_battery_cell mmi_eb20_pre_cell_data = {
 
 /* Default Tables and Charging Parameters */
 static struct single_row_lut mmi_df_fcc_temp = {
-	.x	= {25},
-	.y	= {1750},
-	.cols	= 1,
+	.x	= {-10, 23, 60},
+	.y	= {1775, 1775, 1775},
+	.cols	= 3,
 };
 
 static struct single_row_lut mmi_df_fcc_sf = {
-	.x	= {100, 200, 300, 400, 500},
-	.y	= {100, 100, 100, 100, 100},
-	.cols	= 5,
+	.x	= {1, 100, 200, 300, 400, 500},
+	.y	= {100, 97, 95, 93, 91, 90},
+	.cols	= 6,
 };
 
 static struct pc_sf_lut mmi_df_pc_sf = {
@@ -178,44 +182,48 @@ static struct pc_sf_lut mmi_df_pc_sf = {
 };
 
 static struct pc_temp_ocv_lut mmi_df_pc_temp_ocv = {
-	.rows		= 25,
-	.cols		= 1,
-	.temp		= {25},
+	.rows		= 29,
+	.cols		= 3,
+	.temp		= {-10, 23, 60},
 	.percent	= {100, 95, 90, 85, 80, 75, 70, 65, 60, 55,
 				50, 45, 40, 35, 30, 25, 20, 15, 10,
-				5, 4, 3, 2, 1, 0
+				9, 8, 7, 6, 5, 4, 3, 2, 1, 0
 	},
 	.ocv		= {
-			{4350},
-			{4275},
-			{4223},
-			{4169},
-			{4115},
-			{4065},
-			{4009},
-			{3963},
-			{3922},
-			{3885},
-			{3854},
-			{3828},
-			{3805},
-			{3786},
-			{3769},
-			{3753},
-			{3732},
-			{3693},
-			{3660},
-			{3600},
-			{3567},
-			{3514},
-			{3435},
-			{3322},
-			{3050}
+			{4321, 4321, 4321},
+			{4270, 4270, 4270},
+			{4212, 4212, 4212},
+			{4155, 4155, 4155},
+			{4099, 4099, 4099},
+			{4046, 4046, 4046},
+			{3994, 3994, 3994},
+			{3945, 3945, 3945},
+			{3904, 3904, 3904},
+			{3868, 3868, 3868},
+			{3837, 3837, 3837},
+			{3810, 3810, 3810},
+			{3786, 3786, 3786},
+			{3765, 3765, 3765},
+			{3746, 3746, 3746},
+			{3729, 3729, 3729},
+			{3707, 3707, 3707},
+			{3674, 3674, 3674},
+			{3645, 3645, 3645},
+			{3639, 3639, 3639},
+			{3630, 3630, 3630},
+			{3618, 3618, 3618},
+			{3605, 3605, 3605},
+			{3585, 3585, 3585},
+			{3555, 3555, 3555},
+			{3507, 3507, 3507},
+			{3441, 3441, 3441},
+			{3348, 3348, 3348},
+			{3200, 3200, 3200}
 	},
 };
 
 static struct pm8921_bms_battery_data  mmi_df_metering_data = {
-	.fcc			= 1750,
+	.fcc			= 1775,
 	.fcc_temp_lut		= &mmi_df_fcc_temp,
 	.fcc_sf_lut		= &mmi_df_fcc_sf,
 	.pc_temp_ocv_lut	= &mmi_df_pc_temp_ocv,
@@ -229,7 +237,7 @@ static struct pm8921_charger_battery_data mmi_df_charging_data = {
 	.term_current			= 80,
 	.cool_temp			= 0,
 	.warm_temp			= 45,
-	.max_bat_chg_current		= 1750,
+	.max_bat_chg_current		= 1775,
 	.cool_bat_chg_current		= 0,
 	.warm_bat_chg_current		= 0,
 	.cool_bat_voltage		= 3800,
