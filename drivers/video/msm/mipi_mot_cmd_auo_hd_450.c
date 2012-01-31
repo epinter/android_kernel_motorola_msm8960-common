@@ -124,7 +124,7 @@ static int __init mipi_cmd_mot_auo_qhd_450_init(void)
 	pinfo->bl_max = 100;
 	pinfo->bl_min = 1;
 	pinfo->fb_num = 2;
-	pinfo->clk_rate = 400000000;
+	pinfo->clk_rate = 460000000;
 	pinfo->lcd.vsync_enable = TRUE;
 	pinfo->lcd.hw_vsync_mode = TRUE;
 	pinfo->lcd.v_back_porch = 10;
