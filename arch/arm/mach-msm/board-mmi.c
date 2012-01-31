@@ -2366,6 +2366,52 @@ static void __init mot_gpiomux_init(unsigned kp_mode)
 			ARRAY_SIZE(msm8960_batt_eprom_configs));
 }
 
+static void __init mot_init_factory_kill(void)
+{
+	struct device_node *chosen;
+	int len = 0, enable = 1, rc;
+	const void *prop;
+
+	chosen = of_find_node_by_path("/Chosen@0");
+	if (!chosen)
+		goto out;
+
+	prop = of_get_property(chosen, "factory_kill_disable", &len);
+	if (prop && (len == sizeof(u8)) && *(u8 *)prop)
+		enable = 0;
+
+	rc = gpio_request(75, "Factory Kill Disable");
+	if (rc) {
+		pr_err("%s: GPIO request failure\n", __func__);
+		goto putnode;
+	}
+
+	rc = gpio_direction_output(75, enable);
+	if (rc) {
+		pr_err("%s: GPIO configuration failure\n", __func__);
+		goto gpiofree;
+	}
+
+	rc = gpio_export(75, 0);
+	if (rc) {
+		pr_err("%s: GPIO export failure\n", __func__);
+		goto gpiofree;
+	}
+
+	pr_info("%s: Factory Kill Circuit: %s\n", __func__,
+		(enable ? "enabled" : "disabled"));
+
+	return;
+
+gpiofree:
+	gpio_free(75);
+putnode:
+	of_node_put(chosen);
+out:
+	return;
+}
+
+
 static int mot_tcmd_export_gpio(void)
 {
 	int rc;
@@ -2384,47 +2430,6 @@ static int mot_tcmd_export_gpio(void)
 	if (rc) {
 		pr_err("export USB_HOST_EN failed, rc=%d\n", rc);
 		return -ENODEV;
-	}
-	rc = gpio_request(75, "Factory Kill Disable");
-	if (rc) {
-		pr_err("request Factory Kill Disable failed, rc=%d\n", rc);
-		return -ENODEV;
-	}
-	/* Set Factory Kill Disable to OUTPUT/LOW to disable the circuitry that
-	 * powers down upon factory cable removal.
-	 *
-	 * Disabling is only needed for HW revision 'A' hardware:
-	 * Teufel:   {'A', "M1",   0x2100}
-	 * Asanti:   {'A', "M1",   0x2100}
-	 * Becker:   {'A', "M1",   0x2100}
-	 * Qinara:   {'A', "P1",   0x8100}
-	 * Vanquish: {'A', "P1",   0x8100}
-	 * Volta:    {'A', "M1",   0x2100}
-	 */
-	if ((system_rev == HWREV_M1) || (system_rev == HWREV_P1)) {
-		pr_info("Disabling Factory Kill.\n");
-		rc = gpio_direction_output(75, 0);
-		if (rc) {
-			pr_err("Factory Kill Disable, output error: %d\n", rc);
-			return -ENODEV;
-		}
-		rc = gpio_export(75, 0);
-		if (rc) {
-			pr_err("Factory Kill Disable, export error: %d\n", rc);
-			return -ENODEV;
-		}
-	} else {
-		pr_info("Enabling Factory Kill.\n");
-		rc = gpio_direction_output(75, 1);
-		if (rc) {
-			pr_err("Factory Kill Enable, output error: %d\n", rc);
-			return -ENODEV;
-		}
-		rc = gpio_export(75, 0);
-		if (rc) {
-			pr_err("Factory Kill Enable, export error: %d\n", rc);
-			return -ENODEV;
-		}
 	}
 
 	rc = gpio_request(PM8921_GPIO_PM_TO_SYS(36), "SIM_DET");
@@ -2564,6 +2569,7 @@ static void __init msm8960_mmi_init(void)
 	pm8921_mpps_w1_adjust_from_dt();
 	pm8921_gpio_mpp_init(pm8921_gpios, pm8921_gpios_size,
 							pm8921_mpps, ARRAY_SIZE(pm8921_mpps));
+	mot_init_factory_kill();
 	msm8960_init_usb();
 
 #ifdef CONFIG_EMU_DETECTION
