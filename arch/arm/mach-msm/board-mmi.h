@@ -21,6 +21,7 @@
 #include <linux/power/mmi-battery.h>
 #include <linux/ct406.h>
 #include <linux/i2c.h>
+#include <linux/of.h>
 
 #define _HWREV(x)	(x)
 #define HWREV_DEF	_HWREV(0xFF00)
@@ -52,15 +53,11 @@ extern int __init melfas_ts_platform_init(void);
 extern struct lm3532_backlight_platform_data mp_lm3532_pdata;
 #endif
 
-#ifdef CONFIG_TOUCHSCREEN_CYTTSP3
-extern struct touch_platform_data ts_platform_data_cyttsp3;
-extern void mot_setup_touch_cyttsp3(void);
-#endif
+extern int mot_setup_touch_cyttsp3(struct i2c_board_info *info,
+		struct device_node *node);
 
-#ifdef CONFIG_TOUCHSCREEN_ATMXT
-extern void mot_setup_touch_atmxt(void);
-extern struct touch_platform_data ts_platform_data_atmxt;
-#endif
+extern int mot_setup_touch_atmxt(struct i2c_board_info *info,
+		struct device_node *node);
 
 extern struct pm8xxx_keypad_platform_data mmi_keypad_data;
 extern struct pm8xxx_keypad_platform_data mmi_qwerty_keypad_data;
@@ -86,6 +83,8 @@ extern struct mmi_battery_list mmi_batts;
 
 int __init ct406_init(struct i2c_board_info *info, struct device_node *child);
 void __init mmi_vibrator_init(void);
+int __init mapphone_touch_panel_init(struct i2c_board_info *i2c_info,
+		struct device_node *node);
 
 #define  MMI_KEYPAD_RESET	0x1
 #define  MMI_KEYPAD_SLIDER	0x2

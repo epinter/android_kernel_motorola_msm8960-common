@@ -2115,6 +2115,7 @@ static __init void register_i2c_devices_from_dt(int bus)
 		struct i2c_board_info info;
 		int len = 0;
 		const void *prop;
+		int err = 0;
 
 		memset(&info, 0, sizeof(struct i2c_board_info));
 
@@ -2161,8 +2162,7 @@ static __init void register_i2c_devices_from_dt(int bus)
 			/* must match type identifiers defined in DT schema */
 			switch (*(u32 *)prop) {
 			case 0x00040002: /* Cypress_CYTTSP3 */
-				info.platform_data = &ts_platform_data_cyttsp3;
-				mot_setup_touch_cyttsp3();
+				err = mot_setup_touch_cyttsp3(&info, child);
 				break;
 
 			case 0x000B0003: /* National_LM3559 */
@@ -2192,8 +2192,7 @@ static __init void register_i2c_devices_from_dt(int bus)
 				break;
 
 			case 0x00260001: /* Atmel_MXT */
-				info.platform_data = &ts_platform_data_atmxt;
-				mot_setup_touch_atmxt();
+				err = mot_setup_touch_atmxt(&info, child);
 				break;
 
 			case 0x00270000: /* Melfas_MMS100 */
@@ -2217,7 +2216,8 @@ static __init void register_i2c_devices_from_dt(int bus)
 			}
 		}
 
-		i2c_register_board_info(bus, &info, 1);
+		if (err >= 0)
+			i2c_register_board_info(bus, &info, 1);
 	}
 
 	of_node_put(parent);
