@@ -28,6 +28,8 @@
 
 #include <linux/melfas100_ts.h>
 
+#define	TS_I2C_MAX_RETRY	10
+
 #define TS_MAX_Z_TOUCH	255
 #define TS_MAX_W_TOUCH	100
 #define TS_MAX_X_COORD	700
@@ -87,29 +89,73 @@ static void melfas_ts_early_suspend(struct early_suspend *h);
 static void melfas_ts_late_resume(struct early_suspend *h);
 #endif
 
+static int melfas_ts_i2c_write(struct i2c_client *clnt, uint8_t *buf, int size)
+{
+	int	err = 0;
+	int	i = 0;
+
+	for (i = 0; i < TS_I2C_MAX_RETRY; i++) {
+		err = i2c_master_send(clnt, buf, size);
+		if (err < 0) {
+			printk(KERN_ERR
+				"%s: %s %d, failed with error code %d.\n",
+				__func__, "On I2C write attempt", i, err);
+		} else if (err < size) {
+			printk(KERN_ERR
+				"%s: %s %d, wrote %d bytes instead of %d.\n",
+				__func__, "On I2C write attempt", i, err,
+				size);
+			err = -EBADE;
+		} else {
+			break;
+		}
+	}
+	return err;
+}
+static int melfas_ts_i2c_read(struct i2c_client *clnt, uint8_t *buf, int size)
+{
+	int	err = 0;
+	int	i = 0;
+
+	for (i = 0; i < TS_I2C_MAX_RETRY; i++) {
+		err = i2c_master_recv(clnt, buf, size);
+		if (err < 0) {
+			printk(KERN_ERR
+				"%s: %s %d, failed with error code %d.\n",
+				__func__, "On I2C read attempt", i, err);
+		} else if (err < size) {
+			printk(KERN_ERR
+				"%s: %s %d, wrote %d bytes instead of %d.\n",
+				__func__, "On I2C read attempt", i, err,
+				size);
+			err = -EBADE;
+		} else {
+			break;
+		}
+	}
+	return err;
+}
 static void melfas_ts_get_data(struct melfas_ts_data *ts)
 {
 	int ret = 0, i;
 	uint8_t buf[TS_READ_REGS_LEN];
-	int read_num, finger_id;
+	uint8_t read_num, finger_id;
 
-	ret = i2c_smbus_read_i2c_block_data(ts->client,
-			 TS_INPUT_EVENT_PKT_SZ, 1, (u8 *)buf);
+	buf[0] = TS_INPUT_EVENT_PKT_SZ;
+	ret = melfas_ts_i2c_write(ts->client, buf, 1);
 	if (ret < 0) {
 		pr_err("%s: i2c failed\n", __func__);
 		return ;
 	}
-
-	read_num = buf[0];
-
+	ret = melfas_ts_i2c_read(ts->client, (uint8_t *)&read_num, 1);
 	if (read_num > 0) {
-
-		ret = i2c_smbus_read_i2c_block_data(ts->client,
-			 TS_INPUT_EVENT_INFO, read_num, (u8 *)buf);
+		buf[0] = TS_INPUT_EVENT_INFO;
+		ret = melfas_ts_i2c_write(ts->client, buf, 1);
 		if (ret < 0) {
 			pr_err("%s: i2c failed\n", __func__);
 			return ;
 		}
+		ret = melfas_ts_i2c_read(ts->client, (uint8_t *)buf, read_num);
 
 		for (i = 0; i < read_num; i = i+6) {
 			finger_id = (buf[i] & 0x0F)-1;
