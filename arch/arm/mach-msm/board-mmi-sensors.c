@@ -76,6 +76,12 @@ static int __init ct406_init(void)
 		goto fail;
 	}
 
+	ret = gpio_export(CT406_IRQ_GPIO, 0);
+	if (ret) {
+		pr_err("ct406 gpio_export failed: %d\n", ret);
+		goto fail;
+	}
+
 	mp_ct406_pdata.irq = MSM_GPIO_TO_INT(CT406_IRQ_GPIO);
 
 	return 0;
