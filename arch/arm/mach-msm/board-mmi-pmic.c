@@ -353,17 +353,6 @@ int64_t read_mmi_battery_bms(int64_t battery_id,
 	return 0;
 }
 
-enum pm8921_btm_state {
-	BTM_NORM = 0,
-	BTM_COLD,
-	BTM_COOL_HV,
-	BTM_COOL_LV,
-	BTM_WARM_HV,
-	BTM_WARM_LV,
-	BTM_HOT,
-	BTM_POWER_OFF,
-};
-
 static enum pm8921_btm_state btm_state;
 
 #define TEMP_HYSTERISIS_DEGC 2
@@ -372,7 +361,7 @@ static enum pm8921_btm_state btm_state;
 #define TEMP_COLD -20
 static int64_t temp_range_check(int batt_temp, int batt_mvolt,
 				struct pm8921_charger_battery_data *data,
-				int64_t *enable)
+				int64_t *enable, enum pm8921_btm_state *state)
 {
 	int64_t chrg_enable = 0;
 	int64_t btm_change = 0;
@@ -381,9 +370,7 @@ static int64_t temp_range_check(int batt_temp, int batt_mvolt,
 		return btm_change;
 
 	/* Check for a State Change */
-	if (btm_state == BTM_POWER_OFF) {
-		btm_change = 2;
-	} else if (btm_state == BTM_NORM) {
+	if (btm_state == BTM_NORM) {
 		if (batt_temp >= (signed int)(data->warm_temp)) {
 			data->cool_temp =
 				data->warm_temp - TEMP_HYSTERISIS_DEGC;
@@ -412,10 +399,7 @@ static int64_t temp_range_check(int batt_temp, int batt_mvolt,
 			btm_change = 1;
 		}
 	} else if (btm_state == BTM_COLD) {
-		if (batt_temp <= TEMP_COLD - TEMP_OVERSHOOT) {
-			btm_state = BTM_POWER_OFF;
-			btm_change = 2;
-		} else if (batt_temp >= TEMP_COLD + TEMP_HYSTERISIS_DEGC) {
+		if (batt_temp >= TEMP_COLD + TEMP_HYSTERISIS_DEGC) {
 			data->warm_temp =
 				data->cool_temp + TEMP_HYSTERISIS_DEGC;
 			data->cool_temp = TEMP_COLD;
@@ -518,10 +502,7 @@ static int64_t temp_range_check(int batt_temp, int batt_mvolt,
 			btm_change = 1;
 		}
 	} else if (btm_state == BTM_HOT) {
-		if (batt_temp >= TEMP_HOT + TEMP_OVERSHOOT) {
-			btm_state = BTM_POWER_OFF;
-			btm_change = 2;
-		} else if (batt_temp <= TEMP_HOT - TEMP_HYSTERISIS_DEGC) {
+		if (batt_temp <= TEMP_HOT - TEMP_HYSTERISIS_DEGC) {
 			data->cool_temp =
 				data->warm_temp - TEMP_HYSTERISIS_DEGC;
 			data->warm_temp = TEMP_HOT;
@@ -538,6 +519,7 @@ static int64_t temp_range_check(int batt_temp, int batt_mvolt,
 	}
 
 	*enable = chrg_enable;
+	*state = btm_state;
 
 	return btm_change;
 }

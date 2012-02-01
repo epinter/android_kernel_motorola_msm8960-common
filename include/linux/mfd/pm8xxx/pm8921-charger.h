@@ -114,7 +114,17 @@ enum pm8921_alarm_state {
 	PM_BATT_ALARM_NORMAL,
 	PM_BATT_ALARM_WARNING,
 	PM_BATT_ALARM_SHUTDOWN,
-	PM_BATT_ALARM_INVALID
+	PM_BATT_ALARM_OV
+};
+
+enum pm8921_btm_state {
+	BTM_NORM = 0,
+	BTM_COLD,
+	BTM_COOL_HV,
+	BTM_COOL_LV,
+	BTM_WARM_HV,
+	BTM_WARM_LV,
+	BTM_HOT,
 };
 #endif
 
@@ -229,7 +239,8 @@ struct pm8921_charger_platform_data {
 	unsigned int			step_charge_voltage;
 	int64_t (*temp_range_cb) (int batt_temp, int batt_mvolt,
 				  struct pm8921_charger_battery_data *data,
-				  int64_t *enable);
+				  int64_t *enable,
+				  enum pm8921_btm_state *state);
 	unsigned int			batt_alarm_delta;
 	unsigned int			lower_battery_threshold;
 #endif
