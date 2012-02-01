@@ -3506,6 +3506,15 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 					" for PMIC ID\n");
 				goto remove_otg;
 			}
+#ifdef CONFIG_EMU_DETECTION
+			/*
+			 * This is a workaround for the PMIC ID IRQ constantly
+			 * firing after disconnecting a cable. The IRQ is not
+			 * used by any MMI devices so we just disable it for
+			 * now.
+			 */
+			disable_irq(motg->pdata->pmic_id_irq);
+#endif
 		} else {
 			ret = -ENODEV;
 			dev_err(&pdev->dev, "PMIC IRQ for ID notifications"
