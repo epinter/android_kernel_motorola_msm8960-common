@@ -153,7 +153,7 @@ static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 	PM8XXX_MPP_INIT(PM8XXX_AMUX_MPP_8, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH8,
 								DOUT_CTRL_LOW),
 	PM8XXX_MPP_INIT(11, D_BI_DIR, PM8921_MPP_DIG_LEVEL_S4, BI_PULLUP_1KOHM),
-	PM8XXX_MPP_INIT(12, D_BI_DIR, PM8921_MPP_DIG_LEVEL_L17, BI_PULLUP_1KOHM),
+	PM8XXX_MPP_INIT(12, D_BI_DIR, PM8921_MPP_DIG_LEVEL_L17, BI_PULLUP_OPEN),
 };
 
 static u32 fdt_start_address; /* flattened device tree address */
@@ -1970,6 +1970,36 @@ static __init u8 dt_get_u8_or_die(struct device_node *node, const char *name)
 	return *(u8 *)prop;
 }
 
+/* Temporary Workaround to get charging back working on all devices */
+static __init void pm8921_mpps_w1_adjust_from_dt(void)
+{
+	struct device_node *chosen;
+	int len = 0;
+	const void *prop;
+	int i;
+
+	chosen = of_find_node_by_path("/Chosen@0");
+	if (!chosen)
+		goto out;
+
+	prop = of_get_property(chosen, "old_w1_layout", &len);
+	if (prop && (len == sizeof(u8)) && *(u8 *)prop) {
+		for (i = 0; i < ARRAY_SIZE(pm8921_mpps); i++) {
+			if (pm8921_mpps[i].mpp == PM8921_MPP_PM_TO_SYS(12)) {
+				pm8921_mpps[3].config.control =
+					PM8XXX_MPP_BI_PULLUP_1KOHM;
+				pr_err("MPP 12 Turn on 1K Pullup\n");
+			}
+		}
+	}
+
+
+	of_node_put(chosen);
+
+out:
+	return;
+}
+
 static __init void load_pm8921_gpios_from_dt(void)
 {
 	struct device_node *parent, *child;
@@ -2612,6 +2642,7 @@ static void __init msm8960_mmi_init(void)
 	msm8960_add_common_devices(msm_fb_detect_panel);
 
 	load_pm8921_gpios_from_dt();
+	pm8921_mpps_w1_adjust_from_dt();
 	pm8921_gpio_mpp_init(pm8921_gpios, pm8921_gpios_size,
 							pm8921_mpps, ARRAY_SIZE(pm8921_mpps));
 	msm8960_init_usb();
