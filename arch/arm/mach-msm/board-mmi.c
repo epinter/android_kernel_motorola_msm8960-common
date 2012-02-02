@@ -213,7 +213,7 @@ static char serialno[SERIALNO_MAX_LEN + 1];
 int __init board_serialno_init(char *s)
 {
 	strncpy(serialno, s, SERIALNO_MAX_LEN);
-	boot_mode[SERIALNO_MAX_LEN] = '\0';
+	serialno[SERIALNO_MAX_LEN] = '\0';
 	return 1;
 }
 __setup("androidboot.serialno=", board_serialno_init);
