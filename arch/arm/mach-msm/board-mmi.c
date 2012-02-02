@@ -2136,11 +2136,20 @@ static __init void register_i2c_devices_from_dt(int bus)
 		/*
 		 * HACK: Teufel has different i2c devices depending on the
 		 * display.
+		 *
+		 * teufel-hack possible values as defined in device tree
+		 * schema:
+		 *	0 - don't care
+		 *	1 - AUO display
+		 *	2 - SMD display
 		 */
 		prop = of_get_property(child, "teufel-hack", &len);
-		if (prop && (len == sizeof(u8)) && *(u8 *)prop)
+		if (prop && (len == sizeof(u8)) && *(u8 *)prop) {
 			if (is_smd() && (*(u8 *)prop != 2))
 				continue;
+			if (!is_smd() && (*(u8 *)prop != 1))
+				continue;
+		}
 
 		prop = of_get_property(child, "platform_data", &len);
 		if (prop && len) {
