@@ -1748,84 +1748,6 @@ static struct msm_pm_boot_platform_data msm_pm_boot_pdata __initdata = {
 	.mode = MSM_PM_BOOT_CONFIG_TZ,
 };
 
-#ifdef CONFIG_I2C
-
-enum i2c_type {
-	TOUCHSCREEN_MELFAS100_TS = 0,
-	TOUCHSCREEN_CYTTSP3,
-	BACKLIGHT_LM3532,
-};
-
-struct i2c_registry {
-	unsigned				enabled;
-	int                    bus;
-	struct i2c_board_info *info;
-	int                    len;
-};
-
-#ifdef CONFIG_BACKLIGHT_LM3532
-static struct i2c_board_info lm3532_i2c_boardinfo[] __initdata = {
-	{
-		I2C_BOARD_INFO("lm3532", 0x38),
-		.platform_data = &mp_lm3532_pdata,
-	},
-};
-#endif
-
-#ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
-static struct i2c_board_info i2c_bus3_melfas_ts_info[] __initdata = {
-	{
-		I2C_BOARD_INFO(MELFAS_TS_NAME, 0x48),
-		.irq = MSM_GPIO_TO_INT(MELFAS_TOUCH_INT_GPIO),
-		.platform_data = &touch_pdata,
-	},
-};
-#endif
-
-#ifdef CONFIG_TOUCHSCREEN_CYTTSP3
-static struct i2c_board_info cyttsp_i2c_boardinfo[] __initdata = {
-	{
-		I2C_BOARD_INFO(CY3_I2C_NAME, 0x3B),
-		.platform_data = &ts_platform_data_cyttsp3,
-		.irq = MSM_GPIO_TO_INT(CYTT_GPIO_INTR),
-	},
-};
-#endif
-
-static struct i2c_registry msm8960_i2c_devices[] __initdata = {
-#ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
-	[TOUCHSCREEN_MELFAS100_TS] = {
-		0,
-		MSM_8960_GSBI3_QUP_I2C_BUS_ID,
-		i2c_bus3_melfas_ts_info,
-		ARRAY_SIZE(i2c_bus3_melfas_ts_info),
-	},
-#endif
-#ifdef CONFIG_TOUCHSCREEN_CYTTSP3
-	[TOUCHSCREEN_CYTTSP3] = {
-		0,
-		MSM_8960_GSBI3_QUP_I2C_BUS_ID,
-		cyttsp_i2c_boardinfo,
-		ARRAY_SIZE(cyttsp_i2c_boardinfo),
-	},
-#endif
-#ifdef CONFIG_BACKLIGHT_LM3532
-	[BACKLIGHT_LM3532] = {
-		0,
-		MSM_8960_GSBI10_QUP_I2C_BUS_ID,
-		lm3532_i2c_boardinfo,
-		ARRAY_SIZE(lm3532_i2c_boardinfo),
-	},
-#endif
-};
-
-#define ENABLE_I2C_DEVICE(device)                        \
-	do {                                             \
-		msm8960_i2c_devices[device].enabled = 1; \
-	} while (0)
-
-#endif /* CONFIG_I2C */
-
 static void __init set_emu_detection_resource(const char *res_name, int value);
 
 static __init void config_emu_det_from_dt(void)
@@ -2211,6 +2133,15 @@ static __init void register_i2c_devices_from_dt(int bus)
 		if (prop && (len == sizeof(u8)))
 			info.irq = MSM_GPIO_TO_INT(*(u8 *)prop);
 
+		/*
+		 * HACK: Teufel has different i2c devices depending on the
+		 * display.
+		 */
+		prop = of_get_property(child, "teufel-hack", &len);
+		if (prop && (len == sizeof(u8)) && *(u8 *)prop)
+			if (is_smd() && (*(u8 *)prop != 2))
+				continue;
+
 		prop = of_get_property(child, "platform_data", &len);
 		if (prop && len) {
 			info.platform_data = kmemdup(prop, len, GFP_KERNEL);
@@ -2289,18 +2220,6 @@ out:
 
 static void __init register_i2c_devices(void)
 {
-#ifdef CONFIG_I2C
-	int i;
-
-	/* Run the array and install devices as appropriate */
-	for (i = 0; i < ARRAY_SIZE(msm8960_i2c_devices); ++i) {
-		if (msm8960_i2c_devices[i].enabled)
-			i2c_register_board_info(msm8960_i2c_devices[i].bus,
-						msm8960_i2c_devices[i].info,
-						msm8960_i2c_devices[i].len);
-	}
-#endif
-
 	register_i2c_devices_from_dt(MSM_8960_GSBI3_QUP_I2C_BUS_ID);
 	register_i2c_devices_from_dt(MSM_8960_GSBI4_QUP_I2C_BUS_ID);
 	register_i2c_devices_from_dt(MSM_8960_GSBI10_QUP_I2C_BUS_ID);
@@ -2624,14 +2543,6 @@ static void __init msm8960_mmi_init(void)
 	msm8960_spm_init();
 	msm8960_init_buses();
 
-#ifdef CONFIG_TOUCHSCREEN_CYTTSP3
-	if (msm8960_i2c_devices[TOUCHSCREEN_CYTTSP3].enabled)
-		mot_setup_touch_cyttsp3();
-#endif
-#ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
-	if (msm8960_i2c_devices[TOUCHSCREEN_MELFAS100_TS].enabled)
-		melfas_ts_platform_init();
-#endif
 #ifdef CONFIG_VIB_TIMED
 	mmi_vibrator_init();
 #endif
@@ -2748,28 +2659,13 @@ static void __init mmi_init_early(void)
 	}
 }
 
-static __init void teufel_init(void)
-{
-	/* need panel_name early so that is_smd below will be correct */
-	load_pm8921_gpios_from_dt();
-
-	if (is_smd()) {
-		ENABLE_I2C_DEVICE(TOUCHSCREEN_MELFAS100_TS);
-	} else {
-		ENABLE_I2C_DEVICE(TOUCHSCREEN_CYTTSP3);
-		ENABLE_I2C_DEVICE(BACKLIGHT_LM3532);
-	}
-
-	msm8960_mmi_init();
-}
-
 MACHINE_START(TEUFEL, "Teufel")
 	.map_io = msm8960_map_io,
 	.reserve = msm8960_reserve,
 	.init_irq = msm8960_init_irq,
 	.handle_irq = gic_handle_irq,
 	.timer = &msm_timer,
-	.init_machine = teufel_init,
+	.init_machine = msm8960_mmi_init,
 	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
 MACHINE_END
