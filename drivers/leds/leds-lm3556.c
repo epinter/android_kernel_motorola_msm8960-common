@@ -28,7 +28,7 @@
 #define LM3556_MAX_RW_RETRIES	5
 #define LM3556_I2C_RETRY_DELAY	10
 #define LM3556_TORCH_STEP	32
-#define LM3556_STROBE_STEP	24
+#define LM3556_STROBE_STEP	16
 
 
 #define LM3556_SI_REV_AND_FILTER_TIME_REG	0x00
@@ -189,8 +189,73 @@ static ssize_t ld_lm3556_registers_store(struct device *dev,
 static DEVICE_ATTR(registers, 0644, ld_lm3556_registers_show,
 		ld_lm3556_registers_store);
 
+int lm3556_enable_strobe_mode(void)
+{
+	int err;
+	err = lm3556_write_reg(LM3556_ENABLE_REG,
+				torch_data->pdata->flash_enable_val);
+	if (err) {
+		pr_err("%s: Writing to 0x%X failed %i\n",
+				__func__, LM3556_ENABLE_REG,
+				err);
+		err = -EIO;
+	}
 
-int lm3556_led_write(unsigned long flash_val, uint8_t mode)
+	err = lm3556_write_reg(LM3556_FLASH_FEAT_REG,
+				torch_data->pdata->flash_features_reg_def);
+
+	if (err) {
+		pr_err("%s: Writing to 0x%X failed %i\n",
+				__func__,
+				LM3556_FLASH_FEAT_REG,
+				err);
+		return -EIO;
+	}
+
+	return err;
+}
+EXPORT_SYMBOL(lm3556_enable_strobe_mode);
+
+int lm3556_enable_torch_mode(void)
+
+{
+	int err;
+	err = lm3556_write_reg(LM3556_ENABLE_REG,
+				torch_data->pdata->torch_enable_val);
+	if (err) {
+		pr_err("%s: Writing to 0x%X failed %i\n",
+				__func__, LM3556_ENABLE_REG,
+				err);
+		err = -EIO;
+	}
+
+	return err;
+}
+EXPORT_SYMBOL(lm3556_enable_torch_mode);
+
+
+int lm3556_disable_mode(void)
+{
+	int err;
+	uint8_t temp_val;
+	uint8_t val;
+
+	err = lm3556_read_reg(LM3556_ENABLE_REG, &val);
+	if (err) {
+		pr_err("%s: Reading 0x%X failed %i\n",
+				__func__, LM3556_ENABLE_REG,
+				err);
+		return -EIO;
+	}
+	/* Do not turn off the message indicator if on */
+	temp_val = (val & 0x01);
+	err = lm3556_write_reg(LM3556_ENABLE_REG, temp_val);
+	return err;
+}
+EXPORT_SYMBOL(lm3556_disable_mode);
+
+
+static int lm3556_led_write(unsigned long flash_val, uint8_t mode)
 {
 	int err;
 	uint8_t err_flags;
@@ -231,33 +296,14 @@ int lm3556_led_write(unsigned long flash_val, uint8_t mode)
 				return -EIO;
 			}
 
-			err = lm3556_write_reg(LM3556_ENABLE_REG,
-					torch_data->pdata->torch_enable_val);
-			if (err) {
-				pr_err("%s: Writing to 0x%X failed %i\n",
-						__func__, LM3556_ENABLE_REG,
-						err);
-				return -EIO;
-			}
+			err = lm3556_enable_torch_mode();
+			if (err)
+				return err;
 
 		} else {
-			err = lm3556_read_reg(LM3556_ENABLE_REG, &val);
-			if (err) {
-				pr_err("%s: Reading 0x%X failed %i\n",
-						__func__, LM3556_ENABLE_REG,
-						err);
-			return -EIO;
-			}
-			/* Do not turn off the message indicator if on */
-			temp_val = (val & 0x01);
-			err = lm3556_write_reg(LM3556_ENABLE_REG,
-					temp_val);
-			if (err) {
-				pr_err("%s: Writing to 0x%X failed %i\n",
-						__func__,
-						LM3556_ENABLE_REG, err);
-				return -EIO;
-			}
+			err = lm3556_disable_mode();
+			if (err)
+				return err;
 		}
 		torch_data->flash_light_brightness = flash_val;
 		break;
@@ -312,52 +358,16 @@ int lm3556_led_write(unsigned long flash_val, uint8_t mode)
 				return -EIO;
 			}
 
-			err = lm3556_write_reg(LM3556_ENABLE_REG,
-					torch_data->pdata->flash_enable_val);
-			if (err) {
-				pr_err("%s: Writing to 0x%X failed %i\n",
-						__func__,
-						LM3556_ENABLE_REG, err);
-				return -EIO;
-			}
-
-			err = lm3556_write_reg(LM3556_FLASH_FEAT_REG,
-				torch_data->pdata->flash_features_reg_def);
-
-			if (err) {
-				pr_err("%s: Writing to 0x%X failed %i\n",
-						__func__,
-						LM3556_FLASH_FEAT_REG,
-						err);
-				return -EIO;
-			}
 		} else {
-			err = lm3556_read_reg(LM3556_ENABLE_REG,
-					&val);
-			if (err) {
-				pr_err("%s: Reading 0x%X failed %i\n",
-						__func__, LM3556_ENABLE_REG,
-						err);
-				return -EIO;
-			}
-			/* Do not turn off the message indicator if on */
-			temp_val = (val & 0x01);
-			lm3556_write_reg(LM3556_ENABLE_REG,
-					temp_val);
-			if (err) {
-				pr_err("%s: Writing to 0x%X failed %i\n",
-						__func__, LM3556_ENABLE_REG,
-						err);
-				return -EIO;
-			}
+			err = lm3556_disable_mode();
+			if (err)
+				return err;
 		}
-
 		torch_data->camera_strobe_brightness = flash_val;
 		break;
 	}
 	return 0;
 }
-EXPORT_SYMBOL(lm3556_led_write);
 
 static ssize_t lm3556_torch_show(struct device *dev,
 		struct device_attribute *attr, char *buf)

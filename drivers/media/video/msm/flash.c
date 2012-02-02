@@ -204,18 +204,16 @@ static int msm_camera_flash_led(
 		break;
 
 	case MSM_CAMERA_LED_HIGH:
-		rc = lm3556_led_write(LM3556_MED_LOW_TORCH_INTENSITY,
-					LM3556_TORCH_MODE);
+		rc = lm3556_enable_strobe_mode();
 		break;
 
 	case MSM_CAMERA_LED_LOW:
-		rc = lm3556_led_write(LM3556_LOW_TORCH_INTENSITY,
-					LM3556_TORCH_MODE);
+		rc = lm3556_enable_torch_mode();
 		break;
 
 	case MSM_CAMERA_LED_RELEASE:
 	case MSM_CAMERA_LED_OFF:
-		rc = lm3556_led_write(LM3556_TORCH_OFF, LM3556_TORCH_MODE);
+		rc = lm3556_disable_mode();
 		break;
 
 	default:
