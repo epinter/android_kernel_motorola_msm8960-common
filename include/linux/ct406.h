@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Motorola Mobility, Inc.
+ * Copyright (C) 2011-2012 Motorola Mobility, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -33,19 +33,19 @@ struct ct406_platform_data {
 	u16	irq;
 	u8	regulator_name[CT406_REGULATOR_NAME_LENGTH];
 	u8	prox_samples_for_noise_floor;
-	u16	prox_saturation_threshold;
-	u16	prox_covered_offset;
-	u16	prox_uncovered_offset;
-	u16	prox_recalibrate_offset;
+
+	u16	ct405_prox_saturation_threshold;
+	u16	ct405_prox_covered_offset;
+	u16	ct405_prox_uncovered_offset;
+	u16	ct405_prox_recalibrate_offset;
+
+	u16	ct406_prox_saturation_threshold;
+	u16	ct406_prox_covered_offset;
+	u16	ct406_prox_uncovered_offset;
+	u16	ct406_prox_recalibrate_offset;
 	u8	als_lens_transmissivity;
 } __attribute__ ((packed));
 
 #endif	/* __KERNEL__ */
-
-#define CT406_IOCTL_BASE		0xA4
-#define CT406_IOCTL_GET_PROX_ENABLE	_IOR(CT406_IOCTL_BASE, 0x00, char)
-#define CT406_IOCTL_SET_PROX_ENABLE	_IOW(CT406_IOCTL_BASE, 0x01, char)
-#define CT406_IOCTL_GET_LIGHT_ENABLE	_IOR(CT406_IOCTL_BASE, 0x02, char)
-#define CT406_IOCTL_SET_LIGHT_ENABLE	_IOW(CT406_IOCTL_BASE, 0x03, char)
 
 #endif	/* _LINUX_CT406_H__ */

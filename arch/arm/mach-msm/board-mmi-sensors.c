@@ -1,7 +1,7 @@
 /*
  * linux/arch/arm/mach-msm/board-8960-sensors.c
  *
- * Copyright (C) 2009-2011 Motorola Mobility, Inc.
+ * Copyright (C) 2009-2012 Motorola Mobility, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -47,7 +47,6 @@ static struct gpiomux_setting ct406_reset_active_config = {
 };
 
 static struct msm_gpiomux_config ct406_irq_gpio_config = {
-        .gpio = CT406_IRQ_GPIO,
         .settings = {
                 [GPIOMUX_SUSPENDED] = &ct406_reset_suspend_config,
                 [GPIOMUX_ACTIVE] = &ct406_reset_active_config,
@@ -57,43 +56,86 @@ static struct msm_gpiomux_config ct406_irq_gpio_config = {
 struct ct406_platform_data mp_ct406_pdata = {
 	.regulator_name = "",
 	.prox_samples_for_noise_floor = 0x05,
-	.prox_saturation_threshold = 0x0208,
-	.prox_covered_offset = 0x008c,
-	.prox_uncovered_offset = 0x0046,
-	.prox_recalibrate_offset = 0x0046,
+	.ct405_prox_saturation_threshold = 0x0208,
+	.ct405_prox_covered_offset = 0x008c,
+	.ct405_prox_uncovered_offset = 0x0046,
+	.ct405_prox_recalibrate_offset = 0x0046,
+	.ct406_prox_saturation_threshold = 0x0208,
+	.ct406_prox_covered_offset = 0x008c,
+	.ct406_prox_uncovered_offset = 0x0046,
+	.ct406_prox_recalibrate_offset = 0x0046,
 	.als_lens_transmissivity = 20,
 };
 
-static int __init ct406_init(void)
+int __init ct406_init(struct i2c_board_info *info, struct device_node *child)
+
 {
 	int ret = 0;
+	int len = 0;
+	const void *prop;
+	unsigned gpio = 0;
 
-        msm_gpiomux_install(&ct406_irq_gpio_config, 1);
+	info->platform_data = &mp_ct406_pdata;
 
-	ret = gpio_request(CT406_IRQ_GPIO, "ct406 proximity int");
+	prop = of_get_property(child, "irq,gpio", &len);
+	if (!prop || (len != sizeof(u8)))
+		return -EINVAL;
+	gpio = *(u8 *)prop;
+
+	info->irq = MSM_GPIO_TO_INT(gpio);
+
+	ct406_irq_gpio_config.gpio = gpio;
+	msm_gpiomux_install(&ct406_irq_gpio_config, 1);
+	ret = gpio_request(gpio, "ct406 proximity int");
 	if (ret) {
 		pr_err("ct406 gpio_request failed: %d\n", ret);
 		goto fail;
 	}
 
-	ret = gpio_export(CT406_IRQ_GPIO, 0);
+	ret = gpio_export(gpio, 0);
 	if (ret) {
 		pr_err("ct406 gpio_export failed: %d\n", ret);
-		goto fail;
 	}
 
-	mp_ct406_pdata.irq = MSM_GPIO_TO_INT(CT406_IRQ_GPIO);
+	mp_ct406_pdata.irq = info->irq;
+
+	prop = of_get_property(child, "prox_samples_for_noise_floor", &len);
+	if (prop && (len == sizeof(u8)))
+		mp_ct406_pdata.prox_samples_for_noise_floor = *(u8 *)prop;
+	prop = of_get_property(child, "ct405_prox_saturation_threshold", &len);
+	if (prop && (len == sizeof(u16)))
+		mp_ct406_pdata.ct405_prox_saturation_threshold = *(u16 *)prop;
+	prop = of_get_property(child, "ct405_prox_covered_offset", &len);
+	if (prop && (len == sizeof(u16)))
+		mp_ct406_pdata.ct405_prox_covered_offset = *(u16 *)prop;
+	prop = of_get_property(child, "ct405_prox_uncovered_offset", &len);
+	if (prop && (len == sizeof(u16)))
+		mp_ct406_pdata.ct405_prox_uncovered_offset = *(u16 *)prop;
+	prop = of_get_property(child, "ct405_prox_recalibrate_offset", &len);
+	if (prop && (len == sizeof(u16)))
+		mp_ct406_pdata.ct405_prox_recalibrate_offset = *(u16 *)prop;
+	prop = of_get_property(child, "ct406_prox_saturation_threshold", &len);
+	if (prop && (len == sizeof(u16)))
+		mp_ct406_pdata.ct406_prox_saturation_threshold = *(u16 *)prop;
+	prop = of_get_property(child, "ct406_prox_covered_offset", &len);
+	if (prop && (len == sizeof(u16)))
+		mp_ct406_pdata.ct406_prox_covered_offset = *(u16 *)prop;
+	prop = of_get_property(child, "ct406_prox_uncovered_offset", &len);
+	if (prop && (len == sizeof(u16)))
+		mp_ct406_pdata.ct406_prox_uncovered_offset = *(u16 *)prop;
+	prop = of_get_property(child, "ct406_prox_recalibrate_offset", &len);
+	if (prop && (len == sizeof(u16)))
+		mp_ct406_pdata.ct406_prox_recalibrate_offset = *(u16 *)prop;
 
 	return 0;
 
 fail:
-    gpio_free(CT406_IRQ_GPIO);
-    return ret;
+	return ret;
 }
 #else
 static int __init ct406_init(void)
 {
-    return 0;
+	return 0;
 }
 #endif //CONFIG_CT406
 
@@ -227,12 +269,3 @@ struct lm3532_backlight_platform_data mp_lm3532_pdata = {
 	.boot_brightness = LM3532_MAX_BRIGHTNESS,
 };
 #endif /* CONFIG_BACKLIGHT_LM3532 */
-
-/*
- * Sensors
- */
-
-void __init msm8960_sensors_init(void)
-{
-	ct406_init();
-}

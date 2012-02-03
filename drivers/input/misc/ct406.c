@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Motorola Mobility, Inc.
+ * Copyright (C) 2011-2012 Motorola Mobility, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -109,6 +109,7 @@
 #define CT406_PDATAH			0x19
 
 #define CT406_C0DATA_MAX		0xFFFF
+#define CT405_PDATA_MAX			0x03FF
 #define CT406_PDATA_MAX			0x07FF
 
 #define CT406_PROXIMITY_NEAR		30	/* 30 mm */
@@ -131,6 +132,11 @@ enum ct406_als_mode {
 	CT406_ALS_MODE_SUNLIGHT,
 	CT406_ALS_MODE_LOW_LUX,
 	CT406_ALS_MODE_HIGH_LUX,
+};
+
+enum ct40x_hardware_type {
+	CT405_HW_TYPE,
+	CT406_HW_TYPE,
 };
 
 struct ct406_data {
@@ -159,6 +165,12 @@ struct ct406_data {
 	unsigned int prox_low_threshold;
 	unsigned int prox_high_threshold;
 	unsigned int als_low_threshold;
+	u16 prox_saturation_threshold;
+	u16 prox_covered_offset;
+	u16 prox_uncovered_offset;
+	u16 prox_recalibrate_offset;
+	u16 pdata_max;
+	enum ct40x_hardware_type hw_type;
 };
 
 static struct ct406_data *ct406_misc_data;
@@ -357,7 +369,10 @@ static int ct406_init_registers(struct ct406_data *ct)
 	/* write prox integration time = ~3 ms */
 	reg_data[0] = (CT406_ATIME | CT406_COMMAND_AUTO_INCREMENT);
 	reg_data[1] = CT406_ATIME_NOT_SATURATED;
-	reg_data[2] = 0xFE; /* 5.46 ms */
+	if (ct->hw_type == CT405_HW_TYPE)
+		reg_data[2] = 0xFF; /* 2.73 ms */
+	else
+		reg_data[2] = 0xFE; /* 5.46 ms */
 	error = ct406_i2c_write(ct, reg_data, 2);
 	if (error < 0)
 		return error;
@@ -366,8 +381,12 @@ static int ct406_init_registers(struct ct406_data *ct)
 	/* write proximity diode = ch1, proximity gain = 1/2, ALS gain = 1 */
 	reg_data[0] = (CT406_PPCOUNT | CT406_COMMAND_AUTO_INCREMENT);
 	reg_data[1] = 2;
-	reg_data[2] = CT406_CONTROL_PDIODE_CH1
-		| CT406_CONTROL_PGAIN_1X | CT406_CONTROL_AGAIN_1X;
+	if (ct->hw_type == CT405_HW_TYPE)
+		reg_data[2] = CT406_CONTROL_PDIODE_CH1
+			| CT406_CONTROL_PGAIN_2X | CT406_CONTROL_AGAIN_1X;
+	else
+		reg_data[2] = CT406_CONTROL_PDIODE_CH1
+			| CT406_CONTROL_PGAIN_1X | CT406_CONTROL_AGAIN_1X;
 	error = ct406_i2c_write(ct, reg_data, 2);
 	if (error < 0)
 		return error;
@@ -410,8 +429,12 @@ static void ct406_als_mode_sunlight(struct ct406_data *ct)
 
 	/* write ALS gain = 1 */
 	reg_data[0] = CT406_CONTROL;
-	reg_data[1] = CT406_CONTROL_PDIODE_CH1
-		| CT406_CONTROL_PGAIN_1X | CT406_CONTROL_AGAIN_1X;
+	if (ct->hw_type == CT405_HW_TYPE)
+		reg_data[1] = CT406_CONTROL_PDIODE_CH1
+			| CT406_CONTROL_PGAIN_2X | CT406_CONTROL_AGAIN_1X;
+	else
+		reg_data[1] = CT406_CONTROL_PDIODE_CH1
+			| CT406_CONTROL_PGAIN_1X | CT406_CONTROL_AGAIN_1X;
 	error = ct406_i2c_write(ct, reg_data, 1);
 	if (error < 0) {
 		pr_err("%s: error writing ALS gain: %d\n", __func__, error);
@@ -428,7 +451,7 @@ static void ct406_als_mode_sunlight(struct ct406_data *ct)
 	}
 
 	ct->als_mode = CT406_ALS_MODE_SUNLIGHT;
-	ct->als_low_threshold = ct->pdata->prox_saturation_threshold;
+	ct->als_low_threshold = ct->prox_saturation_threshold;
 	ct406_write_als_thresholds(ct);
 }
 
@@ -448,8 +471,12 @@ static void ct406_als_mode_low_lux(struct ct406_data *ct)
 
 	/* write ALS gain = 8 */
 	reg_data[0] = CT406_CONTROL;
-	reg_data[1] = CT406_CONTROL_PDIODE_CH1
-		| CT406_CONTROL_PGAIN_1X | CT406_CONTROL_AGAIN_8X;
+	if (ct->hw_type == CT405_HW_TYPE)
+		reg_data[1] = CT406_CONTROL_PDIODE_CH1
+			| CT406_CONTROL_PGAIN_2X | CT406_CONTROL_AGAIN_8X;
+	else
+		reg_data[1] = CT406_CONTROL_PDIODE_CH1
+			| CT406_CONTROL_PGAIN_1X | CT406_CONTROL_AGAIN_8X;
 	error = ct406_i2c_write(ct, reg_data, 1);
 	if (error < 0) {
 		pr_err("%s: error writing ALS gain: %d\n", __func__, error);
@@ -486,8 +513,12 @@ static void ct406_als_mode_high_lux(struct ct406_data *ct)
 
 	/* write ALS gain = 1 */
 	reg_data[0] = CT406_CONTROL;
-	reg_data[1] = CT406_CONTROL_PDIODE_CH1
-		| CT406_CONTROL_PGAIN_1X | CT406_CONTROL_AGAIN_1X;
+	if (ct->hw_type == CT405_HW_TYPE)
+		reg_data[1] = CT406_CONTROL_PDIODE_CH1
+			| CT406_CONTROL_PGAIN_2X | CT406_CONTROL_AGAIN_1X;
+	else
+		reg_data[1] = CT406_CONTROL_PDIODE_CH1
+			| CT406_CONTROL_PGAIN_1X | CT406_CONTROL_AGAIN_1X;
 	error = ct406_i2c_write(ct, reg_data, 1);
 	if (error < 0) {
 		pr_err("%s: error writing ALS gain: %d\n", __func__, error);
@@ -536,13 +567,13 @@ static void ct406_prox_mode_saturated(struct ct406_data *ct)
 static void ct406_prox_mode_uncovered(struct ct406_data *ct)
 {
 	unsigned int noise_floor = ct->prox_noise_floor;
-	unsigned int pilt = noise_floor - ct->pdata->prox_recalibrate_offset;
-	unsigned int piht = noise_floor + ct->pdata->prox_covered_offset;
+	unsigned int pilt = noise_floor - ct->prox_recalibrate_offset;
+	unsigned int piht = noise_floor + ct->prox_covered_offset;
 
-	if (pilt > CT406_PDATA_MAX)
+	if (pilt > ct->pdata_max)
 		pilt = 0;
-	if (piht > CT406_PDATA_MAX)
-		piht = CT406_PDATA_MAX;
+	if (piht > ct->pdata_max)
+		piht = ct->pdata_max;
 
 	ct->prox_mode = CT406_PROX_MODE_UNCOVERED;
 	ct->prox_low_threshold = pilt;
@@ -554,11 +585,11 @@ static void ct406_prox_mode_uncovered(struct ct406_data *ct)
 static void ct406_prox_mode_covered(struct ct406_data *ct)
 {
 	unsigned int noise_floor = ct->prox_noise_floor;
-	unsigned int pilt = noise_floor + ct->pdata->prox_uncovered_offset;
-	unsigned int piht = CT406_PDATA_MAX;
+	unsigned int pilt = noise_floor + ct->prox_uncovered_offset;
+	unsigned int piht = ct->pdata_max;
 
-	if (pilt > CT406_PDATA_MAX)
-		pilt = CT406_PDATA_MAX;
+	if (pilt > ct->pdata_max)
+		pilt = ct->pdata_max;
 
 	ct->prox_mode = CT406_PROX_MODE_COVERED;
 	ct->prox_low_threshold = pilt;
@@ -610,6 +641,12 @@ static int ct406_device_power_on(struct ct406_data *ct)
 			return error;
 		}
 	}
+	return 0;
+}
+
+static int ct406_device_init(struct ct406_data *ct)
+{
+	int error;
 
 	if (!ct->regs_initialized) {
 		error = ct406_init_registers(ct);
@@ -731,7 +768,7 @@ static void ct406_measure_noise_floor(struct ct406_data *ct)
 	int error = -EINVAL;
 	unsigned int num_samples = ct->pdata->prox_samples_for_noise_floor;
 	unsigned int i, sum = 0, avg = 0;
-	unsigned int max = CT406_PDATA_MAX - 1 - ct->pdata->prox_covered_offset;
+	unsigned int max = ct->pdata_max - 1 - ct->prox_covered_offset;
 	u8 reg_data[2] = {0};
 
 	/* disable ALS temporarily */
@@ -823,7 +860,7 @@ static int ct406_check_saturation(struct ct406_data *ct)
 	/* disable prox */
 	ct406_set_prox_enable(ct, 0);
 	ct->prox_low_threshold = 0;
-	ct->prox_high_threshold = CT406_PDATA_MAX;
+	ct->prox_high_threshold = ct->pdata_max;
 	ct406_write_prox_thresholds(ct);
 
 	ct406_als_mode_sunlight(ct);
@@ -869,6 +906,9 @@ static int ct406_enable_prox(struct ct406_data *ct)
 		if (ct406_debug & CT406_DBG_ENABLE_DISABLE)
 			pr_info("%s: Powering on\n", __func__);
 		error = ct406_device_power_on(ct);
+		if (error)
+			return error;
+		error = ct406_device_init(ct);
 		if (error)
 			return error;
 	}
@@ -1280,6 +1320,7 @@ static int ct406_suspend(struct ct406_data *ct)
 static int ct406_resume(struct ct406_data *ct)
 {
 	ct406_device_power_on(ct);
+	ct406_device_init(ct);
 
 	ct->suspended = 0;
 
@@ -1432,7 +1473,7 @@ static int ct406_probe(struct i2c_client *client,
 	}
 
 	error = ct406_device_power_on(ct);
-	if (error < 0) {
+	if (error) {
 		pr_err("%s:power_on failed: %d\n", __func__, error);
 		goto error_power_on_failed;
 	}
@@ -1443,10 +1484,35 @@ static int ct406_probe(struct i2c_client *client,
 		pr_err("%s: revision read failed: %d\n", __func__, error);
 		goto error_revision_read_failed;
 	}
-	if (reg_data[0] == CT40X_REV_ID_CT405)
+	if (reg_data[0] == CT40X_REV_ID_CT405) {
 		pr_info("%s: CT405 part detected\n", __func__);
-	else
+		ct->prox_saturation_threshold
+			= ct->pdata->ct405_prox_saturation_threshold;
+		ct->prox_covered_offset = ct->pdata->ct405_prox_covered_offset;
+		ct->prox_uncovered_offset
+			= ct->pdata->ct405_prox_uncovered_offset;
+		ct->prox_recalibrate_offset
+			= ct->pdata->ct405_prox_recalibrate_offset;
+		ct->pdata_max = CT405_PDATA_MAX;
+		ct->hw_type = CT405_HW_TYPE;
+	} else {
 		pr_info("%s: CT406 part detected\n", __func__);
+		ct->prox_saturation_threshold
+			= ct->pdata->ct406_prox_saturation_threshold;
+		ct->prox_covered_offset = ct->pdata->ct406_prox_covered_offset;
+		ct->prox_uncovered_offset
+			= ct->pdata->ct406_prox_uncovered_offset;
+		ct->prox_recalibrate_offset
+			= ct->pdata->ct406_prox_recalibrate_offset;
+		ct->pdata_max = CT406_PDATA_MAX;
+		ct->hw_type = CT406_HW_TYPE;
+	}
+
+	error = ct406_device_init(ct);
+	if (error) {
+		pr_err("%s:device init failed: %d\n", __func__, error);
+		goto error_revision_read_failed;
+	}
 
 	return 0;
 

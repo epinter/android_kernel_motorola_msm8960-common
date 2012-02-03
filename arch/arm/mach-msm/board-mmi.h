@@ -1,7 +1,7 @@
 /*
  * arch/arm/mach-msm/board-mmi.h
  *
- * Copyright (C) 2011 Motorola Mobility, Inc.
+ * Copyright (C) 2011-2012 Motorola Mobility, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -20,6 +20,7 @@
 #include <linux/mfd/pm8xxx/pm8921.h>
 #include <linux/power/mmi-battery.h>
 #include <linux/ct406.h>
+#include <linux/i2c.h>
 
 #define _HWREV(x)	(x)
 #define HWREV_DEF	_HWREV(0xFF00)
@@ -45,11 +46,6 @@
 #ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
 extern struct melfas_ts_platform_data touch_pdata;
 extern int __init melfas_ts_platform_init(void);
-#endif
-
-#ifdef CONFIG_INPUT_CT406
-#define CT406_IRQ_GPIO 49
-extern struct ct406_platform_data mp_ct406_pdata;
 #endif
 
 #ifdef CONFIG_BACKLIGHT_LM3532
@@ -88,7 +84,7 @@ struct mmi_battery_list {
 
 extern struct mmi_battery_list mmi_batts;
 
-void __init msm8960_sensors_init(void);
+int __init ct406_init(struct i2c_board_info *info, struct device_node *child);
 void __init mmi_vibrator_init(void);
 
 #define  MMI_KEYPAD_RESET	0x1

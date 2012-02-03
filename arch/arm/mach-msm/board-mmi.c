@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Motorola Mobility. All rights reserved.
+/* Copyright (c) 2011-2012, Motorola Mobility. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -87,9 +87,8 @@
 #include <mach/restart.h>
 #include <mach/system.h>
 
-#ifdef CONFIG_INPUT_CT406
 #include <linux/ct406.h>
-#endif
+
 #ifdef CONFIG_BACKLIGHT_LM3532
 #include <linux/i2c/lm3532.h>
 #endif
@@ -2189,7 +2188,7 @@ static __init void register_i2c_devices_from_dt(int bus)
 				break;
 
 			case 0x00250001: /* TAOS_CT406 */
-				info.platform_data = &mp_ct406_pdata;
+				ct406_init(&info, child);
 				break;
 
 			case 0x00260001: /* Atmel_MXT */
@@ -2584,7 +2583,6 @@ static void __init msm8960_mmi_init(void)
 	msm8960_init_slim();
 	msm8960_init_dsps();
 
-	msm8960_sensors_init();
 	msm8960_pm_init(RPM_APCC_CPU0_WAKE_UP_IRQ);
 	mot_tcmd_export_gpio();
 
