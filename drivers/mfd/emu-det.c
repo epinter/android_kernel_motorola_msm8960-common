@@ -2348,7 +2348,7 @@ static int emu_det_probe(struct platform_device *pdev)
 	if (ret)
 		pr_err("couldn't register switch (%s) rc=%d\n",
 					data->dsdev.name, ret);
-	data->asdev.name = "usb_audio";
+	data->asdev.name = "semu_audio";
 	data->asdev.print_name = emu_audio_print_name;
 	ret = switch_dev_register(&data->asdev);
 	if (ret)
