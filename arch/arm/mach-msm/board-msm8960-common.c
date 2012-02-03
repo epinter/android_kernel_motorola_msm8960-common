@@ -2376,10 +2376,12 @@ static struct mmc_platform_data msm8960_sdc3_data = {
 void __init msm8960_init_mmc(unsigned sd_detect)
 {
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
+	msm8960_sdc1_data.swfi_latency = msm_rpm_get_swfi_latency();
 	/* SDC1 : eMMC card connected */
 	msm_add_sdcc(1, &msm8960_sdc1_data);
 #endif
 #ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
+	msm8960_sdc3_data.swfi_latency = msm_rpm_get_swfi_latency();
 	/* SDC3: External card slot */
 	msm8960_sdc3_data.status_gpio	= PM8921_GPIO_PM_TO_SYS(sd_detect);
 	msm8960_sdc3_data.status_irq = PM8921_GPIO_IRQ(PM8921_IRQ_BASE, sd_detect);
@@ -2560,7 +2562,7 @@ struct msm_rpm_platform_data msm_rpm_data = {
 	.msm_apps_ipc_rpm_val = 4,
 };
 
-struct msm_rpmrs_level msm_rpmrs_levels[] __initdata = {
+static struct msm_rpmrs_level msm_rpmrs_levels[] = {
 	{
 		MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT,
 		MSM_RPMRS_LIMITS(ON, ACTIVE, MAX, ACTIVE),
@@ -2623,6 +2625,19 @@ struct msm_rpmrs_level msm_rpmrs_levels[] __initdata = {
 		29700, 0, 76350000, 9800,
 	},
 };
+
+uint32_t msm_rpm_get_swfi_latency(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(msm_rpmrs_levels); i++) {
+		if (msm_rpmrs_levels[i].sleep_mode ==
+			MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT)
+			return msm_rpmrs_levels[i].latency_us;
+	}
+
+	return 0;
+}
 
 static struct platform_device msm_device_saw_core0 = {
 	.name          = "saw-regulator",
