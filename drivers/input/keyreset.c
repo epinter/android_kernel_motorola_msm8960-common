@@ -46,7 +46,7 @@ static void deferred_restart(struct work_struct *dummy)
 	restart_requested = 2;
 	sys_sync();
 	restart_requested = 3;
-	kernel_restart(NULL);
+	BUG();
 }
 static DECLARE_WORK(restart_work, deferred_restart);
 
