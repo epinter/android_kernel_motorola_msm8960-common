@@ -45,6 +45,12 @@
 #endif
 
 #define be32_to_cpup(p)	(*(p))
+
+#ifdef cpu_to_be32
+#undef cpu_to_be32
+#endif
+
+#define cpu_to_be32(n)	(n)
 #endif
 
 char *of_fdt_get_string(struct boot_param_header *blob, u32 offset)
