@@ -1534,6 +1534,7 @@ error_create_wq_failed:
 error_register_pm_notifier_failed:
 	misc_deregister(&ct->miscdevice);
 error_misc_register_failed:
+	ct406_misc_data = NULL;
 	input_free_device(ct->dev);
 error_input_allocate_failed:
 	regulator_put(ct->regulator);
