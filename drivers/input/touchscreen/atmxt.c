@@ -179,26 +179,24 @@ static int atmxt_probe(struct i2c_client *client,
 	int err = 0;
 	bool softfail = false;
 
-	printk(KERN_INFO "%s: Driver: %s, Version: %s, Date: %s\n", __func__,
+	pr_info("%s: Driver: %s, Version: %s, Date: %s\n", __func__,
 		ATMXT_I2C_NAME, ATMXT_DRIVER_VERSION, ATMXT_DRIVER_DATE);
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
-		printk(KERN_ERR "%s: I2C_FUNC_I2C failure.\n", __func__);
+		pr_err("%s: I2C_FUNC_I2C failure.\n", __func__);
 		err = -ENODEV;
 		goto atmxt_probe_fail;
 	}
 
 	if (client == NULL) {
-		printk(KERN_ERR "%s: I2C client structure is missing.\n",
-			__func__);
+		pr_err("%s: I2C client structure is missing.\n", __func__);
 		err = -EINVAL;
 		goto atmxt_probe_fail;
 	}
 
 	dd = kzalloc(sizeof(struct atmxt_driver_data), GFP_KERNEL);
 	if (dd == NULL) {
-		printk(KERN_ERR "%s: Unable to create driver data.\n",
-			__func__);
+		pr_err("%s: Unable to create driver data.\n", __func__);
 		err = -ENOMEM;
 		goto atmxt_probe_fail;
 	}
@@ -213,8 +211,7 @@ static int atmxt_probe(struct i2c_client *client,
 
 	dd->mutex = kzalloc(sizeof(struct mutex), GFP_KERNEL);
 	if (dd->mutex == NULL) {
-		printk(KERN_ERR "%s: Unable to create mutex lock.\n",
-			__func__);
+		pr_err("%s: Unable to create mutex lock.\n", __func__);
 		err = -ENOMEM;
 		goto atmxt_probe_fail;
 	}
@@ -223,8 +220,7 @@ static int atmxt_probe(struct i2c_client *client,
 #ifdef CONFIG_TOUCHSCREEN_DEBUG
 	dd->dbg = kzalloc(sizeof(struct atmxt_debug), GFP_KERNEL);
 	if (dd->dbg == NULL) {
-		printk(KERN_ERR "%s: Unable to create driver debug data.\n",
-			__func__);
+		pr_err("%s: Unable to create driver debug data.\n", __func__);
 		err = -ENOMEM;
 		goto atmxt_probe_fail;
 	}
@@ -235,33 +231,44 @@ static int atmxt_probe(struct i2c_client *client,
 	if (err < 0)
 		goto atmxt_probe_fail;
 
-	gpio_request(dd->pdata->gpio_enable,"touch_enable");
-	if ( (err = gpio_direction_output(dd->pdata->gpio_enable, 1)))
-	{
+	err = gpio_request(dd->pdata->gpio_enable, "touch_enable");
+	if (err)
+		goto atmxt_probe_fail;
+
+	err = gpio_direction_output(dd->pdata->gpio_enable, 1);
+	if (err) {
 		pr_err("%s: Failed to setup ENABLE irq for output.\n",
 				__func__);
-		goto gpio_failed;
+		goto gpio_en_fail;
 	}
-	gpio_request(dd->pdata->gpio_reset,"touch_rst");
-	if ( (err = gpio_direction_output(dd->pdata->gpio_reset, 1)))
-	{
+
+	err = gpio_request(dd->pdata->gpio_reset, "touch_rst");
+	if (err)
+		goto gpio_en_fail;
+
+	err = gpio_direction_output(dd->pdata->gpio_reset, 0);
+	if (err) {
 		pr_err("%s: Failed to setup RST irq for output.\n",
 				__func__);
-		goto gpio_failed;
+		goto gpio_res_fail;
 	}
-	gpio_request(dd->pdata->gpio_interrupt,"touch_intr");
-	if ( (err = gpio_direction_input(dd->pdata->gpio_interrupt)))
-	{
+
+	err = gpio_request(dd->pdata->gpio_interrupt, "touch_intr");
+	if (err)
+		goto gpio_res_fail;
+
+	err = gpio_direction_input(dd->pdata->gpio_interrupt);
+	if (err) {
 		pr_err("%s: Failed to setup INTR irq for input.\n",
 				__func__);
-		goto gpio_failed;
+		goto atmxt_gpio_fail;
 	}
 
 	dd->settings = dd->pdata->flags;
 
 	err = atmxt_register_inputs(dd);
 	if (err < 0)
-		goto atmxt_probe_fail;
+		goto atmxt_gpio_fail;
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	dd->es.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
@@ -272,15 +279,14 @@ static int atmxt_probe(struct i2c_client *client,
 
 	err = atmxt_request_irq(dd);
 	if (err < 0)
-		goto atmxt_probe_fail;
+		goto atmxt_gpio_fail;
 
 	mutex_lock(dd->mutex);
 
 	err = atmxt_create_debug_files(dd);
 	if (err < 0) {
-		printk(KERN_ERR
-			"%s: Probe had error %d when creating debug files.\n",
-			__func__, err);
+		pr_err("%s: Probe had error %d when creating debug files.\n",
+				__func__, err);
 		softfail = true;
 	}
 
@@ -288,10 +294,9 @@ static int atmxt_probe(struct i2c_client *client,
 	if ((err == -ENOMEM) ||
 		(err == -EOVERFLOW)) {
 		mutex_unlock(dd->mutex);
-		goto atmxt_probe_fail;
+		goto atmxt_gpio_fail;
 	} else if (err < 0) {
-		printk(KERN_ERR
-			"%s: Probe had error %d when restarting IC.\n",
+		pr_err("%s: Probe had error %d when restarting IC.\n",
 				__func__, err);
 		softfail = true;
 	}
@@ -302,23 +307,21 @@ static int atmxt_probe(struct i2c_client *client,
 
 	mutex_unlock(dd->mutex);
 
-	goto atmxt_probe_pass;
+	if (softfail)
+		pr_info("%s: Probe completed with errors\n", __func__);
 
-gpio_failed:
+	return 0;
+
+atmxt_gpio_fail:
+	gpio_free(dd->pdata->gpio_interrupt);
+gpio_res_fail:
+	gpio_free(dd->pdata->gpio_reset);
+gpio_en_fail:
+	gpio_free(dd->pdata->gpio_enable);
 atmxt_probe_fail:
 	atmxt_free(dd);
-	printk(KERN_ERR "%s: Probe failed with error code %d.\n",
-		__func__, err);
+	pr_err("%s: Probe failed with error code %d.\n", __func__, err);
 	return err;
-
-atmxt_probe_pass:
-	if (softfail) {
-		printk(KERN_INFO "%s: Probe completed with errors.\n",
-			__func__);
-	} else {
-		printk(KERN_INFO "%s: Probe successful.\n", __func__);
-	}
-	return 0;
 }
 
 static int atmxt_remove(struct i2c_client *client)
