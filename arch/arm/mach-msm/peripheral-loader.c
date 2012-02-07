@@ -32,6 +32,7 @@
 #include <asm/setup.h>
 #include <mach/peripheral-loader.h>
 
+#include "board-mmi.h"
 #include "peripheral-loader.h"
 
 enum pil_state {
@@ -136,6 +137,7 @@ static int load_segment(const struct elf32_phdr *phdr, unsigned num,
 	char fw_name[30];
 	const struct firmware *fw = NULL;
 	const u8 *data;
+	char fw_name_ver[8] = "";
 
 	if (memblock_overlaps_memory(phdr->p_paddr, phdr->p_memsz)) {
 		dev_err(&pil->dev, "%s: kernel memory would be overwritten "
@@ -146,8 +148,14 @@ static int load_segment(const struct elf32_phdr *phdr, unsigned num,
 	}
 
 	if (phdr->p_filesz) {
-		snprintf(fw_name, ARRAY_SIZE(fw_name), "%s.b%02d",
-				pil->desc->name, num);
+		if (!strcmp("dsps", pil->desc->name)) {
+			msm8960_get_dsps_fw_name(fw_name_ver);
+			snprintf(fw_name, sizeof(fw_name), "%s%s.b%02d",
+					pil->desc->name, fw_name_ver, num);
+		} else
+			snprintf(fw_name, sizeof(fw_name), "%s.b%02d",
+					pil->desc->name, num);
+
 		ret = request_firmware(&fw, fw_name, &pil->dev);
 		if (ret) {
 			dev_err(&pil->dev, "%s: Failed to locate blob %s\n",
@@ -240,10 +248,18 @@ static int load_image(struct pil_device *pil)
 	const struct elf32_phdr *phdr;
 	const struct firmware *fw;
 	unsigned long proxy_timeout = pil->desc->proxy_timeout;
+	char fw_name_ver[8] = "";
+
+	if (!strcmp("dsps", pil->desc->name)) {
+		msm8960_get_dsps_fw_name(fw_name_ver);
+		snprintf(fw_name, sizeof(fw_name), "%s%s.mdt",
+			pil->desc->name, fw_name_ver);
+	} else
+		snprintf(fw_name, sizeof(fw_name), "%s.mdt", pil->desc->name);
 
 	down_read(&pil_pm_rwsem);
-	snprintf(fw_name, sizeof(fw_name), "%s.mdt", pil->desc->name);
 	ret = request_firmware(&fw, fw_name, &pil->dev);
+
 	if (ret) {
 		dev_err(&pil->dev, "%s: Failed to locate %s\n",
 				pil->desc->name, fw_name);

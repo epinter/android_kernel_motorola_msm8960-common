@@ -82,6 +82,7 @@ struct mmi_battery_list {
 extern struct mmi_battery_list mmi_batts;
 
 int __init ct406_init(struct i2c_board_info *info, struct device_node *child);
+void msm8960_get_dsps_fw_name(char *name);
 void __init mmi_vibrator_init(void);
 int __init mapphone_touch_panel_init(struct i2c_board_info *i2c_info,
 		struct device_node *node);

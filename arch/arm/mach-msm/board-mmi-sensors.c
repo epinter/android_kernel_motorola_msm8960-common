@@ -269,3 +269,28 @@ struct lm3532_backlight_platform_data mp_lm3532_pdata = {
 	.boot_brightness = LM3532_MAX_BRIGHTNESS,
 };
 #endif /* CONFIG_BACKLIGHT_LM3532 */
+
+/*
+ * DSPS Firmware
+ */
+
+void msm8960_get_dsps_fw_name(char *name)
+{
+	struct device_node *dsps_node;
+	int len = 0;
+	const void *prop;
+
+	dsps_node = of_find_node_by_path("/Chosen@0");
+	if (!dsps_node)
+		return;
+	prop = of_get_property(dsps_node, "qualcomm,dsps,fw", &len);
+	if (len >= 16) {
+		printk(KERN_ERR "%s: Invalid DSPS FW name\n", __func__);
+		return;
+	}
+	if (prop) {
+		strcpy(name, (char *)prop);
+		printk(KERN_INFO "%s: DSPS FW version from devtree: %s\n",
+			 __func__, (char *)prop);
+	}
+}
