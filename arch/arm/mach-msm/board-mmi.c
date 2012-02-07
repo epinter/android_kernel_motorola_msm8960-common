@@ -161,6 +161,14 @@ extern unsigned int k_atag_tcmd_raw_cid[4];
 extern unsigned int k_atag_tcmd_raw_csd[4];
 extern unsigned char k_atag_tcmd_raw_ecsd[512];
 
+extern char pmic_hw_rev_txt_version[8];
+extern unsigned char pmic_hw_rev_txt_rev1;
+extern unsigned char pmic_hw_rev_txt_rev2;
+
+extern unsigned short display_hw_rev_txt_manufacturer;
+extern unsigned short display_hw_rev_txt_controller;
+extern unsigned short display_hw_rev_txt_controller_drv;
+
 static struct pm8xxx_gpio_init *pm8921_gpios = pm8921_gpios_vanquish;
 static unsigned pm8921_gpios_size = ARRAY_SIZE(pm8921_gpios_vanquish);
 static struct pm8xxx_keypad_platform_data *keypad_data = &mmi_keypad_data;
@@ -1451,6 +1459,63 @@ static void init_mmi_unit_info(void){
 		mui->system_serial_low, mui->machine, mui->barcode);
 }
 
+static ssize_t hw_rev_txt_pmic_show(struct kobject *kobj,
+				    struct kobj_attribute *attr, char *buf)
+{
+/* Format: TYPE:VENDOR:HWREV:DATE:FIRMWARE_REV:INFO  */
+	return snprintf(buf, PAGE_SIZE,
+			"PMIC:QUALCOMM-PM8921:%s:::rev1=0x%02X,rev2=0x%02X\n",
+			pmic_hw_rev_txt_version,
+			pmic_hw_rev_txt_rev1,
+			pmic_hw_rev_txt_rev2);
+}
+
+static ssize_t hw_rev_txt_display_show(struct kobject *kobj,
+				    struct kobj_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE,
+			"Display:0x%02X:0x%02X::0x%02X:\n",
+			display_hw_rev_txt_manufacturer,
+			display_hw_rev_txt_controller,
+			display_hw_rev_txt_controller_drv);
+}
+
+static struct kobj_attribute hw_rev_txt_pmic_attribute =
+	__ATTR(pmic, 0444, hw_rev_txt_pmic_show, NULL);
+
+static struct kobj_attribute hw_rev_txt_display_attribute =
+	__ATTR(display, 0444, hw_rev_txt_display_show, NULL);
+
+static struct attribute *hw_rev_txt_attrs[] = {
+	&hw_rev_txt_pmic_attribute.attr,
+	&hw_rev_txt_display_attribute.attr,
+	NULL
+};
+
+static struct attribute_group hw_rev_txt_attr_group = {
+	.attrs = hw_rev_txt_attrs,
+};
+
+static int hw_rev_txt_init(void)
+{
+	static struct kobject *hw_rev_txt_kobj;
+	int retval;
+
+	hw_rev_txt_kobj = kobject_create_and_add("hardware_revisions", NULL);
+	if (!hw_rev_txt_kobj) {
+		pr_err("%s: failed to create /sys/hardware_revisions\n",
+		       __func__);
+		return -ENOMEM;
+	}
+
+	retval = sysfs_create_group(hw_rev_txt_kobj, &hw_rev_txt_attr_group);
+	if (retval)
+		pr_err("%s: failed for entries in /sys/hardware_revisions\n",
+		       __func__);
+
+	return retval;
+}
+
 static ssize_t cid_show(struct kobject *kobj, struct kobj_attribute *attr,
 			char *buf)
 {
@@ -2598,6 +2663,7 @@ static void __init msm8960_mmi_init(void)
 	init_mmi_unit_info();
 	init_mmi_ram_info();
 	emmc_version_init();
+	hw_rev_txt_init();
 }
 
 static int __init mot_parse_atag_baseband(const struct tag *tag)

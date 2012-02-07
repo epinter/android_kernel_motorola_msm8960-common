@@ -24,10 +24,14 @@ static struct mipi_mot_panel mot_panel;
 static struct dsi_buf mot_tx_buf;
 static struct dsi_buf mot_rx_buf;
 
+unsigned short display_hw_rev_txt_manufacturer;
+unsigned short display_hw_rev_txt_controller;
+unsigned short display_hw_rev_txt_controller_drv;
 
 static u16 get_manufacture_id(struct msm_fb_data_type *mfd)
 {
 	static u16 manufacture_id = INVALID_VALUE;
+	display_hw_rev_txt_manufacturer = 0;
 
 	if (manufacture_id == INVALID_VALUE) {
 		if (mot_panel.get_manufacture_id)
@@ -39,6 +43,7 @@ static u16 get_manufacture_id(struct msm_fb_data_type *mfd)
 		}
 
 		pr_info(" MIPI panel Manufacture_id = 0x%x\n", manufacture_id);
+		display_hw_rev_txt_manufacturer = manufacture_id;
 	}
 
 end:
@@ -48,6 +53,7 @@ end:
 static u16 get_controller_ver(struct msm_fb_data_type *mfd)
 {
 	static u16 controller_ver = INVALID_VALUE;
+	display_hw_rev_txt_controller = 0;
 
 	if (controller_ver == INVALID_VALUE) {
 		if (mot_panel.get_controller_ver)
@@ -59,6 +65,7 @@ static u16 get_controller_ver(struct msm_fb_data_type *mfd)
 		}
 
 		pr_info(" MIPI panel Controller_ver = 0x%x\n", controller_ver);
+		display_hw_rev_txt_controller = controller_ver;
 	}
 end:
 	return controller_ver;
@@ -68,6 +75,7 @@ end:
 static u16 get_controller_drv_ver(struct msm_fb_data_type *mfd)
 {
 	static u16 controller_drv_ver = INVALID_VALUE;
+	display_hw_rev_txt_controller_drv = 0;
 
 	if (controller_drv_ver == INVALID_VALUE) {
 		if (mot_panel.get_controller_drv_ver)
@@ -81,6 +89,7 @@ static u16 get_controller_drv_ver(struct msm_fb_data_type *mfd)
 
 		pr_info(" MIPI panel Controller_drv_ver = 0x%x\n",
 							controller_drv_ver);
+		display_hw_rev_txt_controller_drv = controller_drv_ver;
 	}
 
 end:
