@@ -34,6 +34,7 @@
 #include <mach/scm.h>
 #include "msm_watchdog.h"
 #include "timer.h"
+#include "restart.h"
 
 #define WDT0_RST	0x38
 #define WDT0_EN		0x40
@@ -106,6 +107,21 @@ static int dload_set(const char *val, struct kernel_param *kp)
 }
 #else
 #define set_dload_mode(x) do {} while (0)
+#endif
+
+#ifdef TEMP_BP_APR_NOTIF
+/*
+Short term change to enable BP APR notification to be updated when RAM dump
+transfer time is acceptable for user-trial.
+Flag will be set during subsystem reset of modem
+DLOAD mode is not needed for this to work & it should still work if enabled
+*/
+static int in_bp_panic;
+
+void set_in_bp_panic(void)
+{
+	in_bp_panic = 1;
+}
 #endif
 
 void msm_set_restart_mode(int mode)
@@ -222,6 +238,10 @@ void arch_reset(char mode, const char *cmd)
 	} else {
 		__raw_writel(0x77665501, restart_reason);
 	}
+#ifdef TEMP_BP_APR_NOTIF
+	if (in_bp_panic)
+		__raw_writel(0x77665506, restart_reason);
+#endif
 
 	__raw_writel(0, msm_tmr0_base + WDT0_EN);
 	if (!(machine_is_msm8x60_fusion() || machine_is_msm8x60_fusn_ffa())) {

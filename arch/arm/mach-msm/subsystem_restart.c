@@ -35,6 +35,7 @@
 #include <mach/subsystem_restart.h>
 
 #include "smd_private.h"
+#include "restart.h"
 
 struct subsys_soc_restart_order {
 	const char * const *subsystem_list;
@@ -454,6 +455,13 @@ int subsystem_restart(const char *subsys_name)
 	pr_info("Restart sequence requested for %s, restart_level = %d.\n",
 		subsys_name, restart_level);
 
+#ifdef TEMP_BP_APR_NOTIF
+	if (!strncmp("modem", subsys_name, strnlen("modem",
+		SUBSYS_NAME_MAX_LENGTH))) {
+		pr_info("BP panic notify enabled\n");
+		set_in_bp_panic();
+	}
+#endif
 	/* List of subsystems is protected by a lock. New subsystems can
 	 * still come in.
 	 */
