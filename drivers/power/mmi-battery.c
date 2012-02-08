@@ -143,6 +143,15 @@ static void mmi_battery_decode_eeprom(struct mmi_battery_info *dev_info)
 		(unsigned short)(data[ROM_DATA_DC_IMPEDANCE]);
 	pr_info("MMI Battery DC Impedance 0x%2X\n",
 		dev_info->cell_info.dc_impedance);
+
+	dev_info->cell_info.cell_id =
+		(unsigned short)(data[ROM_DATA_CMN_CELL_ID_MSB]);
+	dev_info->cell_info.cell_id =
+		(dev_info->cell_info.cell_id << 8) & 0xFF00;
+	dev_info->cell_info.cell_id |=
+		(unsigned short)(data[ROM_DATA_CMN_CELL_ID_LSB]);
+	pr_info("MMI Battery Cell ID 0x%4X\n",
+		dev_info->cell_info.cell_id);
 }
 
 static void mmi_battery_eeprom_read_work(struct work_struct *work)

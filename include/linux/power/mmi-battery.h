@@ -35,6 +35,7 @@
 #define ADC_OFFSET		2400
 #define VLT_ROM_OFFSET_100_PERC	4000
 #define C5_VLT_LVL_OFFSET	712
+#define OLD_EPROM_CELL_ID	0x0501
 
 enum {
 	MMI_BATTERY_INVALID,
@@ -101,10 +102,8 @@ enum {
 	ROM_DATA_CMN_RPD_CHRG_TM_LIM_FST,
 	ROM_DATA_CMN_RPD_CHRG_RATE_MID,
 	ROM_DATA_CMN_RPD_CHRG_TM_LIM_MID,
-	ROM_DATA_CMN_TOPOFF_CHRG_INTVL_TM,
-	ROM_DATA_CMN_DELTA_TM_LIM = ROM_DATA_CMN_TOPOFF_CHRG_INTVL_TM,
-	ROM_DATA_CMN_TOPOFF_CHRG_INTVL_CURR,
-	ROM_DATA_CMN_DELTA_TMP_LIM = ROM_DATA_CMN_TOPOFF_CHRG_INTVL_CURR,
+	ROM_DATA_CMN_CELL_ID_MSB,
+	ROM_DATA_CMN_CELL_ID_LSB,
 	ROM_DATA_CMN_MAINT_CHRG_RATE,
 	ROM_DATA_CMN_DELTA_VLT_RSTRT_FST,
 	ROM_DATA_CMN_MAIN_AUX_SEL,
@@ -319,6 +318,7 @@ struct mmi_battery_cell {
 	unsigned short        peak_voltage;
 	unsigned short        dc_impedance;
 	int                   batt_valid;
+	unsigned short        cell_id;
 };
 
 struct mmi_battery_cell *mmi_battery_get_info(void);

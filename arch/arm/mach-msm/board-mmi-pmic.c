@@ -282,6 +282,18 @@ int find_mmi_battery(struct mmi_battery_cell *cell_info)
 {
 	int i;
 
+	if (cell_info->cell_id != OLD_EPROM_CELL_ID) {
+		/* Search Based off Cell ID */
+		for (i = (MMI_BATTERY_DEFAULT + 1); i < MMI_BATTERY_NUM; i++) {
+			if (cell_info->cell_id ==
+			    mmi_batts.cell_list[i]->cell_id) {
+				pr_info("Battery Cell ID Found: %d\n", i);
+				return i;
+			}
+		}
+	}
+
+	/* Search based off Typical Values */
 	for (i = (MMI_BATTERY_DEFAULT + 1); i < MMI_BATTERY_NUM; i++) {
 		if (cell_info->capacity == mmi_batts.cell_list[i]->capacity) {
 			if (cell_info->peak_voltage ==
