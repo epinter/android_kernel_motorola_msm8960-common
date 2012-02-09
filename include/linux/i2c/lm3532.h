@@ -98,7 +98,8 @@ struct lm3532_backlight_platform_data {
 
 	u8 en_ambl_sens;	/* 1 = enable ambient light sensor */
 
-	int init_delay_ms;
+	int pwm_init_delay_ms;
+	int pwm_resume_delay_ms;
 
 	u8 ctrl_a_pwm;
 	u8 ctrl_b_pwm;

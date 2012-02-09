@@ -228,7 +228,8 @@ struct lm3532_backlight_platform_data mp_lm3532_pdata = {
 
 	.en_ambl_sens = 0,
 
-	.init_delay_ms = 5000,
+	.pwm_init_delay_ms = 5000,
+	.pwm_resume_delay_ms = 0,
 
 	.ctrl_a_usage = LM3532_BACKLIGHT_DEVICE,
 	.ctrl_a_pwm = 0xC2,
@@ -266,7 +267,7 @@ struct lm3532_backlight_platform_data mp_lm3532_pdata = {
 	.l1_high = 0x33,
 	.l1_low = 0x33,
 
-	.boot_brightness = LM3532_MAX_BRIGHTNESS,
+	.boot_brightness = 102,
 };
 #endif /* CONFIG_BACKLIGHT_LM3532 */
 

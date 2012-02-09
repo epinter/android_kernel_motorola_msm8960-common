@@ -21,11 +21,6 @@
 #include <linux/slab.h>
 #include <linux/version.h>
 #include <linux/workqueue.h>
-
-#if 0
-#include <plat/mapphones_dsi_panel.h>
-#endif
-
 #include <linux/i2c/lm3532.h>
 
 #define LM3532_OUTPUT_CFGR	0x10  /* Output Configuration */
@@ -139,8 +134,6 @@ struct lm3532_bl {
 
 static struct mutex lock; /* Used to state chnages */
 static int suspended;
-static enum lm3532_display_connected_state display_connected
-	= LM3522_STATE_UNKNOWN;
 
 static struct lm3532_reg {
 	const char *name;
@@ -264,9 +257,11 @@ static void lm3532_led_work(struct work_struct *work)
 {
 	struct lm3532_led *led = container_of(work, struct lm3532_led, work);
 
-	while (mutex_trylock(&lock) == 0)
-		if (suspended == 1)
+	if (mutex_trylock(&lock) == 0) {
+		if (suspended == 0)
+			schedule_work(work);
 			return;
+	}
 
 	if (suspended == 0)
 		lm3532_write(led->client,
@@ -412,7 +407,7 @@ static int lm3532_bl_set(struct backlight_device *bl, int brightness)
 		return ret;
 	}
 
-	if ((suspended == 1) || (display_connected != LM3522_STATE_CONNECTED)) {
+	if (suspended == 1) {
 		data->current_brightness = brightness;
 		mutex_unlock(&lock);
 		return 0;
@@ -489,6 +484,36 @@ static const struct backlight_ops lm3532_bl_ops = {
 	.update_status	= lm3532_bl_update_status,
 	.get_brightness	= lm3532_bl_get_brightness,
 };
+
+static void lm3532_bl_work(struct work_struct *work)
+{
+	struct lm3532_bl *data = container_of((struct delayed_work *)work,
+						struct lm3532_bl,
+						work);
+	struct i2c_client *client = data->client;
+	struct lm3532_backlight_platform_data *pdata = data->pdata;
+	int ret = 0;
+
+	if (mutex_trylock(&lock) == 0) {
+		/* Someone's holding mutex, reschedule */
+		pr_info("%s: mutex_trylock failed, suspended = %d\n",
+			__func__, suspended);
+		if (suspended == 0)
+			schedule_delayed_work(&data->work,
+				msecs_to_jiffies(pdata->pwm_resume_delay_ms));
+		return;
+	}
+
+	pr_info("%s: enabling PWM\n", __func__);
+	ret |= lm3532_write(client, LM3532_CTRL_A_PWM, pdata->ctrl_a_pwm);
+	ret |= lm3532_write(client, LM3532_CTRL_B_PWM, pdata->ctrl_b_pwm);
+	ret |= lm3532_write(client, LM3532_CTRL_C_PWM, pdata->ctrl_c_pwm);
+
+	mutex_unlock(&lock);
+
+	if (ret)
+		dev_err(&client->dev, "failed to initialize pwm\n");
+}
 
 static int lm3532_als_setup(struct lm3532_bl *data)
 {
@@ -719,93 +744,6 @@ static int lm3532_bl_init(struct lm3532_bl *data)
 	return 0;
 }
 
-static void lm3532_bl_work(struct work_struct *work)
-{
-	struct lm3532_bl *data = container_of((struct delayed_work *)work,
-						struct lm3532_bl,
-						work);
-
-	struct i2c_client *client = data->client;
-	struct lm3532_backlight_platform_data *pdata = data->pdata;
-#if 0
-	enum mapphone_panel_init_state display_state;
-#endif
-	int ret = 0;
-
-	while (mutex_trylock(&lock) == 0)
-		if (suspended == 1)
-			return;
-
-#if 0
-	display_state = get_panel_state();
-	switch (display_state) {
-	case MAPPHONE_PANEL_UNDETERMINE:
-		schedule_delayed_work(&data->work,
-			msecs_to_jiffies(pdata->init_delay_ms));
-		break;
-	case MAPPHONE_PANEL_PRESENT:
-		if (display_connected != LM3522_STATE_CONNECTED) {
-			if (lm3532_bl_init(data)) {
-				pr_info("%s: Init failed\n", __func__);
-				break;
-			}
-
-			display_connected = LM3522_STATE_CONNECTED;
-		}
-
-		pr_info("%s: Display backlight initilaized\n", __func__);
-		schedule_delayed_work(&data->work,
-			msecs_to_jiffies(pdata->init_delay_ms));
-		break;
-	case MAPPHONE_PANEL_NOT_PRESENT:
-		display_connected = LM3522_STATE_DISCONNECTED;
-		pr_info("%s: Display backlight disabled\n", __func__);
-		break;
-	case MAPPHONE_PANEL_INIT_FAILED:
-		if (display_connected != LM3522_STATE_CONNECTED) {
-			if (lm3532_bl_init(data)) {
-				pr_info("%s: Init failed\n", __func__);
-				break;
-			}
-
-			display_connected = LM3522_STATE_CONNECTED;
-		}
-		pr_info("%s: Display backlight enabled but PWM disabled\n",
-			__func__);
-		break;
-	case MAPPHONE_PANEL_INIT_DONE:
-#endif
-		if (display_connected != LM3522_STATE_CONNECTED) {
-			if (lm3532_bl_init(data)) {
-				pr_info("%s: init failed\n", __func__);
-#if 0
-				break;
-#endif
-			}
-
-			display_connected = LM3522_STATE_CONNECTED;
-		}
-
-		ret |= lm3532_write(client, LM3532_CTRL_A_PWM,
-			pdata->ctrl_a_pwm);
-		ret |= lm3532_write(client, LM3532_CTRL_B_PWM,
-			pdata->ctrl_b_pwm);
-		ret |= lm3532_write(client, LM3532_CTRL_C_PWM,
-			pdata->ctrl_c_pwm);
-		if (ret)
-			dev_err(&client->dev, "Failed to initialize pwm\n");
-
-		pr_info("%s: display backlight enabled\n", __func__);
-#if 0
-		break;
-	default:
-		break;
-	}
-#endif
-
-	mutex_unlock(&lock);
-}
-
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void lm3532_early_suspend(struct early_suspend *handler)
 {
@@ -849,7 +787,6 @@ static void lm3532_early_resume(struct early_suspend *handler)
 {
 	struct lm3532_bl *data;
 	struct lm3532_backlight_platform_data *pdata;
-	int ret = 0;
 
 	data = container_of(handler, struct lm3532_bl, early_suspend);
 	pdata = data->pdata;
@@ -867,12 +804,17 @@ static void lm3532_early_resume(struct early_suspend *handler)
 
 	suspended = 0;
 
-	if (display_connected == LM3522_STATE_CONNECTED)
-		ret = lm3532_bl_init(data);
+	lm3532_bl_init(data);
 
-	if ((!ret) && (display_connected != LM3522_STATE_DISCONNECTED))
+	if (pdata->pwm_resume_delay_ms > 0)
 		schedule_delayed_work(&data->work,
-			msecs_to_jiffies(pdata->init_delay_ms));
+			msecs_to_jiffies(pdata->pwm_resume_delay_ms));
+	else {
+		pr_info("%s: enabling PWM\n", __func__);
+		lm3532_write(data->client, LM3532_CTRL_A_PWM, pdata->ctrl_a_pwm);
+		lm3532_write(data->client, LM3532_CTRL_B_PWM, pdata->ctrl_b_pwm);
+		lm3532_write(data->client, LM3532_CTRL_C_PWM, pdata->ctrl_c_pwm);
+	}
 
 	mutex_unlock(&lock);
 
@@ -957,7 +899,9 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 	if(pdata->reset_release)
 		pdata->reset_release();
 		
-	lm3532_write(client, LM3532_REVISION, 0xFF);
+	ret = lm3532_write(client, LM3532_REVISION, 0xFF);
+	if (ret < 0)
+		return -EIO;
 	ret = lm3532_read(client, LM3532_REVISION, &reg_val);
 	if (ret < 0)
 		return -EIO;
@@ -976,8 +920,10 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 	}
 
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
-	if (data == NULL)
+	if (data == NULL) {
+		dev_err(&client->dev, "kzalloc error\n");
 		return -ENOMEM;
+	}
 
 	data->revid = reg_val;
 	data->client = client;
@@ -989,6 +935,8 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 
 	mutex_init(&lock);
 
+	INIT_DELAYED_WORK(&data->work, lm3532_bl_work);
+
 	if (pdata->ctrl_a_usage == LM3532_BACKLIGHT_DEVICE)
 		backlight_name = pdata->ctrl_a_name;
 	else if (pdata->ctrl_b_usage == LM3532_BACKLIGHT_DEVICE)
@@ -997,6 +945,20 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 		backlight_name = pdata->ctrl_c_name;
 	else
 		backlight_name = "lcd-backlight";
+
+	bl = backlight_device_register(backlight_name,
+			&client->dev, data, &lm3532_bl_ops, NULL);
+	if (IS_ERR(bl)) {
+		dev_err(&client->dev, "failed to register backlight\n");
+		ret = PTR_ERR(bl);
+		goto out;
+	}
+
+	bl->props.max_brightness = LM3532_MAX_BRIGHTNESS;
+	bl->props.brightness = pdata->boot_brightness;
+	data->bl = bl;
+
+	lm3532_register_init(data);
 
 	if (data->revid == LM3532_REV1) {
 		/* backlight must use LM3532_CNTRL_A and LM3532_LED_D1
@@ -1011,33 +973,8 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 			goto out;
 		}
 
-		INIT_DELAYED_WORK(&data->work, lm3532_bl_work);
-
-		bl = backlight_device_register(backlight_name,
-			&client->dev, data, &lm3532_bl_ops, NULL);
-		if (IS_ERR(bl)) {
-			dev_err(&client->dev, "failed to register backlight\n");
-			ret = PTR_ERR(bl);
-			goto out;
-		}
-
-		bl->props.max_brightness = LM3532_MAX_BRIGHTNESS;
-		bl->props.brightness = pdata->boot_brightness;
-
-		data->bl = bl;
-
 		pr_info("%s: finished\n", __func__);
 		return 0;
-	}
-
-	INIT_DELAYED_WORK(&data->work, lm3532_bl_work);
-
-	bl = backlight_device_register(backlight_name,
-			&client->dev, data, &lm3532_bl_ops, NULL);
-	if (IS_ERR(bl)) {
-		dev_err(&client->dev, "failed to register backlight\n");
-		ret = PTR_ERR(bl);
-		goto out;
 	}
 
 	ret = device_create_file(&client->dev, &dev_attr_registers);
@@ -1045,11 +982,6 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 		/* This is not a fatal error */
 		dev_err(&client->dev, "unable to create \'registers\' device file\n");
 	}
-
-	bl->props.max_brightness = LM3532_MAX_BRIGHTNESS;
-	bl->props.brightness = pdata->boot_brightness;
-
-	data->bl = bl;
 
 	if ((pdata->ctrl_a_usage == LM3532_LED_DEVICE)
 			|| (pdata->ctrl_a_usage == LM3532_LED_DEVICE_FDBCK))
@@ -1061,6 +993,21 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 			|| (pdata->ctrl_c_usage == LM3532_LED_DEVICE_FDBCK))
 		lm3532_led_probe(client, LM3532_CNTRL_C);
 
+	if (pdata->pwm_init_delay_ms)
+		schedule_delayed_work(&data->work,
+				msecs_to_jiffies(pdata->pwm_init_delay_ms));
+	else {
+		ret |= lm3532_write(client, LM3532_CTRL_A_PWM,
+						pdata->ctrl_a_pwm);
+		ret |= lm3532_write(client, LM3532_CTRL_B_PWM,
+						pdata->ctrl_b_pwm);
+		ret |= lm3532_write(client, LM3532_CTRL_C_PWM,
+						pdata->ctrl_c_pwm);
+		if (ret)
+			goto out;
+	}
+
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	data->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 5;
 	data->early_suspend.suspend = lm3532_early_suspend,
@@ -1068,16 +1015,16 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 	register_early_suspend(&data->early_suspend);
 #endif
 
-	schedule_delayed_work(&data->work,
-		msecs_to_jiffies(pdata->init_delay_ms));
-
 	pr_info("%s: finished\n", __func__);
 	return 0;
 
 out:
+	device_remove_file(&client->dev, &dev_attr_registers);
+	if (bl)
+		backlight_device_unregister(bl);
 	cancel_delayed_work_sync(&data->work);
-	i2c_set_clientdata(client, NULL);
 	mutex_destroy(&lock);
+	i2c_set_clientdata(client, NULL);
 	kfree(data);
 
 	return ret;
