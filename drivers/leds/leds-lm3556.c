@@ -60,6 +60,7 @@ struct lm3556_data {
 };
 
 static struct lm3556_data *torch_data;
+static bool lm3556_probe_success;
 
 struct lm3556_reg {
 	const char *name;
@@ -79,7 +80,7 @@ struct lm3556_reg {
 	{ "CONFIG_REG",	LM3556_CONF_REG},
 };
 
-int lm3556_read_reg(uint8_t reg, uint8_t *val)
+static int lm3556_read_reg(uint8_t reg, uint8_t *val)
 {
 	int err = -1;
 	int i = 0;
@@ -107,7 +108,7 @@ int lm3556_read_reg(uint8_t reg, uint8_t *val)
 	return 0;
 }
 
-int lm3556_write_reg(uint8_t reg, uint8_t val)
+static int lm3556_write_reg(uint8_t reg, uint8_t val)
 {
 	int err = -1;
 	int i = 0;
@@ -192,6 +193,10 @@ static DEVICE_ATTR(registers, 0644, ld_lm3556_registers_show,
 int lm3556_enable_strobe_mode(void)
 {
 	int err;
+
+	if (!lm3556_probe_success)
+		return -ENODEV;
+
 	err = lm3556_write_reg(LM3556_ENABLE_REG,
 				torch_data->pdata->flash_enable_val);
 	if (err) {
@@ -220,6 +225,10 @@ int lm3556_enable_torch_mode(void)
 
 {
 	int err;
+
+	if (!lm3556_probe_success)
+		return -ENODEV;
+
 	err = lm3556_write_reg(LM3556_ENABLE_REG,
 				torch_data->pdata->torch_enable_val);
 	if (err) {
@@ -239,6 +248,9 @@ int lm3556_disable_mode(void)
 	int err;
 	uint8_t temp_val;
 	uint8_t val;
+
+	if (!lm3556_probe_success)
+		return -ENODEV;
 
 	err = lm3556_read_reg(LM3556_ENABLE_REG, &val);
 	if (err) {
@@ -450,7 +462,7 @@ static ssize_t lm3556_strobe_err_show(struct device *dev,
 
 static DEVICE_ATTR(strobe_err, 0644, lm3556_strobe_err_show, NULL);
 
-int lm3556_init_registers(void)
+static int lm3556_init_registers(void)
 {
 	int err;
 	uint8_t si_filter_time_val;
@@ -611,6 +623,8 @@ static int lm3556_probe(struct i2c_client *client,
 		err = -ENODEV;
 		goto err_reg_register_file_failed;
 	}
+
+	lm3556_probe_success = true;
 
 	pr_debug("LM3556 Initialised");
 	return 0;
