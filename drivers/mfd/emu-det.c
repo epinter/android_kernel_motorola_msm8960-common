@@ -83,8 +83,6 @@
 #include <linux/usb/msm_hsusb_hw.h>
 #include <linux/mfd/pm8xxx/pm8921.h>
 #include <linux/mfd/pm8xxx/pm8921-charger.h>
-#include <linux/mfd/pm8xxx/gpio.h>
-#include <linux/mfd/pm8xxx/mpp.h>
 
 #include <mach/irqs.h>
 #include <mach/mmi_emu_det.h>
@@ -180,9 +178,6 @@ static bool in_range(int voltage, int idx)
 #define MODE_F_USB	1
 #define MODE_F_UART	2
 #define MODE_F_AUDIO	3
-
-#define GPIO_MODE_GPIO	0
-#define GPIO_MODE_GSBI	1
 
 static int debug_mask = PRINT_ERROR | PRINT_DEBUG |
 	PRINT_STATUS | PRINT_TRANSITION;
@@ -296,18 +291,14 @@ enum emu_det_interrupts {
 };
 
 enum emu_det_gpios {
-	MSMGPIO_BASE = 0,
-	EMU_SCI_OUT_GPIO = MSMGPIO_BASE,
+	EMU_SCI_OUT_GPIO,
 	EMU_ID_EN_GPIO,
 	EMU_MUX_CTRL0_GPIO,
 	EMU_MUX_CTRL1_GPIO,
-	WHISPER_TX_GPIO,
-	WHISPER_RX_GPIO,
-	PMGPIO_BASE,
-	SEMU_PPD_DET_GPIO = PMGPIO_BASE,
+	SEMU_PPD_DET_GPIO,
 	SEMU_ALT_MODE_EN_GPIO,
-	PMMPP_BASE,
-	EMU_ID_GPIO = PMMPP_BASE,
+	EMU_ID_GPIO,
+
 	EMU_DET_MAX_GPIOS,
 };
 
@@ -411,8 +402,8 @@ struct emu_det_data {
 	short whisper_auth;
 	u8 retries;
 	unsigned char power_up;
-	unsigned emu_gpio[EMU_DET_MAX_GPIOS],
-		emu_irq[EMU_DET_MAX_INTS];
+	unsigned emu_gpio[EMU_DET_MAX_GPIOS];
+	unsigned emu_irq[EMU_DET_MAX_INTS];
 	atomic_t in_lpm, last_irq;
 	int async_int;
 	int usb_present;
@@ -504,39 +495,10 @@ static const char *print_state_name(enum emu_det_state st)
 	return (st < STATE_MAX ? state_names[st] : "NA");
 }
 
-static struct gpiomux_setting gsbi12_gpio_mode = {
-	.func = 0, /* GPIO function assigned in whisper_gpio_mode() */
-	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_NONE,
-};
-
-static struct msm_gpiomux_config gsbi12_gpio_configs[] = {
-	{
-		.gpio      = 42,	/* GSBI12 GPIO */
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &gsbi12_gpio_mode,
-			[GPIOMUX_ACTIVE] = &gsbi12_gpio_mode,
-		},
-	},
-	{
-		.gpio      = 43,	/* GSBI12 GPIO */
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &gsbi12_gpio_mode,
-			[GPIOMUX_ACTIVE] = &gsbi12_gpio_mode,
-		},
-	},
-};
-
 static void whisper_gpio_mode(int mode)
 {
-	switch (mode) {
-	case GPIO_MODE_GPIO:
-		gsbi12_gpio_mode.func = GPIOMUX_FUNC_GPIO; break;
-	case GPIO_MODE_GSBI:
-		gsbi12_gpio_mode.func = GPIOMUX_FUNC_1; break;
-	}
-	msm_gpiomux_install(gsbi12_gpio_configs,
-		ARRAY_SIZE(gsbi12_gpio_configs));
+	if (emu_pdata && emu_pdata->gpio_mode)
+		emu_pdata->gpio_mode(mode);
 }
 
 static void gsbi_ctrl_register(bool restore)
@@ -599,13 +561,13 @@ static void mux_ctrl_mode(int mode)
 /* Returns voltage in mV */
 static int adc_emu_id_get(void)
 {
-	struct pm8xxx_adc_chan_result res;
-	memset(&res, 0, sizeof(res));
-	if (pm8xxx_adc_read(CHANNEL_MPP_2, &res))
-		pr_err("CHANNEL_MPP_2 ADC read error\n");
-	else
-		pr_emu_det(DEBUG, "emu_id=%lld uV\n", res.physical);
-	return (int)res.physical/1000;
+	int ret = 0;
+
+	if (emu_pdata && emu_pdata->adc_id)
+		ret = emu_pdata->adc_id();
+
+	pr_emu_det(DEBUG, "emu_id=%d mV\n", ret);
+	return ret;
 }
 
 /* Returns voltage in mV */
@@ -688,27 +650,12 @@ static bool dcd_check(void)
 }
 */
 
-static struct pm8xxx_mpp_config_data pm_emu_id_en_config[] = {
-	{       /* PMIC MPP 9 - EMU_ID_EN - protection Off */
-		.type           = PM8XXX_MPP_TYPE_D_OUTPUT,
-		.level          = PM8921_MPP_DIG_LEVEL_L17,
-		.control        = PM8XXX_MPP_DOUT_CTRL_LOW,
-	},
-	{       /* PMIC MPP 9 - EMU_ID_EN - protection On */
-		.type           = PM8XXX_MPP_TYPE_D_INPUT,
-		.level          = PM8921_MPP_DIG_LEVEL_L17,
-		.control        = PM8XXX_MPP_DIN_TO_INT,
-	},
-};
-
 static void emu_id_protection_setup(bool on)
 {
 	struct emu_det_data *emud = the_emud;
 	if (on == emud->protection_forced_off) {
-		if (emud->emu_gpio[EMU_ID_EN_GPIO] > NR_MSM_GPIOS) {
-			pr_emu_det(PARANOIC, "re-config PMIC MPP\n");
-			pm8xxx_mpp_config(emud->emu_gpio[EMU_ID_EN_GPIO],
-				&pm_emu_id_en_config[on]);
+		if (emu_pdata && emu_pdata->id_protect) {
+			emu_pdata->id_protect(on);
 		}
 		if (on) {
 			gpio_direction_input(
@@ -725,36 +672,12 @@ static void emu_id_protection_setup(bool on)
 		pr_emu_det(DEBUG, "state is the same as requested\n");
 }
 
-static struct pm_gpio pm_semu_alt_mode_config[] = {
-	{	/* PM GPIO 17 - SEMU_ALT_MODE_EN - standard mode */
-		.direction	= PM_GPIO_DIR_OUT,
-		.output_buffer	= PM_GPIO_OUT_BUF_CMOS,
-		.output_value	= 0,
-		.pull		= PM_GPIO_PULL_NO,
-		.vin_sel	= PM_GPIO_VIN_L17,
-		.out_strength	= PM_GPIO_STRENGTH_LOW,
-		.function	= PM_GPIO_FUNC_NORMAL,
-		.inv_int_pol	= 0,
-		.disable_pin	= 1, /* high impedance */
-	},
-	{	/* PM GPIO 17 - SEMU_ALT_MODE_EN - alternate mode */
-		.direction	= PM_GPIO_DIR_OUT,
-		.output_buffer	= PM_GPIO_OUT_BUF_CMOS,
-		.output_value	= 1,
-		.pull		= PM_GPIO_PULL_NO,
-		.vin_sel	= PM_GPIO_VIN_L17,
-		.out_strength	= PM_GPIO_STRENGTH_HIGH,
-		.function	= PM_GPIO_FUNC_NORMAL,
-		.inv_int_pol	= 0,
-		.disable_pin	= 0,
-	},
-};
-
 static void alt_mode_setup(bool on)
 {
 	struct emu_det_data *emud = the_emud;
-	pm8xxx_gpio_config(emud->emu_gpio[SEMU_ALT_MODE_EN_GPIO],
-			&pm_semu_alt_mode_config[on]);
+	if (emu_pdata && emu_pdata->alt_mode) {
+		emu_pdata->alt_mode(on);
+	}
 	emud->semu_alt_mode = on;
 	pr_emu_det(DEBUG, "SEMU_ALT_MODE_EN is %s\n",
 		on ? "alternate" : "standard");
@@ -1626,58 +1549,6 @@ put_on_schedule:
 	return IRQ_HANDLED;
 }
 
-static struct pm_gpio pm_gpio_config_data[] = {
-	{	/* PM GPIO 35 - SEMU_PPD_DET */
-		.direction	= PM_GPIO_DIR_IN,
-		.output_buffer	= PM_GPIO_OUT_BUF_CMOS,
-		.output_value	= 0,
-		.pull		= PM_GPIO_PULL_NO,
-		.vin_sel	= PM_GPIO_VIN_L17,
-		.out_strength	= PM_GPIO_STRENGTH_LOW,
-		.function	= PM_GPIO_FUNC_NORMAL,
-		.inv_int_pol	= 0,
-		.disable_pin	= 0,
-	},
-	{	/* PM GPIO 17 - SEMU_ALT_MODE_EN */
-		.direction	= PM_GPIO_DIR_OUT,
-		.output_buffer	= PM_GPIO_OUT_BUF_CMOS,
-		.output_value	= 0,
-		.pull		= PM_GPIO_PULL_NO,
-		.vin_sel	= PM_GPIO_VIN_L17,
-		.out_strength	= PM_GPIO_STRENGTH_LOW,
-		.function	= PM_GPIO_FUNC_NORMAL,
-		.inv_int_pol	= 0,
-		.disable_pin	= 1, /* high impedance */
-	},
-};
-
-static int pmic_gpio_initf(int idx, int base)
-{
-	struct emu_det_data *emud = the_emud;
-	return pm8xxx_gpio_config(emud->emu_gpio[idx],
-				&pm_gpio_config_data[idx-base]);
-}
-
-static struct pm8xxx_mpp_config_data pm_mpp_config_data[] = {
-	{	/* PMIC MPP 10 - EMU_ID */
-		.type		= PM8XXX_MPP_TYPE_A_INPUT,
-		.level		= PM8XXX_MPP_AIN_AMUX_CH7,
-		.control	= PM8XXX_MPP_DOUT_CTRL_LOW,
-	},
-	{	/* PMIC MPP 9 - EMU_ID_EN */
-		.type		= PM8XXX_MPP_TYPE_D_INPUT,
-		.level		= PM8921_MPP_DIG_LEVEL_L17,
-		.control	= PM8XXX_MPP_DIN_TO_INT,
-	},
-};
-
-static int pmic_mpp_initf(int idx, int base)
-{
-	struct emu_det_data *emud = the_emud;
-	return pm8xxx_mpp_config(emud->emu_gpio[idx],
-				&pm_mpp_config_data[idx-base]);
-}
-
 struct emu_det_irq_init_data {
 	unsigned int	idx;
 	char		*name;
@@ -1713,7 +1584,7 @@ static void free_irqs(void)
 		}
 }
 
-static int __devinit request_irqs(void)
+static int __devinit request_irqs(struct platform_device *pdev)
 {
 	struct emu_det_data *emud = the_emud;
 	int ret, i;
@@ -1722,6 +1593,13 @@ static int __devinit request_irqs(void)
 	bitmap_fill(emud->enabled_irqs, EMU_DET_MAX_INTS);
 
 	for (i = 0; i < ARRAY_SIZE(emu_det_irq_data); i++) {
+		emud->emu_irq[emu_det_irq_data[i].idx] =
+			platform_get_irq_byname(pdev, emu_det_irq_data[i].name);
+		if (!emud->emu_irq[emu_det_irq_data[i].idx]) {
+			pr_err("failed to get %s\n", emu_det_irq_data[i].name);
+			goto err_out;
+		}
+
 		pr_emu_det(DEBUG, "requesting irq[%d] %s-%d\n",
 				emu_det_irq_data[i].idx,
 				emu_det_irq_data[i].name,
@@ -1747,134 +1625,33 @@ err_out:
 	return -EINVAL;
 }
 
-static struct gpiomux_setting gpio_np_config = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_NONE,
-};
-
-static struct gpiomux_setting gpio_pu_config = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_UP,
-};
-
-static struct gpiomux_setting gpio_pd_config = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_DOWN,
-};
-
-static struct msm_gpiomux_config msm_gpio_configs[] = {
-	{
-		.gpio = 0, /* EMU_SCI_OUT */
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_np_config,
-			[GPIOMUX_ACTIVE] = &gpio_np_config,
-		}
-	},
-	{
-		.gpio = 0, /* EMU_ID_EN */
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_pd_config,
-			[GPIOMUX_ACTIVE] = &gpio_pd_config,
-		}
-	},
-	{
-		.gpio = 0, /* EMU_MUX_CTRL0 */
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_pu_config,
-			[GPIOMUX_ACTIVE] = &gpio_pu_config,
-		}
-	},
-	{
-		.gpio = 0, /* EMU_MUX_CTRL1 */
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_pd_config,
-			[GPIOMUX_ACTIVE] = &gpio_pd_config,
-		}
-	},
-	{
-		.gpio = 0, /* WHISPER_TX */
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_np_config,
-			[GPIOMUX_ACTIVE] = &gpio_np_config,
-		}
-	},
-	{
-		.gpio = 0, /* WHISPER_RX */
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_np_config,
-			[GPIOMUX_ACTIVE] = &gpio_np_config,
-		}
-	},
-};
-
-static int msm_gpio_initf(int idx, int base)
-{
-	struct emu_det_data *emud = the_emud;
-	msm_gpio_configs[idx].gpio = emud->emu_gpio[idx];
-	msm_gpiomux_install(&msm_gpio_configs[idx], 1);
-	return 0;
-}
-
-static void common_gpio_initf(unsigned gpio, int idx, int base)
-{
-	int rc;
-	if (gpio < NR_MSM_GPIOS)
-		rc = msm_gpio_initf(idx, base);
-	else {
-		gpio -= NR_MSM_GPIOS;
-		if (gpio < PM8921_NR_GPIOS)
-			rc = pmic_gpio_initf(idx, base);
-		else
-			rc = pmic_mpp_initf(idx, base);
-	}
-	if (rc)
-		pr_emu_det(ERROR, "gpio config function failed rc=%d\n", rc);
-}
-
 struct emu_det_gpio_init_data {
 	int	idx;
-	int	base;
 	char	*name;
 	int	direction;
 	int	value;
-	void	(*init)(unsigned, int, int);
 };
 
 #define SKIP		0
 #define DIR_INPUT	1
 #define DIR_OUTPUT	2
 
-#define DECLARE_GPIO(_id, _base, _dir, _val, _initf) \
+#define DECLARE_GPIO(_id, _dir, _val) \
 { \
 	.idx		= _id, \
-	.base		= _base, \
 	.name		= #_id, \
 	.direction	= _dir, \
 	.value		= _val, \
-	.init		= _initf, \
 }
-/*
- * GPIOs that belong to PMIC need to be consistent with config setup in PMIC
- * see pm_gpio_config_data[] and pm_mpp_config_data[] above
- */
+
 struct emu_det_gpio_init_data emu_det_gpio_data[] = {
-	DECLARE_GPIO(EMU_SCI_OUT_GPIO,   MSMGPIO_BASE, DIR_INPUT, \
-				-1, common_gpio_initf),
-	DECLARE_GPIO(EMU_ID_EN_GPIO,     MSMGPIO_BASE, DIR_INPUT, \
-				-1, common_gpio_initf), /* machine dependent */
-	DECLARE_GPIO(EMU_MUX_CTRL0_GPIO, MSMGPIO_BASE, DIR_OUTPUT, \
-				1, common_gpio_initf),
-	DECLARE_GPIO(EMU_MUX_CTRL1_GPIO, MSMGPIO_BASE, DIR_OUTPUT, \
-				0, common_gpio_initf),
-	DECLARE_GPIO(SEMU_PPD_DET_GPIO,  PMGPIO_BASE,  DIR_INPUT, \
-				-1, common_gpio_initf),
-	DECLARE_GPIO(SEMU_ALT_MODE_EN_GPIO, PMGPIO_BASE, SKIP, \
-				-1, common_gpio_initf),
-	DECLARE_GPIO(EMU_ID_GPIO,        PMMPP_BASE,   SKIP, \
-				-1, common_gpio_initf),
+	DECLARE_GPIO(EMU_SCI_OUT_GPIO,      DIR_INPUT,  -1),
+	DECLARE_GPIO(EMU_ID_EN_GPIO,        DIR_INPUT,  -1),
+	DECLARE_GPIO(EMU_MUX_CTRL0_GPIO,    DIR_OUTPUT,  1),
+	DECLARE_GPIO(EMU_MUX_CTRL1_GPIO,    DIR_OUTPUT,  0),
+	DECLARE_GPIO(SEMU_PPD_DET_GPIO,     DIR_INPUT,  -1),
+	DECLARE_GPIO(SEMU_ALT_MODE_EN_GPIO, SKIP,       -1),
+	DECLARE_GPIO(EMU_ID_GPIO,           SKIP,       -1),
 };
 
 static void free_gpios(void)
@@ -1890,8 +1667,6 @@ static void free_gpios(void)
 			emud->emu_gpio[i] = 0;
 		}
 }
-
-#define GPIO_IN_OUT(gpio)	(MSM_TLMM_BASE + 0x1004 + (0x10 * (gpio)))
 
 static int __devinit request_gpios(struct platform_device *pdev)
 {
@@ -1923,35 +1698,13 @@ static int __devinit request_gpios(struct platform_device *pdev)
 			goto err_out;
 		}
 
-		if (emu_det_gpio_data[i].init) {
-
-			emu_det_gpio_data[i].init(
-				emud->emu_gpio[emu_det_gpio_data[i].idx],
-				emu_det_gpio_data[i].idx,
-				emu_det_gpio_data[i].base);
-			pr_emu_det(DEBUG, "gpio %d has init function\n",
-				emud->emu_gpio[emu_det_gpio_data[i].idx]);
-		}
-
 		if (emu_det_gpio_data[i].direction == DIR_OUTPUT) {
-
 			ret = gpio_direction_output(
-				emud->emu_gpio[emu_det_gpio_data[i].idx], 0);
+				emud->emu_gpio[emu_det_gpio_data[i].idx],
+				emu_det_gpio_data[i].value);
 			pr_emu_det(DEBUG, "gpio %d is OUT\n",
 				emud->emu_gpio[emu_det_gpio_data[i].idx]);
-
-			if (emu_det_gpio_data[i].value != -1) {
-
-				gpio_set_value(
-				emud->emu_gpio[emu_det_gpio_data[i].idx],
-					emu_det_gpio_data[i].value);
-				pr_emu_det(DEBUG, "gpio %d value set to %d\n",
-				emud->emu_gpio[emu_det_gpio_data[i].idx],
-					emu_det_gpio_data[i].value);
-			}
-
 		} else if (emu_det_gpio_data[i].direction == DIR_INPUT) {
-
 			ret = gpio_direction_input(
 				emud->emu_gpio[emu_det_gpio_data[i].idx]);
 			pr_emu_det(DEBUG, "gpio %d is IN\n",
@@ -2288,13 +2041,6 @@ static int emu_det_probe(struct platform_device *pdev)
 		goto free_data;
 	}
 
-	data->emu_irq[PHY_USB_IRQ] = platform_get_irq(pdev, 0);
-	if (!data->emu_irq[PHY_USB_IRQ]) {
-		pr_err("failed to get PHY_USB_IRQ\n");
-		ret = -ENODEV;
-		goto free_data;
-	}
-
 	if (emu_pdata && emu_pdata->core_power)
 		emu_pdata->core_power(1);
 
@@ -2320,14 +2066,7 @@ static int emu_det_probe(struct platform_device *pdev)
 
 	data->wq = create_singlethread_workqueue("emu_det");
 
-	/*
-	 * have to hard code PM GPIO # for SEMU_PPD_DET, since devices-8960.c
-	 * already have GPIO aligned with PM8921_GPIO_PM_TO_SYS
-	 */
-	data->emu_irq[SEMU_PPD_DET_IRQ] = PM8921_GPIO_IRQ(PM8921_IRQ_BASE, 35);
-	data->emu_irq[EMU_SCI_OUT_IRQ] = MSM_GPIO_TO_INT(
-				data->emu_gpio[EMU_SCI_OUT_GPIO]);
-	ret = request_irqs();
+	ret = request_irqs(pdev);
 	if (ret) {
 		pr_err("couldn't register interrupts rc=%d\n", ret);
 		goto free_gpios;

@@ -1,5 +1,5 @@
 /*
- *  * Copyright (C) 2011 Motorola, Inc.
+ *  * Copyright (C) 2011-2012 Motorola, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -22,6 +22,13 @@
 struct mmi_emu_det_platform_data {
 	int (*enable_5v)(int on);
 	int (*core_power)(int on);
+	int (*id_protect)(int on);
+	int (*alt_mode)(int on);
+	void (*gpio_mode)(int mode);
+	int (*adc_id)(void);
 };
+
+#define GPIO_MODE_GPIO	0
+#define GPIO_MODE_GSBI	1
 
 #endif  /* __MMI_EMU_DETECTION_H__ */
