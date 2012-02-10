@@ -3687,10 +3687,10 @@ static int __devinit pm8921_chg_hw_init(struct pm8921_chg_chip *chip)
 						chip->max_voltage_mv, rc);
 		return rc;
 	}
-	rc = pm_chg_ibatsafe_set(chip, SAFE_CURRENT_MA);
+	rc = pm_chg_ibatsafe_set(chip, chip->max_bat_chg_current);
 	if (rc) {
 		pr_err("Failed to set max voltage to %d rc=%d\n",
-						SAFE_CURRENT_MA, rc);
+						chip->max_bat_chg_current, rc);
 		return rc;
 	}
 
