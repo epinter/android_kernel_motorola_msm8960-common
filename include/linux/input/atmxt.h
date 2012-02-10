@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2011 Motorola Mobility, Inc.
+ * Copyright (C) 2010-2012 Motorola Mobility, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -30,29 +30,28 @@
 #endif
 
 #define ATMXT_I2C_NAME              "atmxt-i2c"
-#define ATMXT_DRIVER_VERSION        "TF-06-03"
-#define ATMXT_DRIVER_DATE           "2011-10-14"
+#define ATMXT_DRIVER_VERSION        "TF-09-01-QC"
+#define ATMXT_DRIVER_DATE           "2012-02-09"
 
-#define CONFIG_TOUCHSCREEN_DEBUG	1
 #ifdef CONFIG_TOUCHSCREEN_DEBUG
 #define atmxt_dbg(dd, level, format, args...) \
 {\
 	if ((dd->dbg->dbg_lvl) >= level) \
-		printk(KERN_INFO format, ## args); \
+		printk(KERN_ERR format, ## args); \
 }
 #else
 #define atmxt_dbg(dd, level, format, args...) {}
 #endif
 
-/* make sure the right GPIOs are used */
-#define ATMXT_GPIO_INTR		46
-#define ATMXT_GPIO_RST		50
-#define ATMXT_GPIO_ENABLE	52
-
 #define ATMXT_DBG0                  0
 #define ATMXT_DBG1                  1
 #define ATMXT_DBG2                  2
 #define ATMXT_DBG3                  3
+
+/* make sure the right GPIOs are used */
+#define ATMXT_GPIO_INTR		46
+#define ATMXT_GPIO_RST		50
+#define ATMXT_GPIO_ENABLE	52
 
 #define ATMXT_IRQ_ENABLED_FLAG      0
 #define ATMXT_WAITING_FOR_FW_FLAG   1
@@ -74,6 +73,13 @@ enum atmxt_driver_state {
 	ATMXT_DRV_PROBE,
 	ATMXT_DRV_ERROR,
 };
+static const char * const atmxt_driver_state_string[] = {
+	"ACTIVE",
+	"IDLE",
+	"REFLASH",
+	"PROBE",
+	"ERROR",
+};
 
 enum atmxt_ic_state {
 	ATMXT_IC_ACTIVE,
@@ -86,6 +92,18 @@ enum atmxt_ic_state {
 	ATMXT_IC_ERR_BADAPP,
 	ATMXT_IC_RECOVER,
 };
+static const char * const atmxt_ic_state_string[] = {
+	"ACTIVE",
+	"SLEEP",
+	"UNKNOWN",
+	"BOOTLOADER",
+	"UNAVAILABLE",
+	"PRESENT",
+	"ERR_HWCONFIG",
+	"ERR_BADAPP",
+	"RECOVER",
+};
+
 
 struct atmxt_obj {
 	uint8_t           num;
@@ -115,6 +133,7 @@ struct atmxt_addr {
 	uint8_t         dbg[2];
 	uint8_t         dbg_cmd[2];
 	uint8_t         acq[2];
+	uint8_t         chg_cmd[2];
 } __attribute__ ((packed));
 
 struct atmxt_data {
@@ -125,6 +144,8 @@ struct atmxt_data {
 	uint8_t         xysize[2];
 	uint8_t         acq[4];
 	unsigned long   timer;
+	uint8_t         last_stat;
+	uint8_t         max_x;
 } __attribute__ ((packed));
 
 struct atmxt_touch_data {

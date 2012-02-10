@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2011 Motorola Mobility, Inc.
+ * Copyright (C) 2010-2012 Motorola Mobility, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -66,7 +66,13 @@ static irqreturn_t atmxt_isr(int irq, void *handle);
 static int atmxt_get_info_header(struct atmxt_driver_data *dd);
 static int atmxt_get_object_table(struct atmxt_driver_data *dd);
 static int atmxt_process_object_table(struct atmxt_driver_data *dd);
+static int atmxt_identify_panel(struct atmxt_driver_data *dd,
+		uint8_t *entry, struct touch_settings *pid_data,
+		uint8_t *count, uint8_t *id);
 static struct atmxt_obj *atmxt_create_object(int *err, uint8_t *entry);
+static int atmxt_copy_platform_data(struct atmxt_obj *obj,
+		struct touch_settings *tsett, uint8_t num_panels, uint8_t id);
+static int atmxt_create_id_table(struct atmxt_driver_data *dd, uint32_t ids);
 static int atmxt_check_settings(struct atmxt_driver_data *dd, bool *reset);
 static int atmxt_send_settings(struct atmxt_driver_data *dd, bool save_nvm);
 static int atmxt_recalibrate_ic(struct atmxt_driver_data *dd);
@@ -97,9 +103,8 @@ static int atmxt_message_handler9(struct atmxt_driver_data *dd,
 		uint8_t *msg, uint8_t size);
 static int atmxt_message_handler42(struct atmxt_driver_data *dd,
 		uint8_t *msg, uint8_t size);
-static int atmxt_message_handler48(struct atmxt_driver_data *dd,
-		uint8_t *msg, uint8_t size);
 static int atmxt_resume_restart(struct atmxt_driver_data *dd);
+static int atmxt_force_bootloader(struct atmxt_driver_data *dd);
 static bool atmxt_check_firmware_upgrade(struct atmxt_driver_data *dd,
 		struct touch_firmware *fw);
 static int atmxt_validate_firmware(const uint8_t *img, uint32_t size);
@@ -109,26 +114,6 @@ static char *atmxt_msg2str(const uint8_t *msg, uint8_t size);
 static bool atmxt_wait4irq(struct atmxt_driver_data *dd);
 static int atmxt_create_debug_files(struct atmxt_driver_data *dd);
 static void atmxt_remove_debug_files(struct atmxt_driver_data *dd);
-
-static const char *atmxt_driver_state_string[] = {
-	"ACTIVE",
-	"IDLE",
-	"REFLASH",
-	"PROBE",
-	"ERROR",
-};
-
-static const char *atmxt_ic_state_string[] = {
-	"ACTIVE",
-	"SLEEP",
-	"UNKNOWN",
-	"BOOTLOADER",
-	"UNAVAILABLE",
-	"PRESENT",
-	"ERR_HWCONFIG",
-	"ERR_BADAPP",
-	"RECOVER",
-};
 
 static const struct i2c_device_id atmxt_id[] = {
 	/* This name must match the i2c_board_info name */
@@ -151,7 +136,7 @@ static struct i2c_driver atmxt_driver = {
 #endif
 };
 
-static int	atmxt_hw_reset(struct atmxt_driver_data *dd)
+static int atmxt_hw_reset(struct atmxt_driver_data *dd)
 {
 	gpio_set_value(dd->pdata->gpio_reset, 0);
 	msleep(9);
@@ -159,7 +144,7 @@ static int	atmxt_hw_reset(struct atmxt_driver_data *dd)
 	return(0);
 }
 
-static int	atmxt_hw_recov(struct atmxt_driver_data *dd)
+static int atmxt_hw_recov(struct atmxt_driver_data *dd)
 {
 	disable_irq_nosync(dd->client->irq);
 	atmxt_hw_reset(dd);
@@ -167,7 +152,7 @@ static int	atmxt_hw_recov(struct atmxt_driver_data *dd)
 	return(0);
 }
 
-static	int	atmxt_irq_stat(struct atmxt_driver_data *dd)
+static int atmxt_irq_stat(struct atmxt_driver_data *dd)
 {
 	return(gpio_get_value(dd->pdata->gpio_interrupt));
 }
@@ -177,26 +162,29 @@ static int atmxt_probe(struct i2c_client *client,
 {
 	struct atmxt_driver_data *dd = NULL;
 	int err = 0;
-	bool softfail = false;
+	bool debugfail = false;
+	bool icfail = false;
 
-	pr_info("%s: Driver: %s, Version: %s, Date: %s\n", __func__,
+	printk(KERN_INFO "%s: Driver: %s, Version: %s, Date: %s\n", __func__,
 		ATMXT_I2C_NAME, ATMXT_DRIVER_VERSION, ATMXT_DRIVER_DATE);
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
-		pr_err("%s: I2C_FUNC_I2C failure.\n", __func__);
+		printk(KERN_ERR "%s: I2C_FUNC_I2C failure.\n", __func__);
 		err = -ENODEV;
 		goto atmxt_probe_fail;
 	}
 
 	if (client == NULL) {
-		pr_err("%s: I2C client structure is missing.\n", __func__);
+		printk(KERN_ERR "%s: I2C client structure is missing.\n",
+			__func__);
 		err = -EINVAL;
 		goto atmxt_probe_fail;
 	}
 
 	dd = kzalloc(sizeof(struct atmxt_driver_data), GFP_KERNEL);
 	if (dd == NULL) {
-		pr_err("%s: Unable to create driver data.\n", __func__);
+		printk(KERN_ERR "%s: Unable to create driver data.\n",
+			__func__);
 		err = -ENOMEM;
 		goto atmxt_probe_fail;
 	}
@@ -211,7 +199,8 @@ static int atmxt_probe(struct i2c_client *client,
 
 	dd->mutex = kzalloc(sizeof(struct mutex), GFP_KERNEL);
 	if (dd->mutex == NULL) {
-		pr_err("%s: Unable to create mutex lock.\n", __func__);
+		printk(KERN_ERR "%s: Unable to create mutex lock.\n",
+			__func__);
 		err = -ENOMEM;
 		goto atmxt_probe_fail;
 	}
@@ -220,7 +209,8 @@ static int atmxt_probe(struct i2c_client *client,
 #ifdef CONFIG_TOUCHSCREEN_DEBUG
 	dd->dbg = kzalloc(sizeof(struct atmxt_debug), GFP_KERNEL);
 	if (dd->dbg == NULL) {
-		pr_err("%s: Unable to create driver debug data.\n", __func__);
+		printk(KERN_ERR "%s: Unable to create driver debug data.\n",
+			__func__);
 		err = -ENOMEM;
 		goto atmxt_probe_fail;
 	}
@@ -268,7 +258,7 @@ static int atmxt_probe(struct i2c_client *client,
 
 	err = atmxt_register_inputs(dd);
 	if (err < 0)
-		goto atmxt_gpio_fail;
+		goto atmxt_probe_fail;
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	dd->es.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
@@ -279,38 +269,37 @@ static int atmxt_probe(struct i2c_client *client,
 
 	err = atmxt_request_irq(dd);
 	if (err < 0)
-		goto atmxt_gpio_fail;
+		goto atmxt_probe_fail;
 
 	mutex_lock(dd->mutex);
 
 	err = atmxt_create_debug_files(dd);
 	if (err < 0) {
-		pr_err("%s: Probe had error %d when creating debug files.\n",
-				__func__, err);
-		softfail = true;
+		printk(KERN_ERR
+			"%s: Probe had error %d when creating debug files.\n",
+			__func__, err);
+		debugfail = true;
 	}
 
 	err = atmxt_restart_ic(dd, dd->pdata->fw, false);
-	if ((err == -ENOMEM) ||
-		(err == -EOVERFLOW)) {
-		mutex_unlock(dd->mutex);
-		goto atmxt_gpio_fail;
-	} else if (err < 0) {
-		pr_err("%s: Probe had error %d when restarting IC.\n",
+	if (err < 0) {
+		printk(KERN_ERR
+			"%s: Probe had error %d when restarting IC.\n",
 				__func__, err);
-		softfail = true;
+		icfail = true;
 	}
 
-	atmxt_set_drv_state(dd, ATMXT_DRV_ACTIVE);
-	dd->status = dd->status | (1 << ATMXT_IRQ_ENABLED_FLAG);
-	enable_irq(dd->client->irq);
+	if (!icfail) {
+		atmxt_set_drv_state(dd, ATMXT_DRV_ACTIVE);
+		dd->status = dd->status | (1 << ATMXT_IRQ_ENABLED_FLAG);
+		enable_irq(dd->client->irq);
+	} else {
+		atmxt_set_drv_state(dd, ATMXT_DRV_IDLE);
+	}
 
 	mutex_unlock(dd->mutex);
 
-	if (softfail)
-		pr_info("%s: Probe completed with errors\n", __func__);
-
-	return 0;
+	goto atmxt_probe_pass;
 
 atmxt_gpio_fail:
 	gpio_free(dd->pdata->gpio_interrupt);
@@ -318,10 +307,21 @@ gpio_res_fail:
 	gpio_free(dd->pdata->gpio_reset);
 gpio_en_fail:
 	gpio_free(dd->pdata->gpio_enable);
+
 atmxt_probe_fail:
 	atmxt_free(dd);
-	pr_err("%s: Probe failed with error code %d.\n", __func__, err);
+	printk(KERN_ERR "%s: Probe failed with error code %d.\n",
+		__func__, err);
 	return err;
+
+atmxt_probe_pass:
+	if (debugfail || icfail) {
+		printk(KERN_INFO "%s: Probe completed with errors.\n",
+			__func__);
+	} else {
+		printk(KERN_INFO "%s: Probe successful.\n", __func__);
+	}
+	return 0;
 }
 
 static int atmxt_remove(struct i2c_client *client)
@@ -369,6 +369,8 @@ static int atmxt_suspend(struct i2c_client *client, pm_message_t message)
 		case ATMXT_IC_ACTIVE:
 			atmxt_dbg(dd, ATMXT_DBG3,
 				"%s: Putting touch IC to sleep...\n", __func__);
+			dd->status = dd->status &
+				~(1 << ATMXT_FIXING_CALIBRATION);
 			err = atmxt_i2c_write(dd,
 				dd->addr->pwr[0], dd->addr->pwr[1],
 				&(sleep_cmd[0]), 2);
@@ -386,15 +388,13 @@ static int atmxt_suspend(struct i2c_client *client, pm_message_t message)
 				atmxt_set_ic_state(dd, ATMXT_IC_SLEEP);
 			}
 			break;
-		case ATMXT_IC_SLEEP:
-			break;
 		case ATMXT_IC_RECOVER:
 			printk(KERN_ERR "%s: Attempted to suspend %s.\n",
 				__func__, "while recovering IC");
 			err = -EBUSY;
 			goto atmxt_suspend_fail;
 		default:
-			printk(KERN_ERR "%s: Driver %s, IC %s not handled.\n",
+			printk(KERN_ERR "%s: Driver %s, IC %s suspend.\n",
 				__func__, atmxt_driver_state_string[drv_state],
 				atmxt_ic_state_string[ic_state]);
 		}
@@ -416,7 +416,7 @@ static int atmxt_suspend(struct i2c_client *client, pm_message_t message)
 		break;
 
 	default:
-		printk(KERN_ERR "%s: Driver state \"%s\" not handled.\n",
+		printk(KERN_ERR "%s: Driver state \"%s\" suspend.\n",
 			__func__, atmxt_driver_state_string[drv_state]);
 	}
 
@@ -454,8 +454,6 @@ static int atmxt_resume(struct i2c_client *client)
 	case ATMXT_DRV_ACTIVE:
 	case ATMXT_DRV_IDLE:
 		switch (ic_state) {
-		case ATMXT_IC_ACTIVE:
-			break;
 		case ATMXT_IC_SLEEP:
 			/*
 			 * Disable, re-enable interrupts
@@ -505,7 +503,7 @@ static int atmxt_resume(struct i2c_client *client)
 			atmxt_release_touches(dd);
 			break;
 		default:
-			printk(KERN_ERR "%s: Driver %s, IC %s not handled.\n",
+			printk(KERN_ERR "%s: Driver %s, IC %s resume.\n",
 				__func__, atmxt_driver_state_string[drv_state],
 				atmxt_ic_state_string[ic_state]);
 		}
@@ -515,7 +513,7 @@ static int atmxt_resume(struct i2c_client *client)
 		break;
 
 	default:
-		printk(KERN_ERR "%s: Driver state \"%s\" not handled.\n",
+		printk(KERN_ERR "%s: Driver state \"%s\" resume.\n",
 			__func__, atmxt_driver_state_string[drv_state]);
 	}
 
@@ -845,11 +843,9 @@ static int atmxt_restart_ic(struct atmxt_driver_data *dd,
 	bool irq_low = false;
 	uint32_t size = 0;
 	bool upgrade_fw = false;
-	uint8_t flash_reset = 0xA5;
 	bool need_reset = false;
-	int cur_drv_state;
+	int cur_drv_state = 0;
 	bool upgrade_complete = false;
-	bool forced_recov = false;
 
 	if (force_fw_upgrade) {
 		upgrade_fw = true;
@@ -862,11 +858,10 @@ atmxt_restart_ic_start:
 	atmxt_free_ic_data(dd);
 	atmxt_release_touches(dd);
 	irq_low = false;
-	need_reset = false;
 	if (atmxt_get_ic_state(dd) != ATMXT_IC_UNKNOWN)
 		atmxt_set_ic_state(dd, ATMXT_IC_UNKNOWN);
 
-	if (!upgrade_fw && !upgrade_complete && !forced_recov) {
+	if (!upgrade_fw && !upgrade_complete) {
 		atmxt_dbg(dd, ATMXT_DBG2,
 			"%s: Resetting touch IC...\n", __func__);
 		err = atmxt_hw_reset(dd);
@@ -879,7 +874,7 @@ atmxt_restart_ic_start:
 	}
 
 	irq_low = atmxt_wait4irq(dd);
-	if (!irq_low && !forced_recov && !upgrade_fw) {
+	if (!irq_low && !upgrade_fw) {
 		printk(KERN_ERR "%s: Timeout waiting for interrupt.\n",
 			__func__);
 		err = -ETIME;
@@ -894,7 +889,7 @@ atmxt_restart_ic_start:
 		goto atmxt_restart_ic_fail;
 	}
 
-	if (upgrade_fw || forced_recov) {
+	if (upgrade_fw) {
 		if (!irq_low) {
 			atmxt_dbg(dd, ATMXT_DBG3,
 				"%s: Ignored interrupt timeout.\n", __func__);
@@ -1004,13 +999,19 @@ atmxt_restart_ic_upgradefw_start:
 		if (upgrade_fw) {
 			err = atmxt_validate_firmware(fw->img, fw->size);
 			if (err < 0) {
-				printk(KERN_ERR
-					"%s: %s--%s.\n",
-					__func__,
+				printk(KERN_ERR "%s: %s--%s.\n", __func__,
 					"Firmware upgrade image is invalid",
 					"not upgrading");
 				upgrade_fw = false;
 			}
+		}
+
+		if (upgrade_complete) {
+			printk(KERN_ERR "%s: %s %s %s.\n", __func__,
+				"Platform firmware version",
+				"does not match platform firmware",
+				"after upgrade");
+			upgrade_fw = false;
 		}
 	}
 
@@ -1032,21 +1033,10 @@ atmxt_restart_ic_upgradefw_start:
 	err = atmxt_get_object_table(dd);
 	if (err < 0) {
 		printk(KERN_ERR "%s: Error getting object table.\n", __func__);
-		if (upgrade_fw) {
-			atmxt_dbg(dd, ATMXT_DBG2,
-				"%s: Using hardware recovery...\n", __func__);
-			err = atmxt_hw_recov(dd);
-			if (err < 0) {
-				printk(KERN_ERR
-					"%s: Failed to force flash mode.\n",
-					__func__);
-				goto atmxt_restart_ic_fail;
-			}
-			forced_recov = true;
-			goto atmxt_restart_ic_start;
-		} else {
+		if (upgrade_fw)
+			goto atmxt_restart_upgradefw_check;
+		else
 			goto atmxt_restart_ic_fail;
-		}
 	}
 
 	dd->addr = kzalloc(sizeof(struct atmxt_addr), GFP_KERNEL);
@@ -1076,45 +1066,15 @@ atmxt_restart_upgradefw_check:
 	if (upgrade_fw) {
 		printk(KERN_INFO "%s: Resetting IC to upgrade firmware...\n",
 			__func__);
-		if (dd->addr == NULL ||
-			((dd->addr->rst[0] == 0) && (dd->addr->rst[1] == 0))) {
-			atmxt_dbg(dd, ATMXT_DBG2,
-				"%s: No soft reset available--%s\n",
-				__func__, "using hardware recovery...");
-			err = atmxt_hw_recov(dd);
-			if (err < 0) {
-				printk(KERN_ERR "%s: %s--%s.\n", __func__,
-					"Forced hardware recovery failed",
-					"unable to reflash IC");
-				goto atmxt_restart_ic_fail;
-			}
-			forced_recov = true;
-		} else {
-			err = atmxt_i2c_write(dd,
-				dd->addr->rst[0], dd->addr->rst[1],
-				&flash_reset, 1);
-			if (err < 0) {
-				printk(KERN_ERR
-					"%s: Unable to send %s.\n",
-					__func__, "flash reset command");
-				atmxt_dbg(dd, ATMXT_DBG2,
-					"%s: Using hardware recovery...\n",
-					__func__);
-				err = atmxt_hw_recov(dd);
-				if (err < 0) {
-					printk(KERN_ERR "%s: %s%s--%s.\n",
-						__func__,
-						"Forced hardware ",
-						"recovery failed",
-						"unable to reflash IC");
-					goto atmxt_restart_ic_fail;
-				}
-				forced_recov = true;
-			}
+		err = atmxt_force_bootloader(dd);
+		if (err < 0) {
+			printk(KERN_ERR "%s: Unable to force flash mode.\n",
+				__func__);
+			goto atmxt_restart_ic_fail;
 		}
-
 		goto atmxt_restart_ic_start;
 	}
+
 
 	err = atmxt_set_useful_data(dd);
 	if (err < 0) {
@@ -1132,7 +1092,6 @@ atmxt_restart_upgradefw_check:
 	} else if (need_reset) {
 		upgrade_fw = false;
 		upgrade_complete = false;
-		forced_recov = false;
 		goto atmxt_restart_ic_start;
 	}
 
@@ -1176,14 +1135,15 @@ static irqreturn_t atmxt_isr(int irq, void *handle)
 			atmxt_active_handler(dd);
 			break;
 		default:
-			printk(KERN_ERR "%s: Driver %s, IC %s not handled.\n",
+			printk(KERN_ERR "%s: Driver %s, IC %s IRQ received.\n",
 				__func__, atmxt_driver_state_string[drv_state],
 				atmxt_ic_state_string[ic_state]);
+			break;
 		}
 		break;
 
 	default:
-		printk(KERN_ERR "%s: Driver state \"%s\" not handled.\n",
+		printk(KERN_ERR "%s: Driver state \"%s\" IRQ received.\n",
 			__func__, atmxt_driver_state_string[drv_state]);
 		break;
 	}
@@ -1269,8 +1229,6 @@ static int atmxt_process_object_table(struct atmxt_driver_data *dd)
 	int err = 0;
 	int i = 0;
 	int j = 0;
-	int k = 0;
-	int iter = 0;
 	struct atmxt_obj *first = NULL;
 	struct atmxt_obj *obj = NULL;
 	struct atmxt_obj *prev = NULL;
@@ -1278,12 +1236,14 @@ static int atmxt_process_object_table(struct atmxt_driver_data *dd)
 	struct atmxt_obj *prev_inst = NULL;
 	uint32_t ids = 0;
 	uint32_t inst_addr = 0;
-	struct touch_settings *tsett = NULL;
-	int size = 0;
 	int nvm_start = 0;
+	uint8_t panel_count = 0x01;
+	uint8_t panel_id = 0x01;
 
 	for (i = 0; i < dd->info_blk->size; i += 6) {
 		if (dd->info_blk->data[i+0] != 38) {
+			ids += dd->info_blk->data[i+5] *
+				(dd->info_blk->data[i+4] + 1);
 			atmxt_check_useful_addr(dd, &(dd->info_blk->data[i]));
 			continue;
 		} else {
@@ -1292,7 +1252,15 @@ static int atmxt_process_object_table(struct atmxt_driver_data *dd)
 		}
 	}
 
-	for (i = nvm_start; i < dd->info_blk->size; i += 6) {
+	err = atmxt_identify_panel(dd, &(dd->info_blk->data[nvm_start]),
+		dd->pdata->sett[38], &panel_count, &panel_id);
+	if (err < 0) {
+		printk(KERN_ERR "%s: Panel identification failed.\n",
+			__func__);
+		goto atmxt_process_object_table_fail;
+	}
+
+	for (i = nvm_start + 6; i < dd->info_blk->size; i += 6) {
 		obj = atmxt_create_object(&err, &(dd->info_blk->data[i]));
 		if (err < 0) {
 			printk(KERN_ERR "%s: Unable to create entry %hu.\n",
@@ -1306,8 +1274,8 @@ static int atmxt_process_object_table(struct atmxt_driver_data *dd)
 		if (prev != NULL)
 			prev->next_obj = obj;
 		prev = obj;
-
 		prev_inst = obj;
+
 		for (j = 1; j <= dd->info_blk->data[i+4]; j++) {
 			inst = atmxt_create_object(&err,
 				&(dd->info_blk->data[i]));
@@ -1326,8 +1294,8 @@ static int atmxt_process_object_table(struct atmxt_driver_data *dd)
 			inst_addr = inst_addr + (inst->size * j);
 			if (inst_addr > 0xFFFF) {
 				printk(KERN_ERR "%s: %s %u of object %u %s.\n",
-					__func__, "The address for instance",
-					j, i, "exceeds addressable space");
+					__func__, "The address for instance", j,
+					obj->num, "exceeds addressable space");
 				err = -EOVERFLOW;
 				goto atmxt_process_object_table_fail;
 			}
@@ -1341,58 +1309,104 @@ static int atmxt_process_object_table(struct atmxt_driver_data *dd)
 			(dd->info_blk->data[i+3] + 1) *
 			(dd->info_blk->data[i+4] + 1);
 
-		tsett = dd->pdata->sett[obj->num];
-		if (tsett != NULL) {
-			if (tsett->tag != 0) {
-				printk(KERN_ERR
-					"%s: Tagging not supported %s %u.\n",
-					__func__, "for object", obj->num);
-			}
-			if (tsett->size > obj->size)
-				size = obj->size;
-			else
-				size = tsett->size;
-			memcpy(obj->data, tsett->data, size);
-
-			if (obj->next_inst != NULL) {
-				printk(KERN_ERR "%s: %s %s %u.\n", __func__,
-				"Platform data is not being written",
-				"to instances of object", obj->num);
-			}
+		err = atmxt_copy_platform_data(obj, dd->pdata->sett[obj->num],
+			panel_count, panel_id);
+		if (err < 0) {
+			printk(KERN_ERR "%s: Failed to copy platform data.\n",
+				__func__);
+			goto atmxt_process_object_table_fail;
 		}
 
 		atmxt_check_useful_addr(dd, &(dd->info_blk->data[i]));
 	}
 
-	ids++;
-	if (ids > 255) {
-		printk(KERN_ERR "%s: Too many report IDs used.\n", __func__);
-		err = -EOVERFLOW;
-		goto atmxt_process_object_table_fail;
-	}
-
-	dd->info_blk->msg_id = kzalloc(sizeof(uint8_t) * ids, GFP_KERNEL);
-	if (dd->info_blk->msg_id == NULL) {
+	err = atmxt_create_id_table(dd, ids);
+	if (err < 0) {
 		printk(KERN_ERR "%s: Unable to create ID table.\n", __func__);
-		err = -ENOMEM;
 		goto atmxt_process_object_table_fail;
-	}
-
-	dd->info_blk->id_size = ids;
-	dd->info_blk->msg_id[iter] = 0;
-	iter++;
-	for (i = 0; i < dd->info_blk->size; i += 6) {
-		for (j = 0; j <= dd->info_blk->data[i+4]; j++) {
-			for (k = 0; k < dd->info_blk->data[i+5]; k++) {
-				dd->info_blk->msg_id[iter] =
-					dd->info_blk->data[i+0];
-				iter++;
-			}
-		}
 	}
 
 atmxt_process_object_table_fail:
 	dd->objs = first;
+	return err;
+}
+
+static int atmxt_identify_panel(struct atmxt_driver_data *dd,
+		uint8_t *entry, struct touch_settings *pid_data,
+		uint8_t *count, uint8_t *id)
+{
+	int err = 0;
+	int i = 0;
+	int j = 0;
+	uint8_t *buf = NULL;
+	uint8_t rec_bytes = 0x00;
+
+	if (pid_data == NULL)
+		goto atmxt_identify_panel_fail;
+
+	if (pid_data->tag == 0) {
+		printk(KERN_ERR "%s: No panel tag data found--%s.\n",
+			__func__, "assuming only one panel");
+		*count = 0x01;
+	} else {
+		*count = pid_data->tag;
+	}
+
+	if (pid_data->size % *count != 0) {
+		printk(KERN_ERR
+			"%s: Panel identifaction misaligned.\n",
+			__func__);
+		err = -EINVAL;
+		goto atmxt_identify_panel_fail;
+	}
+
+	if (entry[4] != 0) {
+		printk(KERN_ERR "%s: %s--%s...\n", __func__,
+			"Multiple instances of object 38 are not supported",
+			"using only the first instance");
+	}
+
+	buf = kzalloc(sizeof(uint8_t) * (entry[3] + 1), GFP_KERNEL);
+	if (buf == NULL) {
+		printk(KERN_ERR "%s: Unable to allocate buf.\n", __func__);
+		err = -ENOMEM;
+		goto atmxt_identify_panel_fail;
+	}
+
+	err = atmxt_i2c_write(dd, entry[1], entry[2], NULL, 0);
+	if (err < 0) {
+		printk(KERN_ERR "%s: Unable to set address pointer.\n",
+			__func__);
+		goto atmxt_identify_panel_fail;
+	}
+
+	err = atmxt_i2c_read(dd, buf, (entry[3] + 1));
+	if (err < 0) {
+		printk(KERN_ERR "%s: Unable to read panel data.\n", __func__);
+		goto atmxt_identify_panel_fail;
+	}
+
+	rec_bytes = pid_data->size / *count;
+	for (i = 0; i < *count; i++) {
+		for (j = 0; j < rec_bytes; j++) {
+			if (buf[j] != pid_data->data[i * rec_bytes + j])
+				break;
+		}
+
+		if (j == rec_bytes) {
+			*id = i + 1;
+			break;
+		}
+	}
+
+	if (i == *count) {
+		printk(KERN_ERR "%s: Panel did not match ID data--%s.\n",
+			__func__, "defaulting to first panel data");
+		*id = 0x01;
+	}
+
+atmxt_identify_panel_fail:
+	kfree(buf);
 	return err;
 }
 
@@ -1437,12 +1451,107 @@ atmxt_create_object_fail:
 	return obj;
 }
 
+static int atmxt_copy_platform_data(struct atmxt_obj *obj,
+		struct touch_settings *tsett, uint8_t num_panels, uint8_t id)
+{
+	int err = 0;
+	int i = 0;
+	int iter = 0;
+	int size = 0;
+	const uint8_t *data = NULL;
+	int data_size = 0;
+	uint8_t inst_count = 0x00;
+
+	if (tsett == NULL)
+		goto atmxt_copy_platform_data_fail;
+
+	if (tsett->tag % num_panels != 0) {
+		printk(KERN_ERR "%s: Panel data unevenly packed.\n", __func__);
+		err = -EINVAL;
+		goto atmxt_copy_platform_data_fail;
+	}
+
+	if (tsett->tag == 0) {
+		inst_count = 1;
+		data_size = tsett->size;
+		data = &(tsett->data[0]);
+	} else {
+		inst_count = tsett->tag / num_panels;
+
+		if (tsett->size % (inst_count * num_panels) != 0) {
+			printk(KERN_ERR "%s: Settings data unevenly packed.\n",
+				__func__);
+			err = -EINVAL;
+			goto atmxt_copy_platform_data_fail;
+		}
+
+		data_size = tsett->size / (inst_count * num_panels);
+		data = &(tsett->data[(id - 1) * data_size * inst_count]);
+	}
+
+	if (data_size > obj->size)
+		size = obj->size;
+	else
+		size = data_size;
+
+	for (i = 0; i < inst_count; i++) {
+		if (obj != NULL) {
+			memcpy(obj->data, &(data[iter]), size);
+			iter += data_size;
+			obj = obj->next_inst;
+		} else {
+			break;
+		}
+	}
+
+atmxt_copy_platform_data_fail:
+	return err;
+}
+
+static int atmxt_create_id_table(struct atmxt_driver_data *dd, uint32_t ids)
+{
+	int err = 0;
+	int i = 0;
+	int j = 0;
+	int k = 0;
+	int iter = 0;
+
+	ids++;
+	if (ids > 255) {
+		printk(KERN_ERR "%s: Too many report IDs used.\n", __func__);
+		err = -EOVERFLOW;
+		goto atmxt_create_id_table_fail;
+	}
+
+	dd->info_blk->msg_id = kzalloc(sizeof(uint8_t) * ids, GFP_KERNEL);
+	if (dd->info_blk->msg_id == NULL) {
+		printk(KERN_ERR "%s: Unable to create ID table.\n", __func__);
+		err = -ENOMEM;
+		goto atmxt_create_id_table_fail;
+	}
+
+	dd->info_blk->id_size = ids;
+	dd->info_blk->msg_id[iter] = 0;
+	iter++;
+	for (i = 0; i < dd->info_blk->size; i += 6) {
+		for (j = 0; j <= dd->info_blk->data[i+4]; j++) {
+			for (k = 0; k < dd->info_blk->data[i+5]; k++) {
+				dd->info_blk->msg_id[iter] =
+					dd->info_blk->data[i+0];
+				iter++;
+			}
+		}
+	}
+
+atmxt_create_id_table_fail:
+	return err;
+}
+
 static int atmxt_check_settings(struct atmxt_driver_data *dd, bool *reset)
 {
 	int err = 0;
 	uint8_t *msg_buf = NULL;
 
-	*reset = false;
 	atmxt_dbg(dd, ATMXT_DBG3, "%s: Checking IC settings...\n", __func__);
 
 	if (dd->data->max_msg_size < 5) {
@@ -1489,6 +1598,12 @@ static int atmxt_check_settings(struct atmxt_driver_data *dd, bool *reset)
 				__func__);
 			goto atmxt_check_settings_fail;
 		}
+		*reset = false;
+	} else if (*reset) {
+		printk(KERN_ERR "%s: %s.\n", __func__,
+			"Previous attempt to write platform settings failed");
+		err = -EINVAL;
+		goto atmxt_check_settings_fail;
 	} else {
 		printk(KERN_INFO "%s: Updating IC settings...\n", __func__);
 		err = atmxt_send_settings(dd, true);
@@ -1498,7 +1613,7 @@ static int atmxt_check_settings(struct atmxt_driver_data *dd, bool *reset)
 			goto atmxt_check_settings_fail;
 		}
 
-		msleep(200);
+		msleep(500);
 		*reset = true;
 	}
 
@@ -1510,24 +1625,24 @@ atmxt_check_settings_fail:
 static int atmxt_send_settings(struct atmxt_driver_data *dd, bool save_nvm)
 {
 	int err = 0;
-	uint8_t *buf;
+	uint8_t *buf = NULL;
 	int iter = 0;
-	struct atmxt_obj *obj;
-	struct atmxt_obj *inst;
+	struct atmxt_obj *obj = NULL;
+	struct atmxt_obj *inst = NULL;
 	uint8_t nvm_cmd = 0x55;
+
+	if (dd->objs == NULL) {
+		printk(KERN_ERR "%s: Unable able to send settings--%s.\n",
+			__func__, "no objects exist");
+		err = -ENODATA;
+		goto atmxt_send_settings_fail;
+	}
 
 	buf = kzalloc(sizeof(uint8_t) * dd->info_blk->obj_size, GFP_KERNEL);
 	if (buf == NULL) {
 		printk(KERN_ERR "%s: Unable to allocate settings buffer.\n",
 			__func__);
 		err = -ENOMEM;
-		goto atmxt_send_settings_fail;
-	}
-
-	if (dd->objs == NULL) {
-		printk(KERN_ERR "%s: Unable able to send settings--%s.\n",
-			__func__, "no objects exist");
-		err = -ENODATA;
 		goto atmxt_send_settings_fail;
 	}
 
@@ -1640,6 +1755,8 @@ static int atmxt_verify_ic_calibration_fix(struct atmxt_driver_data *dd)
 	int err = 0;
 	uint8_t cmd = 0xF3;
 	uint8_t *buf = NULL;
+	int size = 0;
+	int offset = 0;
 	int i = 0;
 	bool data_valid = false;
 	bool touches = false;
@@ -1658,7 +1775,8 @@ static int atmxt_verify_ic_calibration_fix(struct atmxt_driver_data *dd)
 			__func__);
 	}
 
-	buf = kzalloc(sizeof(uint8_t) * 82, GFP_KERNEL);
+	size = (dd->data->max_x * 2) * 2 + 2;
+	buf = kzalloc(sizeof(uint8_t) * size, GFP_KERNEL);
 	if (buf == NULL) {
 		printk(KERN_ERR "%s: Failed to allocate buffer.\n", __func__);
 		err = -ENOMEM;
@@ -1673,11 +1791,12 @@ static int atmxt_verify_ic_calibration_fix(struct atmxt_driver_data *dd)
 	}
 
 	for (i = 0; i < 10; i++) {
-		err = atmxt_i2c_read(dd, buf, 82);
+		err = atmxt_i2c_read(dd, buf, size);
 		if (err < 0) {
 			printk(KERN_ERR "%s: %s %s %d %s %d.\n",
-				__func__, "Failed to diagnostic debug data",
-				"on loop", i, "with error code", err);
+				__func__, "Failed to read",
+				"diagnostic debug data on loop",
+				i, "with error code", err);
 			goto atmxt_verify_ic_calibration_fix_fail;
 		}
 
@@ -1703,21 +1822,23 @@ static int atmxt_verify_ic_calibration_fix(struct atmxt_driver_data *dd)
 		mask_high = 0x00;
 	}
 
+	offset = 2;
 	for (i = 0; i < dd->data->xysize[0]; i++) {
-		if ((buf[2 + (i * 2)] & mask_low) != 0x00) {
+		if ((buf[offset + (i * 2)] & mask_low) != 0x00) {
 			touches = true;
 			break;
-		} else if ((buf[3 + (i * 2)] & mask_high) != 0x00) {
+		} else if ((buf[offset + 1 + (i * 2)] & mask_high) != 0x00) {
 			touches = true;
 			break;
 		}
 	}
 
+	offset = 2 + dd->data->max_x * 2;
 	for (i = 0; i < dd->data->xysize[0]; i++) {
-		if ((buf[42 + (i * 2)] & mask_low) != 0x00) {
+		if ((buf[offset + (i * 2)] & mask_low) != 0x00) {
 			antitouches = true;
 			break;
-		} else if ((buf[43 + (i * 2)] & mask_high) != 0x00) {
+		} else if ((buf[offset + 1 + (i * 2)] & mask_high) != 0x00) {
 			antitouches = true;
 			break;
 		}
@@ -1744,9 +1865,7 @@ static int atmxt_verify_ic_calibration_fix(struct atmxt_driver_data *dd)
 		if (((toc - dd->data->timer) * 1000 / HZ) >= 2500) {
 			err = atmxt_stop_ic_calibration_fix(dd);
 			if (err < 0) {
-				printk(KERN_ERR
-					"%s: %s %s.\n",
-					__func__,
+				printk(KERN_ERR "%s: %s %s.\n", __func__,
 					"Failed to stop",
 					"fixing IC calibration");
 				goto atmxt_verify_ic_calibration_fix_fail;
@@ -1925,6 +2044,13 @@ static void atmxt_check_useful_addr(struct atmxt_driver_data *dd,
 			dd->addr->acq[1]++;
 		break;
 
+	case 18:
+		dd->addr->chg_cmd[0] = entry[1] + 1;
+		dd->addr->chg_cmd[1] = entry[2];
+		if (dd->addr->chg_cmd[0] < entry[1])
+			dd->addr->chg_cmd[1]++;
+		break;
+
 	case 37:
 		dd->addr->dbg[0] = entry[1];
 		dd->addr->dbg[1] = entry[2];
@@ -2005,20 +2131,50 @@ static int atmxt_set_useful_data(struct atmxt_driver_data *dd)
 
 		if (obj->data[21] >= 0x04)
 			dd->data->res[1] = true;
+	}
 
-		dd->data->xysize[0] = obj->data[3];
+	if (obj->size < 5) {
+		printk(KERN_ERR "%s: Touch object size is too small.\n",
+			__func__);
+		err = -ENODATA;
+		goto atmxt_set_useful_data_fail;
+	}
+
+	dd->data->xysize[0] = obj->data[3];
+	dd->data->xysize[1] = obj->data[4];
+
+	switch (dd->info_blk->header[0]) {
+	case 0xA0:
+		atmxt_dbg(dd, ATMXT_DBG3, "%s: IC has invalid family ID.\n",
+			__func__);
+		dd->data->max_x = 0;
+		break;
+	case 0x82:
+		dd->data->max_x = 24;
+		if (dd->data->xysize[0] > 24) {
+			printk(KERN_ERR "%s: X size of %hu exceeds 24.\n",
+				__func__, dd->data->xysize[0]);
+			dd->data->xysize[0] = 24;
+		}
+		if (dd->data->xysize[1] > 14) {
+			printk(KERN_ERR "%s: Y size of %hu exceeds 14.\n",
+				__func__, dd->data->xysize[1]);
+			dd->data->xysize[1] = 14;
+		}
+		break;
+	default:
+		dd->data->max_x = 20;
 		if (dd->data->xysize[0] > 20) {
 			printk(KERN_ERR "%s: X size of %hu exceeds 20.\n",
 				__func__, dd->data->xysize[0]);
 			dd->data->xysize[0] = 20;
 		}
-
-		dd->data->xysize[1] = obj->data[4];
-		if (dd->data->xysize[1] > 20) {
-			printk(KERN_ERR "%s: Y size of %hu exceeds 20.\n",
+		if (dd->data->xysize[1] > 14) {
+			printk(KERN_ERR "%s: Y size of %hu exceeds 14.\n",
 				__func__, dd->data->xysize[1]);
-			dd->data->xysize[1] = 20;
+			dd->data->xysize[1] = 14;
 		}
+		break;
 	}
 
 	for (i = 1; i < dd->info_blk->id_size; i++) {
@@ -2044,22 +2200,14 @@ static void atmxt_compute_checksum(struct atmxt_driver_data *dd)
 	uint8_t low = 0;
 	uint8_t mid = 0;
 	uint8_t high = 0;
-	struct atmxt_obj *obj;
-	struct atmxt_obj *inst;
+	struct atmxt_obj *obj  = NULL;
+	struct atmxt_obj *inst = NULL;
 	uint8_t byte1 = 0;
 	uint8_t byte2 = 0;
 	bool need_next_byte = false;
 	uint8_t iter = 0;
 
 	obj = dd->objs;
-	while (obj != NULL) {
-		if (obj->num == 38) {
-			obj = obj->next_obj;
-			break;
-		} else {
-			obj = obj->next_obj;
-		}
-	}
 
 	while (obj != NULL) {
 		if (need_next_byte) {
@@ -2101,7 +2249,7 @@ static void atmxt_compute_checksum(struct atmxt_driver_data *dd)
 					}
 				}
 
-				if (need_next_byte) {
+				if ((need_next_byte)||(iter == 0)) {
 					obj = obj->next_obj;
 					iter = 0;
 					continue;
@@ -2309,8 +2457,6 @@ static int atmxt_process_message(struct atmxt_driver_data *dd,
 			break;
 		case 42:
 			err = atmxt_message_handler42(dd, msg, size);
-		case 48:
-			err = atmxt_message_handler48(dd, msg, size);
 		default:
 			contents = atmxt_msg2str(msg, size);
 			printk(KERN_ERR "%s: Object %u sent this:  %s.\n",
@@ -2354,10 +2500,7 @@ static void atmxt_report_touches(struct atmxt_driver_data *dd)
 		p = dd->rdat->tchdat[i].p;
 		w = dd->rdat->tchdat[i].w;
 
-		if (p == 0)
-			dd->rdat->tchdat[i].active = false;
-		else
-			dd->rdat->active_touches++;
+		dd->rdat->active_touches++;
 
 		atmxt_dbg(dd, ATMXT_DBG1, "%s: ID=%d, X=%d, Y=%d, P=%d, W=%d\n",
 			__func__, id, x, y, p, w);
@@ -2388,6 +2531,9 @@ static void atmxt_report_touches(struct atmxt_driver_data *dd)
 		input_mt_sync(dd->in_dev);
 	}
 
+	if (dd->rdat->active_touches == 0)
+		input_mt_sync(dd->in_dev);
+
 	input_sync(dd->in_dev);
 
 	return;
@@ -2400,7 +2546,7 @@ static void atmxt_release_touches(struct atmxt_driver_data *dd)
 	atmxt_dbg(dd, ATMXT_DBG1, "%s: Releasing all touches...\n", __func__);
 
 	for (i = 0; i < ATMXT_MAX_TOUCHES; i++)
-		dd->rdat->tchdat[i].p = 0;
+		dd->rdat->tchdat[i].active = false;
 
 	atmxt_report_touches(dd);
 
@@ -2420,33 +2566,53 @@ static int atmxt_message_handler6(struct atmxt_driver_data *dd,
 		goto atmxt_message_handler6_fail;
 	}
 
-	if (msg[1] & 0x80)
+	if (msg[1] & 0x80) {
 		printk(KERN_INFO "%s: Touch IC reset complete.\n", __func__);
+		dd->data->last_stat = 0x00;
+	}
 
-	if (msg[1] & 0x40)
+	if ((msg[1] & 0x40) && !(dd->data->last_stat & 0x40)) {
 		printk(KERN_ERR "%s: Acquisition cycle overflow.\n", __func__);
-
-	if (msg[1] & 0x20) {
-		printk(KERN_ERR "%s: Signal error in IC acquisition.\n",
+	} else if (!(msg[1] & 0x40) && (dd->data->last_stat & 0x40)) {
+		printk(KERN_INFO "%s: Acquisition cycle now normal.\n",
 			__func__);
 	}
 
-	if (msg[1] & 0x10) {
+	if ((msg[1] & 0x20) && !(dd->data->last_stat & 0x20)) {
+		printk(KERN_ERR "%s: Signal error in IC acquisition.\n",
+			__func__);
+	} else if (!(msg[1] & 0x20) && (dd->data->last_stat & 0x20)) {
+		printk(KERN_INFO "%s: IC acquisition signal now in range.\n",
+			__func__);
+	}
+
+	if ((msg[1] & 0x10) && !(dd->data->last_stat & 0x10)) {
 		printk(KERN_INFO "%s: Touch IC is calibrating.\n", __func__);
-	} else if (msg[1] == 0) {
+	} else if (!(msg[1] & 0x10) && (dd->data->last_stat & 0x10)) {
 		printk(KERN_INFO "%s: Touch IC calibration complete.\n",
 			__func__);
 	}
 
-	if (msg[1] & 0x08) {
+	if ((msg[1] & 0x08) && !(dd->data->last_stat & 0x08)) {
 		printk(KERN_ERR "%s: Hardware configuration error--%s.\n",
 			__func__, "check platform settings");
+	} else if (!(msg[1] & 0x08) && (dd->data->last_stat & 0x08)) {
+		printk(KERN_INFO
+			"%s: Hardware configuration error corrected.\n",
+			__func__);
 	}
 
 	if (msg[1] & 0x04) {
 		printk(KERN_ERR "%s: IC reports I2C communication error.\n",
 			__func__);
 	}
+
+	if (msg[1] == dd->data->last_stat) {
+		printk(KERN_INFO "%s: Received checksum 0x%02X%02X%02X.\n",
+			__func__, msg[2], msg[3], msg[4]);
+	}
+
+	dd->data->last_stat = msg[1];
 
 #ifdef CONFIG_TOUCHSCREEN_DEBUG
 	if (dd->status & (1 << ATMXT_IGNORE_CHECKSUM))
@@ -2530,14 +2696,17 @@ static int atmxt_message_handler9(struct atmxt_driver_data *dd,
 			msg[0]);
 	}
 
-	if (msg[1] & 0x22)
-		dd->rdat->tchdat[tchidx].p = 0;
-	else
+	if (msg[1] & 0x22) {
+		atmxt_dbg(dd, ATMXT_DBG1, "%s: Touch ID %hu released.\n",
+			__func__, tchidx);
+		dd->rdat->tchdat[tchidx].active = false;
+	} else {
 		dd->rdat->tchdat[tchidx].active = true;
+	}
 
 	if (msg[1] & 0x02) {
-		printk(KERN_INFO "%s: Touch with report id %u suppressed.\n",
-			__func__, msg[0]);
+		printk(KERN_INFO "%s: Touch ID %hu suppressed.\n",
+			__func__, tchidx);
 	}
 
 atmxt_message_handler9_fail:
@@ -2570,42 +2739,6 @@ atmxt_message_handler42_fail:
 	return err;
 }
 
-static int atmxt_message_handler48(struct atmxt_driver_data *dd,
-		uint8_t *msg, uint8_t size)
-{
-	int err = 0;
-	char *contents = NULL;
-
-	atmxt_dbg(dd, ATMXT_DBG3,
-		"%s: Handling message type 48...\n", __func__);
-
-	if (size < 4) {
-		printk(KERN_ERR "%s: Message size is too small.\n", __func__);
-		err = -EINVAL;
-		goto atmxt_message_handler48_fail;
-	}
-
-	if (msg[1] & 0x08) {
-		printk(KERN_INFO "%s: Noise suppression is active.\n",
-		__func__);
-	} else {
-		printk(KERN_INFO "%s: Noise suppression is not running.\n",
-			__func__);
-	}
-
-	if (msg[1] & 0x04) {
-		printk(KERN_ERR "%s: Noise suppression algorithm error--%s.\n",
-		__func__, "touch IC has halted");
-	}
-
-	contents = atmxt_msg2str(&(msg[2]), size-2);
-	printk(KERN_INFO "%s: Noise Data:  %s\n.", __func__, contents);
-
-atmxt_message_handler48_fail:
-	kfree(contents);
-	return err;
-}
-
 static int atmxt_resume_restart(struct atmxt_driver_data *dd)
 {
 	int err = 0;
@@ -2631,6 +2764,83 @@ static int atmxt_resume_restart(struct atmxt_driver_data *dd)
 	}
 
 atmxt_resume_restart_fail:
+	return err;
+}
+
+static int atmxt_force_bootloader(struct atmxt_driver_data *dd)
+{
+	int err = 0;
+	int i = 0;
+	uint8_t cmd = 0x00;
+	bool chg_used = false;
+
+	if (dd->addr == NULL) {
+		atmxt_dbg(dd, ATMXT_DBG3, "%s: No address data available.\n",
+			__func__);
+		goto atmxt_force_bootloader_use_recov;
+	}
+
+	if ((dd->addr->chg_cmd[0] == 0) && (dd->addr->chg_cmd[1] == 0)) {
+		atmxt_dbg(dd, ATMXT_DBG3,
+			"%s: No interrupt force available--%s.\n",
+			__func__, "will pool instead");
+		goto atmxt_force_bootloader_check_reset;
+	}
+
+	cmd = 0x02;
+	err = atmxt_i2c_write(dd,
+		dd->addr->chg_cmd[0], dd->addr->chg_cmd[1], &cmd, 1);
+	if (err < 0) {
+		printk(KERN_ERR "%s: Unable to force interrupt low--%s.\n",
+			__func__, "will poll instead");
+	} else {
+		chg_used = true;
+	}
+
+atmxt_force_bootloader_check_reset:
+	if ((dd->addr->rst[0] == 0) && (dd->addr->rst[1] == 0)) {
+		atmxt_dbg(dd, ATMXT_DBG3,
+			"%s: No soft reset available--%s.\n", __func__,
+			"will try hardware recovery instead");
+		goto atmxt_force_bootloader_use_recov;
+	}
+
+	cmd = 0xA5;
+	err = atmxt_i2c_write(dd, dd->addr->rst[0], dd->addr->rst[1], &cmd, 1);
+	if (err < 0) {
+		printk(KERN_ERR "%s: Unable to send flash reset command.\n",
+			__func__);
+		goto atmxt_force_bootloader_use_recov;
+	}
+
+	if (!chg_used) {
+		for (i = 0; i < 128; i++) {
+			if (atmxt_irq_stat(dd) == 1)
+				break;
+			else
+				udelay(2000);
+		}
+
+		if (i == 128) {
+			printk(KERN_ERR "%s: %s.\n", __func__,
+				"Waiting for flash reset timed out");
+			err = -ETIME;
+			goto atmxt_force_bootloader_exit;
+		}
+	}
+
+	goto atmxt_force_bootloader_exit;
+
+atmxt_force_bootloader_use_recov:
+	atmxt_dbg(dd, ATMXT_DBG2, "%s: Using hardware recovery...\n", __func__);
+	atmxt_hw_recov(dd);
+	if (err < 0) {
+		printk(KERN_ERR "%s: Forced hardware recovery failed--%s.\n",
+			__func__, "unable to reflash IC");
+		goto atmxt_force_bootloader_exit;
+	}
+
+atmxt_force_bootloader_exit:
 	return err;
 }
 
@@ -2853,7 +3063,7 @@ static bool atmxt_wait4irq(struct atmxt_driver_data *dd)
 
 	for (i = 0; i < 500; i++) {
 		if (atmxt_irq_stat(dd) != 0) {
-			msleep(1);
+			msleep(20);
 		} else {
 			irq_low = true;
 			break;
@@ -2876,7 +3086,7 @@ static ssize_t atmxt_debug_drv_debug_store(struct device *dev,
 {
 	int err = 0;
 	struct atmxt_driver_data *dd = dev_get_drvdata(dev);
-	unsigned long value;
+	unsigned long value = 0;
 
 	mutex_lock(dd->mutex);
 
@@ -2918,7 +3128,7 @@ static ssize_t atmxt_debug_drv_flags_store(struct device *dev,
 {
 	int err = 0;
 	struct atmxt_driver_data *dd = dev_get_drvdata(dev);
-	unsigned long value;
+	unsigned long value = 0;
 
 	mutex_lock(dd->mutex);
 
@@ -2949,6 +3159,7 @@ atmxt_debug_drv_flags_store_exit:
 }
 static DEVICE_ATTR(drv_flags, S_IRUSR | S_IWUSR,
 	atmxt_debug_drv_flags_show, atmxt_debug_drv_flags_store);
+#endif
 
 static ssize_t atmxt_debug_drv_irq_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -2965,7 +3176,7 @@ static ssize_t atmxt_debug_drv_irq_store(struct device *dev,
 {
 	int err = 0;
 	struct atmxt_driver_data *dd = dev_get_drvdata(dev);
-	unsigned long value;
+	unsigned long value = 0;
 
 	mutex_lock(dd->mutex);
 
@@ -3019,7 +3230,6 @@ atmxt_debug_drv_irq_store_exit:
 }
 static DEVICE_ATTR(drv_irq, S_IRUSR | S_IWUSR,
 	atmxt_debug_drv_irq_show, atmxt_debug_drv_irq_store);
-#endif
 
 static ssize_t atmxt_debug_driver_stat_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -3080,7 +3290,7 @@ static ssize_t atmxt_debug_hw_recov_store(struct device *dev,
 {
 	int err = 0;
 	struct atmxt_driver_data *dd = dev_get_drvdata(dev);
-	unsigned long value;
+	unsigned long value = 0;
 
 	mutex_lock(dd->mutex);
 
@@ -3249,7 +3459,7 @@ static ssize_t atmxt_debug_ic_group_data_store(struct device *dev,
 	uint8_t *entry = NULL;
 	int data_size = 0;
 	uint8_t *data_out = NULL;
-	unsigned long value;
+	unsigned long value = 0;
 	uint8_t *conv_buf = NULL;
 
 	mutex_lock(dd->mutex);
@@ -3369,7 +3579,7 @@ static ssize_t atmxt_debug_ic_group_number_store(struct device *dev,
 {
 	int err = 0;
 	struct atmxt_driver_data *dd = dev_get_drvdata(dev);
-	unsigned long value;
+	unsigned long value = 0;
 
 	mutex_lock(dd->mutex);
 
@@ -3409,7 +3619,7 @@ static ssize_t atmxt_debug_ic_group_offset_store(struct device *dev,
 {
 	int err = 0;
 	struct atmxt_driver_data *dd = dev_get_drvdata(dev);
-	unsigned long value;
+	unsigned long value = 0;
 
 	mutex_lock(dd->mutex);
 
@@ -3588,13 +3798,13 @@ static int atmxt_create_debug_files(struct atmxt_driver_data *dd)
 		printk(KERN_ERR "%s: Failed to create drv_flags.\n", __func__);
 		err = check;
 	}
+#endif
 
 	check = device_create_file(&(dd->client->dev), &dev_attr_drv_irq);
 	if (check < 0) {
 		printk(KERN_ERR "%s: Failed to create drv_irq.\n", __func__);
 		err = check;
 	}
-#endif
 
 	check = device_create_file(&(dd->client->dev), &dev_attr_drv_stat);
 	if (check < 0) {
@@ -3667,8 +3877,8 @@ static void atmxt_remove_debug_files(struct atmxt_driver_data *dd)
 #ifdef CONFIG_TOUCHSCREEN_DEBUG
 	device_remove_file(&(dd->client->dev), &dev_attr_drv_debug);
 	device_remove_file(&(dd->client->dev), &dev_attr_drv_flags);
-	device_remove_file(&(dd->client->dev), &dev_attr_drv_irq);
 #endif
+	device_remove_file(&(dd->client->dev), &dev_attr_drv_irq);
 	device_remove_file(&(dd->client->dev), &dev_attr_drv_stat);
 	device_remove_file(&(dd->client->dev), &dev_attr_drv_ver);
 #ifdef CONFIG_TOUCHSCREEN_DEBUG
