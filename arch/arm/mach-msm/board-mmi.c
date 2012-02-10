@@ -2240,6 +2240,11 @@ static __init void register_i2c_devices_from_dt(int bus)
 				break;
 
 			case 0x000B0004: /* National_LM3532 */
+				prop = of_get_property(child, "led2_controller",
+						&len);
+				if (prop && (len == sizeof(u8)))
+					mp_lm3532_pdata.led2_controller =
+						*(u8 *)prop;
 				info.platform_data = &mp_lm3532_pdata;
 				break;
 
