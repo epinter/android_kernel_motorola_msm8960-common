@@ -94,6 +94,12 @@ static int lm3556_read_reg(uint8_t reg, uint8_t *val)
 		pr_err("%s: null i2c client\n", __func__);
 		return -EUNATCH;
 	}
+
+	if (torch_data->client->adapter == NULL) {
+		pr_err("%s: null adapter\n", __func__);
+		return -EUNATCH;
+	}
+
 	value[0] = reg & 0xFF;
 
 	do {
@@ -117,6 +123,11 @@ static int lm3556_write_reg(uint8_t reg, uint8_t val)
 	/* If I2C client doesn't exist */
 	if (torch_data->client == NULL) {
 		pr_err("%s: null i2c client\n", __func__);
+		return -EUNATCH;
+	}
+
+	if (torch_data->client->adapter == NULL) {
+		pr_err("%s: null adapter\n", __func__);
 		return -EUNATCH;
 	}
 
