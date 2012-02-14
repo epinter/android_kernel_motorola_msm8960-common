@@ -45,6 +45,7 @@
 #include <asm/setup.h>
 #include <asm/hardware/gic.h>
 #include <asm/mach/mmc.h>
+#include <asm/bootinfo.h>
 
 #include <mach/board.h>
 #include <mach/msm_iomap.h>
@@ -627,7 +628,7 @@ static struct led_info pm8921_led_info[] = {
 	},
 	[1] = {
 		.name			= "led:battery_full",
-		.default_trigger	= "battery-full",
+		/*.default_trigger	= "battery-full", */
 	},
 };
 
@@ -883,4 +884,9 @@ void __init pm8921_init(struct pm8xxx_keypad_platform_data *keypad,
 	pm8921_platform_data.charger_pdata->arch_reboot_cb = cb;
 #endif
 #endif
+	/* Charging LED is needed only on charge-only mode */
+	if (bi_powerup_reason() != PU_REASON_CHARGER) {
+		pr_debug("%s: disabling charging LED\n", __func__);
+		pm8921_led_info[0].default_trigger = NULL;
+	}
 }
