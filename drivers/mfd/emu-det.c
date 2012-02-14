@@ -2334,6 +2334,17 @@ static int emu_det_probe(struct platform_device *pdev)
 	}
 	pr_emu_det(DEBUG, "done with irqs\n");
 
+	data->state = CONFIG;
+	data->power_up = 1;
+	data->semu_alt_mode = false;
+	data->accy = ACCY_NONE;
+	data->undetect_cnt = 0;
+	data->bpass_mod = 'a';
+	data->whisper_auth = AUTH_NOT_STARTED;
+	data->otg_enabled = false;
+	data->low_pwr_mode = 1;
+	dev_set_drvdata(&pdev->dev, data);
+
 	pm8921_charger_register_vbus_sn(&emu_det_vbus_state);
 	pr_emu_det(DEBUG, "registered callback with PM8921\n");
 
@@ -2370,16 +2381,6 @@ static int emu_det_probe(struct platform_device *pdev)
 	if (ret)
 		pr_err("couldn't register switch (%s) rc=%d\n",
 					data->noauthdev.name, ret);
-	data->state = CONFIG;
-	data->power_up = 1;
-	data->semu_alt_mode = false;
-	data->accy = ACCY_NONE;
-	data->undetect_cnt = 0;
-	data->bpass_mod = 'a';
-	data->whisper_auth = AUTH_NOT_STARTED;
-	data->otg_enabled = false;
-	data->low_pwr_mode = 1;
-	dev_set_drvdata(&pdev->dev, data);
 
 	ret = sysfs_create_group(&(pdev->dev.kobj), &emu_dev_attr_groups);
 	if (ret)
