@@ -308,6 +308,7 @@ static struct mmi_emu_det_platform_data mmi_emu_det_data = {
 #define MSM8960_HSUSB_SIZE	SZ_4K
 
 #define MSM_UART_NAME		"msm_serial_hs"
+#define MSM_DSPS_HCLK           "dsps_hclk"
 #define MSM_GSBI12_PHYS		0x12480000
 #define MSM_UART12DM_PHYS	(MSM_GSBI12_PHYS + 0x10000)
 
@@ -443,12 +444,6 @@ static struct resource resources_uart_gsbi12[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.start	= MSM_GSBI12_PHYS,
-		.end	= MSM_GSBI12_PHYS + 4 - 1,
-		.name	= "gsbi_resource",
-		.flags	= IORESOURCE_MEM,
-	},
-	{
 		.start	= DMOV_WHISPER_TX_CHAN,
 		.end	= DMOV_WHISPER_RX_CHAN,
 		.name	= "uartdm_channels",
@@ -500,7 +495,7 @@ static __init void mot_setup_gsbi12_clk(void)
 	if (!msm_gsbi12_qup_clk_ptr(&clk))
 		mot_set_gsbi12_clk("core_clk", clk, NULL);
 	if (!msm_gsbi12_p_clk_ptr(&clk))
-		mot_set_gsbi12_clk("iface_clk", clk, MSM_UART_NAME ".1");
+		mot_set_gsbi12_clk("iface_clk", clk, MSM_DSPS_HCLK);
 }
 
 static __init void mot_init_emu_detection(

@@ -2770,18 +2770,43 @@ void __init msm8960_init_usb(void)
 /* Sensors DSPS platform data */
 #ifdef CONFIG_MSM_DSPS
 #define DSPS_PIL_GENERIC_NAME		"dsps"
+/* GSBI12 Base. */
+#define MSM_GSBI12_PHYS		(0x12480000)
+/* Protocol for UART/I2C. */
+#define UART_I2C_PROTOCOL	(0x6<<4)
 #endif /* CONFIG_MSM_DSPS */
 
 void __init msm8960_init_dsps(void)
 {
 #ifdef CONFIG_MSM_DSPS
+	struct clk *hclk;
 	struct msm_dsps_platform_data *pdata =
 		msm_dsps_device.dev.platform_data;
+
+	void *gsbi_ctrl = ioremap_nocache(MSM_GSBI12_PHYS, 4);
+
 	pdata->pil_name = DSPS_PIL_GENERIC_NAME;
 	pdata->gpios = NULL;
 	pdata->gpios_num = 0;
 
 	platform_device_register(&msm_dsps_device);
+
+	/* Enable GSBI12_HCLK */
+	hclk = clk_get_sys("dsps_hclk", "iface_clk");
+	if (IS_ERR(hclk)) {
+		printk(KERN_ERR "%s: Error getting dsps clk\n",
+		       __func__);
+		return;
+	}
+	/* Enable the clock and leave it on */
+	clk_enable(hclk);
+
+	/* Write the protocol. */
+	writel_relaxed(UART_I2C_PROTOCOL, gsbi_ctrl);
+	/* Ensure that the data is completely written. */
+	mb();
+
+	iounmap(gsbi_ctrl);
 #endif /* CONFIG_MSM_DSPS */
 }
 
