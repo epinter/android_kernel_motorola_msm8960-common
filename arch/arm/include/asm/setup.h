@@ -147,12 +147,6 @@ struct tag_memclk {
 #define ATAG_MOTOROLA	0x41000810
 #define ATAG_BLDEBUG	0x41000811
 
-#define ATAG_BASEBAND	0x41000812
-
-struct tag_baseband {
-	char baseband[1];
-};
-
 #define ATAG_DISPLAY	0x41000813
 
 /* currently just a string denoting the panel type */
@@ -235,7 +229,6 @@ struct tag {
 		/*
 		 * Motorola specific
 		 */
-		struct tag_baseband	baseband;
 		struct tag_display	display;
 		struct tag_mbm_protocol_version  mbm_protocol_version;
 		struct tag_flat_dev_tree_address	fdt_addr;

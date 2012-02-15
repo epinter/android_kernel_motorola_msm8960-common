@@ -268,6 +268,8 @@ extern struct interrupt_stat interrupt_stats[NUM_SMD_SUBSYSTEMS];
 =======
 #define BARCODE_MAX_LEN 64
 #define MACHINE_MAX_LEN 32
+#define CARRIER_MAX_LEN 64
+#define BASEBAND_MAX_LEN 32
 struct mmi_unit_info_v1 {
 	uint32_t version;
 	uint32_t system_rev;
@@ -275,6 +277,8 @@ struct mmi_unit_info_v1 {
 	uint32_t system_serial_high;
 	char machine[MACHINE_MAX_LEN+1];
 	char barcode[BARCODE_MAX_LEN+1];
+	char carrier[CARRIER_MAX_LEN+1];
+	char baseband[BASEBAND_MAX_LEN+1];
 };
 >>>>>>> a00d81d... IKQCOMSD1-593 Export MMI specific unit info to modem over SMEM
 
