@@ -22,15 +22,28 @@
 #define TS_FLIP_X           (1 << 0)
 #define TS_FLIP_Y           (1 << 1)
 
-struct melfas_ts_platform_data {
-	unsigned long	flags;
+#define MELFAS_TOUCH_SCL_GPIO	17
+#define MELFAS_TOUCH_SDA_GPIO	16
+#define MELFAS_TOUCH_INT_GPIO       46
+#define MELFAS_TOUCH_RESET_GPIO     50
 
-	int	gpio_sda;
-	int	gpio_scl;
-	int	gpio_resetb;
-	int	gpio_vdd_en;
-
-	int	(*mux_fw_flash)(bool to_gpios);
+struct melfas_ts_version_info {
+	uint8_t panel_ver;
+	uint8_t hw_ver;
+	uint8_t hw_comp_grp;
+	uint8_t core_fw_ver;
+	uint8_t priv_fw_ver;
+	uint8_t pub_fw_ver;
 };
 
+
+struct melfas_ts_data {
+	struct i2c_client *client;
+	struct device *dev;
+	struct input_dev *input_dev;
+	struct touch_platform_data *pdata;
+	struct early_suspend early_suspend;
+	struct melfas_ts_version_info version_info;
+	atomic_t irq_enabled;
+};
 #endif /* _LINUX_MELFAS_TS100_H */

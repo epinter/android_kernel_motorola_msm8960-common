@@ -3679,7 +3679,7 @@ static void atmxt_debug_ic_reflash_callback(const struct firmware *fw,
 			fw->data[1], fw->data[2], fw->data[3], fw->data[4]);
 	}
 
-	touch_fw.img = &(fw->data[fw->data[0] + 1]);
+	touch_fw.img = (uint8_t *)&(fw->data[fw->data[0] + 1]);
 	touch_fw.size = (uint32_t) (fw->size - (fw->data[0] + 1));
 
 	err = atmxt_validate_firmware(touch_fw.img, touch_fw.size);

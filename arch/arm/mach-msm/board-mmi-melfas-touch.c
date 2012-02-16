@@ -24,44 +24,50 @@
 #include <linux/input.h>
 #include <mach/gpio.h>
 #include <mach/gpiomux.h>
+#include <linux/earlysuspend.h>
 
+#include <linux/input/touch_platform.h>
 #include <linux/melfas100_ts.h>
 #include "board-mmi.h"
 
-#define MELFAS_TOUCH_SCL_GPIO 17
-#define MELFAS_TOUCH_SDA_GPIO 16
+static struct touch_firmware	ts_firmware;
+uint8_t	fw_version[] = { 0x56 };
+/* should be used to compare to public firmware version */
+uint8_t	priv_v[] = { 0x04 };
+uint8_t	pub_v[] = { 0x11 };
+uint8_t fw_file_name[] = "melfas_56_11_4.fw";
 
-static struct gpiomux_setting i2c_gpio_config = {
+struct gpiomux_setting i2c_gpio_config = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_NONE,
 };
 
-static struct gpiomux_setting gsbi3_active_cfg = {
+struct gpiomux_setting gsbi3_active_cfg = {
 	.func = GPIOMUX_FUNC_1,
 	.drv = GPIOMUX_DRV_8MA,
 	.pull = GPIOMUX_PULL_NONE,
 };
 
-static struct gpiomux_setting gsbi3_suspended_cfg = {
+struct gpiomux_setting gsbi3_suspended_cfg = {
 	.func = GPIOMUX_FUNC_1,
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_KEEPER,
 };
 
-static struct gpiomux_setting melfas_int_act_cfg = {
+struct gpiomux_setting melfas_int_act_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_8MA,
 	.pull = GPIOMUX_PULL_UP,
 };
 
-static struct gpiomux_setting melfas_int_sus_cfg = {
+struct gpiomux_setting melfas_int_sus_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_UP,
 };
 
-static struct msm_gpiomux_config gsbi3_gpio_configs[] = {
+struct msm_gpiomux_config gsbi3_gpio_configs[] = {
 	{
 		.gpio = MELFAS_TOUCH_SDA_GPIO,
 		.settings = {
@@ -86,7 +92,7 @@ static struct msm_gpiomux_config gsbi3_gpio_configs[] = {
 
 };
 
-static struct msm_gpiomux_config gsbi3_i2c_configs[] = {
+struct msm_gpiomux_config gsbi3_i2c_configs[] = {
 	{
 		.gpio = MELFAS_TOUCH_SDA_GPIO,	/* GSBI3 I2C QUP SDA */
 		.settings = {
@@ -118,37 +124,50 @@ static int melfas_mux_fw_flash(bool to_gpios)
 
 		msm_gpiomux_install(gsbi3_gpio_configs,
 				ARRAY_SIZE(gsbi3_gpio_configs));
+
 		gpio_direction_output(MELFAS_TOUCH_SCL_GPIO, 0);
 		gpio_direction_output(MELFAS_TOUCH_SDA_GPIO, 0);
 	} else {
 		gpio_direction_output(MELFAS_TOUCH_INT_GPIO, 1);
 		gpio_direction_input(MELFAS_TOUCH_INT_GPIO);
 
+		/* Initalize SCL and SDA for i2c mode */
 		msm_gpiomux_install(gsbi3_i2c_configs,
 				ARRAY_SIZE(gsbi3_i2c_configs));
+
 		gpio_direction_output(MELFAS_TOUCH_SCL_GPIO, 1);
 		gpio_direction_input(MELFAS_TOUCH_SCL_GPIO);
 		gpio_direction_output(MELFAS_TOUCH_SDA_GPIO, 1);
 		gpio_direction_input(MELFAS_TOUCH_SDA_GPIO);
 	}
-
 	return 0;
 }
 
-struct melfas_ts_platform_data touch_pdata = {
+struct touch_platform_data touch_pdata = {
 	.flags = TS_FLIP_X | TS_FLIP_Y,
 
-	.gpio_resetb	= MELFAS_TOUCH_INT_GPIO,
-	.gpio_vdd_en	= MELFAS_TOUCH_RESET_GPIO,
+	.gpio_interrupt	= MELFAS_TOUCH_INT_GPIO,
+	.gpio_reset	= MELFAS_TOUCH_RESET_GPIO,
 	.gpio_scl	= MELFAS_TOUCH_SCL_GPIO,
 	.gpio_sda	= MELFAS_TOUCH_SDA_GPIO,
 
-	.mux_fw_flash	= melfas_mux_fw_flash,
+	.max_x = 720,
+	.max_y = 1280,
+
+	.invert_x = 1,
+	.invert_y = 1,
+
+	.mux_fw_flash   = melfas_mux_fw_flash,
+
 };
+
 
 int __init melfas_ts_platform_init(void)
 {
 	pr_info(" MELFAS TS: platform init\n");
+
+	/* Initalize SCL and SDA for i2c mode */
+	msm_gpiomux_install(gsbi3_i2c_configs, ARRAY_SIZE(gsbi3_i2c_configs));
 
 	/* melfas reset gpio */
 	gpio_request(MELFAS_TOUCH_RESET_GPIO, "touch_reset");
@@ -160,6 +179,17 @@ int __init melfas_ts_platform_init(void)
 
 	gpio_request(MELFAS_TOUCH_SCL_GPIO, "touch_scl");
 	gpio_request(MELFAS_TOUCH_SDA_GPIO, "touch_sda");
+
+	/* Setup platform structure with the firmware information */
+	ts_firmware.ver = &(fw_version[0]);
+	ts_firmware.vsize = sizeof(fw_version);
+	ts_firmware.private_fw_v = &(priv_v[0]);
+	ts_firmware.private_fw_v_size = sizeof(priv_v);
+	ts_firmware.public_fw_v = &(pub_v[0]);
+	ts_firmware.public_fw_v_size = sizeof(pub_v);
+
+	touch_pdata.fw = &ts_firmware;
+	strcpy(touch_pdata.fw_name, fw_file_name);
 
 	return 0;
 }

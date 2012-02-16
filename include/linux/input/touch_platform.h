@@ -23,35 +23,52 @@
 #include <linux/types.h>
 
 struct touch_settings {
-	const uint8_t	*data;
-	uint8_t			size;
-	uint8_t			tag;
+	uint8_t		*data;
+	uint8_t		size;
+	uint8_t		tag;
 } __attribute__ ((packed));
 
 struct touch_firmware {
-	const uint8_t	*img;
-	uint32_t		size;
-	const uint8_t	*ver;
-	uint8_t			vsize;
+	uint8_t		*img;
+	uint32_t	size;
+	uint8_t		*ver;
+	uint8_t		vsize;
+	uint8_t		*private_fw_v;
+	uint8_t		private_fw_v_size;
+	uint8_t		*public_fw_v;
+	uint8_t		public_fw_v_size;
 } __attribute__ ((packed));
 
 struct touch_framework {
 	const uint16_t	*abs;
-	uint8_t			size;
-	uint8_t			enable_vkeys;
+	uint8_t		size;
+	uint8_t		enable_vkeys;
 } __attribute__ ((packed));
 
+/* Not all the fields will be used by all the drivers */
 struct touch_platform_data {
 	struct touch_settings	*sett[256];
 	struct touch_firmware	*fw;
 	struct touch_framework	*frmwrk;
 
 	uint8_t			addr[2];
-	uint16_t		flags;
+	uint32_t		flags;
 
 	int			gpio_enable;
 	int			gpio_reset;
 	int			gpio_interrupt;
+	int			gpio_sda;
+	int			gpio_scl;
+
+	/* as of 2/8/2012, used only by Melfas driver */
+	int			max_x;
+	int			max_y;
+
+	bool			invert_x;
+	bool			invert_y;
+	char			fw_name[20];
+
+	int (*mux_fw_flash)(bool to_gpios);
 
 } __attribute__ ((packed));
 

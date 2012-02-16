@@ -41,11 +41,8 @@
 #define HWREV_P5	_HWREV(0x8500)
 #define HWREV_P6	_HWREV(0x8600)
 
-#define MELFAS_TOUCH_INT_GPIO		46
-#define MELFAS_TOUCH_RESET_GPIO		50
-
 #ifdef CONFIG_TOUCHSCREEN_MELFAS100_TS
-extern struct melfas_ts_platform_data touch_pdata;
+extern struct touch_platform_data touch_pdata;
 extern int __init melfas_ts_platform_init(void);
 #endif
 
