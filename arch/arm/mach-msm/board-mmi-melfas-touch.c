@@ -31,43 +31,43 @@
 #include "board-mmi.h"
 
 static struct touch_firmware	ts_firmware;
-uint8_t	fw_version[] = { 0x56 };
+static uint8_t	fw_version[] = { 0x45 };
 /* should be used to compare to public firmware version */
-uint8_t	priv_v[] = { 0x04 };
-uint8_t	pub_v[] = { 0x11 };
-uint8_t fw_file_name[] = "melfas_56_11_4.fw";
+static uint8_t	priv_v[] = { 0x01 };
+static uint8_t	pub_v[] = { 0x01 };
+static uint8_t fw_file_name[] = "melfas_45_1_1.fw";
 
-struct gpiomux_setting i2c_gpio_config = {
+static struct gpiomux_setting i2c_gpio_config = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_NONE,
 };
 
-struct gpiomux_setting gsbi3_active_cfg = {
+static struct gpiomux_setting gsbi3_active_cfg = {
 	.func = GPIOMUX_FUNC_1,
 	.drv = GPIOMUX_DRV_8MA,
 	.pull = GPIOMUX_PULL_NONE,
 };
 
-struct gpiomux_setting gsbi3_suspended_cfg = {
+static struct gpiomux_setting gsbi3_suspended_cfg = {
 	.func = GPIOMUX_FUNC_1,
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_KEEPER,
 };
 
-struct gpiomux_setting melfas_int_act_cfg = {
+static struct gpiomux_setting melfas_int_act_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_8MA,
 	.pull = GPIOMUX_PULL_UP,
 };
 
-struct gpiomux_setting melfas_int_sus_cfg = {
+static struct gpiomux_setting melfas_int_sus_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_UP,
 };
 
-struct msm_gpiomux_config gsbi3_gpio_configs[] = {
+static struct msm_gpiomux_config gsbi3_gpio_configs[] = {
 	{
 		.gpio = MELFAS_TOUCH_SDA_GPIO,
 		.settings = {
@@ -92,7 +92,7 @@ struct msm_gpiomux_config gsbi3_gpio_configs[] = {
 
 };
 
-struct msm_gpiomux_config gsbi3_i2c_configs[] = {
+static struct msm_gpiomux_config gsbi3_i2c_configs[] = {
 	{
 		.gpio = MELFAS_TOUCH_SDA_GPIO,	/* GSBI3 I2C QUP SDA */
 		.settings = {
