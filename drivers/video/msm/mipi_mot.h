@@ -41,6 +41,7 @@
 #define DCS_CMD_SET_PAGE_ADDRESS     0x2B
 #define DCS_CMD_SET_TEAR_OFF         0x34
 #define DCS_CMD_SET_TEAR_ON          0x35
+#define DCS_CMD_SET_INVERTED_MODE    0x36
 #define DCS_CMD_SET_TEAR_SCANLINE    0x44
 #define DCS_CMD_SET_BRIGHTNESS       0x51
 #define DCS_CMD_READ_BRIGHTNESS      0x52

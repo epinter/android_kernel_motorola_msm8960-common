@@ -41,7 +41,10 @@ static char display_on[2] = {DCS_CMD_SET_DISPLAY_ON, 0x00};
 
 static char led_pwm1[2] = {DCS_CMD_SET_BRIGHTNESS, 0xFF};
 static char led_pwm2[2] = {DCS_CMD_SET_CTRL_DISP, 0x2C};
+static char inverted_mode[2] = {DCS_CMD_SET_INVERTED_MODE, 0xD0};
 /* static char led_pwm3[2] = {DCS_CMD_SET_CABC, 0x00}; */
+
+static bool rotate_display;
 
 static struct dsi_cmd_desc mot_cmd_on_cmds[] = {
 	{DTYPE_DCS_WRITE, 1, 0, 0, 20, sizeof(sw_reset), sw_reset},
@@ -49,6 +52,14 @@ static struct dsi_cmd_desc mot_cmd_on_cmds[] = {
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1), led_pwm1},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm2), led_pwm2},
 	{DTYPE_DCS_WRITE, 1, 0, 0, 1, sizeof(display_on), display_on},
+};
+
+static struct dsi_cmd_desc mot_cmd_inverted_on_cmds[] = {
+	{DTYPE_DCS_WRITE, 1, 0, 0, 20, sizeof(sw_reset), sw_reset},
+	{DTYPE_DCS_WRITE, 1, 0, 0, 120, sizeof(exit_sleep), exit_sleep},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1), led_pwm1},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm2), led_pwm2},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(inverted_mode), inverted_mode},
 };
 
 static struct dsi_cmd_desc mot_display_off_cmds[] = {
@@ -66,9 +77,14 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 	}
 
 	dsi_tx_buf = mot_panel->mot_tx_buf;
-	mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_cmd_on_cmds,
-					ARRAY_SIZE(mot_cmd_on_cmds));
 
+	if (rotate_display == true) {
+		mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_cmd_inverted_on_cmds,
+					ARRAY_SIZE(mot_cmd_inverted_on_cmds));
+	} else {
+		mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_cmd_on_cmds,
+					ARRAY_SIZE(mot_cmd_on_cmds));
+	}
 	return 0;
 }
 
@@ -95,6 +111,10 @@ static int __init mipi_cmd_mot_auo_qhd_430_init(void)
 	int ret;
 	struct msm_panel_info *pinfo;
 
+	struct device_node *chosen;
+	int len = 0;
+	const void *prop;
+
 	pr_debug("%s\n", __func__);
 
 	if (msm_fb_detect_client("mipi_mot_cmd_auo_qhd_430"))
@@ -106,6 +126,20 @@ static int __init mipi_cmd_mot_auo_qhd_430_init(void)
 		return -1;  /*TODO.. need to fix this */
 	}
 
+	chosen = of_find_node_by_path("/Chosen@0");
+	if (!chosen)
+		goto out;
+
+	prop = of_get_property(chosen, "rotate_display", &len);
+	if (prop && (len == sizeof(u8)) && *(u8 *)prop) {
+		rotate_display = true;
+		pr_info("inverted display mode on\n");
+	} else {
+		rotate_display = false;
+	}
+	of_node_put(chosen);
+
+out:
 	pinfo = &mot_panel->pinfo;
 
 	pinfo->xres = 540;
@@ -160,7 +194,6 @@ static int __init mipi_cmd_mot_auo_qhd_430_init(void)
 		pr_err("%s: failed to register device!\n", __func__);
 
 	pr_debug("%s device registered\n", __func__);
-
 	return ret;
 }
 
