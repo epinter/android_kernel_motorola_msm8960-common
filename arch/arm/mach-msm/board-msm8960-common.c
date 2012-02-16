@@ -88,7 +88,7 @@
 #include "spm.h"
 #include "board-8960.h"
 
-#include <mach/pm.h>
+#include "pm.h"
 #include <mach/cpuidle.h>
 #include "rpm_resources.h"
 #include "mpm.h"
@@ -2562,6 +2562,12 @@ struct msm_rpm_platform_data msm_rpm_data = {
 	.msm_apps_ipc_rpm_val = 4,
 };
 
+static struct msm_pm_sleep_status_data msm_pm_slp_sts_data = {
+	.base_addr = MSM_ACC0_BASE + 0x08,
+	.cpu_offset = MSM_ACC1_BASE - MSM_ACC0_BASE,
+	.mask = 1UL << 13,
+};
+
 static struct msm_rpmrs_level msm_rpmrs_levels[] = {
 	{
 		MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT,
@@ -2752,13 +2758,10 @@ static struct tsens_platform_data msm_tsens_pdata  = {
 		.tsens_num_sensor	= 5,
 };
 
-struct platform_device msm_tsens_device = {
-	.name	= "tsens8960-tm",
-	.id	= -1,
-	.dev	= {
-		.platform_data = &msm_tsens_pdata,
-	},
-};
+void __init msm8960_init_tsens(void)
+{
+	msm_tsens_early_init(&msm_tsens_pdata);
+}
 
 void __init msm8960_init_usb(void)
 {
@@ -2996,6 +2999,11 @@ void __init msm8960_init_rpm(void)
 	BUG_ON(msm_rpm_init(&msm_rpm_data));
 	BUG_ON(msm_rpmrs_levels_init(msm_rpmrs_levels,
 				ARRAY_SIZE(msm_rpmrs_levels)));
+}
+
+void __init msm8960_init_sleep_status(void)
+{
+	msm_pm_init_sleep_status_data(&msm_pm_slp_sts_data);
 }
 
 void __init msm8960_init_regulators(void)

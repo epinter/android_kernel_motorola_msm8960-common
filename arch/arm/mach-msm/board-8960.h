@@ -237,7 +237,9 @@ extern void __init msm8960_init_hsic(void);
 extern void __init msm8960_init_buses(void);
 extern int  __init gpiomux_init(bool use_mdp_vsync);
 
+extern void __init msm8960_init_tsens(void);
 extern void __init msm8960_init_rpm(void);
+extern void __init msm8960_init_sleep_status(void);
 extern void __init msm8960_init_regulators(void);
 
 extern void __init msm8960_i2c_init(unsigned speed);

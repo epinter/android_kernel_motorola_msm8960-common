@@ -116,7 +116,7 @@
 #include "spm.h"
 #include "board-8960.h"
 #include "board-mmi.h"
-#include <mach/pm.h>
+#include "pm.h"
 #include <mach/cpuidle.h>
 #include "rpm_resources.h"
 #include "mpm.h"
@@ -1972,6 +1972,7 @@ static struct platform_device *mmi_devices[] __initdata = {
 	&msm_device_hsusb_host,
 	&android_usb_device,
 	&msm_pcm,
+	&msm_multi_ch_pcm,
 	&msm_pcm_routing,
 	&msm_cpudai0,
 	&msm_cpudai1,
@@ -2013,7 +2014,6 @@ static struct platform_device *mmi_devices[] __initdata = {
 	&msm_bus_mm_fabric,
 	&msm_bus_sys_fpb,
 	&msm_bus_cpss_fpb,
-	&msm_tsens_device,
 #ifdef CONFIG_EMU_DETECTION
 	&msm8960_device_uart_gsbi12,
 #endif
@@ -2793,7 +2793,9 @@ static void __init msm8960_mmi_init(void)
 	if (meminfo_init(SYS_MEMORY, SZ_256M) < 0)
 		pr_err("meminfo_init() failed!\n");
 
+	msm8960_init_tsens();
 	msm8960_init_rpm();
+	msm8960_init_sleep_status();
 
 	msm_init_apanic();
 
