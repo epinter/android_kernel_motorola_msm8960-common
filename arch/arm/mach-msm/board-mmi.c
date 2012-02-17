@@ -156,6 +156,7 @@ static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 };
 
 static u32 fdt_start_address; /* flattened device tree address */
+static u32 fdt_size;
 
 extern unsigned int k_atag_tcmd_raw_cid[4];
 extern unsigned int k_atag_tcmd_raw_csd[4];
@@ -2924,8 +2925,10 @@ static int __init parse_tag_flat_dev_tree_address(const struct tag *tag)
 	struct tag_flat_dev_tree_address *fdt_addr =
 		(struct tag_flat_dev_tree_address *)&tag->u.fdt_addr;
 
-	if (fdt_addr->size)
+	if (fdt_addr->size) {
 		fdt_start_address = (u32)phys_to_virt(fdt_addr->address);
+		fdt_size = fdt_addr->size;
+	}
 
 	pr_info("flat_dev_tree_address=0x%08x, flat_dev_tree_size == 0x%08X\n",
 			fdt_addr->address, fdt_addr->size);
@@ -2939,10 +2942,12 @@ static void __init mmi_init_early(void)
 	msm8960_allocate_memory_regions();
 
 	if (fdt_start_address) {
-		pr_info("Unflattening device tree: 0x%08x\n",
-				fdt_start_address);
-		initial_boot_params =
-			(struct boot_param_header *)fdt_start_address;
+		void *mem;
+		mem = __alloc_bootmem(fdt_size, __alignof__(int), 0);
+		BUG_ON(!mem);
+		memcpy(mem, (const void *)fdt_start_address, fdt_size);
+		initial_boot_params = (struct boot_param_header *)mem;
+		pr_info("Unflattening device tree: 0x%08x\n", (u32)mem);
 		unflatten_device_tree();
 	}
 }
