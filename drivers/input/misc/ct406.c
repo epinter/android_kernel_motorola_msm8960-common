@@ -107,6 +107,7 @@
 #define CT406_C1DATAH			0x17
 #define CT406_PDATA			0x18
 #define CT406_PDATAH			0x19
+#define CT406_POFFSET			0x1E
 
 #define CT406_C0DATA_MAX		0xFFFF
 #define CT405_PDATA_MAX			0x03FF
@@ -169,6 +170,7 @@ struct ct406_data {
 	u16 prox_covered_offset;
 	u16 prox_uncovered_offset;
 	u16 prox_recalibrate_offset;
+	u8 prox_offset;
 	u16 pdata_max;
 	enum ct40x_hardware_type hw_type;
 };
@@ -203,6 +205,7 @@ static struct ct406_reg {
 	{ "C1DATAH",	CT406_C1DATAH },
 	{ "PDATA",	CT406_PDATA },
 	{ "PDATAH",	CT406_PDATAH },
+	{ "POFFSET", 	CT406_POFFSET },
 };
 
 #define CT406_DBG_INPUT			0x00000001
@@ -388,6 +391,13 @@ static int ct406_init_registers(struct ct406_data *ct)
 		reg_data[2] = CT406_CONTROL_PDIODE_CH1
 			| CT406_CONTROL_PGAIN_1X | CT406_CONTROL_AGAIN_1X;
 	error = ct406_i2c_write(ct, reg_data, 2);
+	if (error < 0)
+		return error;
+
+	/* write proximity offset */
+	reg_data[0] = (CT406_POFFSET | CT406_COMMAND_AUTO_INCREMENT);
+	reg_data[1] = ct->prox_offset;
+	error = ct406_i2c_write(ct, reg_data, 1);
 	if (error < 0)
 		return error;
 
@@ -1493,6 +1503,7 @@ static int ct406_probe(struct i2c_client *client,
 			= ct->pdata->ct405_prox_uncovered_offset;
 		ct->prox_recalibrate_offset
 			= ct->pdata->ct405_prox_recalibrate_offset;
+		ct->prox_offset = ct->pdata->ct405_prox_offset;
 		ct->pdata_max = CT405_PDATA_MAX;
 		ct->hw_type = CT405_HW_TYPE;
 	} else {
@@ -1504,6 +1515,7 @@ static int ct406_probe(struct i2c_client *client,
 			= ct->pdata->ct406_prox_uncovered_offset;
 		ct->prox_recalibrate_offset
 			= ct->pdata->ct406_prox_recalibrate_offset;
+		ct->prox_offset = ct->pdata->ct406_prox_offset;
 		ct->pdata_max = CT406_PDATA_MAX;
 		ct->hw_type = CT406_HW_TYPE;
 	}
