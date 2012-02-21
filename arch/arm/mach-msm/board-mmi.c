@@ -180,6 +180,7 @@ static int keypad_mode = MMI_KEYPAD_RESET;
  */
 static int phy_settings[] = {0x34, 0x82, 0x3f, 0x81, -1};
 
+static bool	bare_board;
 bool camera_single_mclk;
 
 /*
@@ -2440,7 +2441,17 @@ static __init void register_i2c_devices_from_dt(int bus)
 			/* must match type identifiers defined in DT schema */
 			switch (*(u32 *)prop) {
 			case 0x00040002: /* Cypress_CYTTSP3 */
-				err = mot_setup_touch_cyttsp3(&info, child);
+				/* Check if this is bare board and don't set
+				 * up driver if it is */
+				if (bare_board == 1) {
+					err = -1;
+					pr_err(
+						"%s: NO TOUCH(bare board)!\n",
+						__func__);
+				} else {
+					err = mot_setup_touch_cyttsp3(&info,
+							child);
+				}
 				break;
 
 			case 0x000B0003: /* National_LM3559 */
@@ -2475,12 +2486,31 @@ static __init void register_i2c_devices_from_dt(int bus)
 				break;
 
 			case 0x00260001: /* Atmel_MXT */
-				err = mot_setup_touch_atmxt(&info, child);
+				/* Check if this is bare board and don't set
+				 * up driver if it is */
+				if (bare_board == 1) {
+					err = -1;
+					pr_err(
+						"%s: NO TOUCH(bare board)!\n",
+						__func__);
+				} else {
+					err = mot_setup_touch_atmxt(&info,
+							child);
+				}
 				break;
 
 			case 0x00270000: /* Melfas_MMS100 */
-				info.platform_data = &touch_pdata;
-				melfas_ts_platform_init();
+				/* Check if this is bare board and don't set
+				 * up driver if it is */
+				if (bare_board == 1) {
+					err = -1;
+					pr_err(
+						"%s: NO TOUCH(bare board)!\n",
+						__func__);
+				} else {
+					info.platform_data = &touch_pdata;
+					melfas_ts_platform_init();
+				}
 				break;
 
 			case 0x00280000: /* Aptina_MT9M114 */
@@ -2952,6 +2982,25 @@ static void __init mmi_init_early(void)
 	}
 }
 
+static void __init msm8960_fixup(struct machine_desc *desc,
+		struct tag *tags, char **cmdline, struct meminfo *mi)
+{
+	struct	tag	*t;
+
+	bare_board = 0;
+	/* Since command line is not available at this time, we have to parse
+	 * the atags, specifially atag_cmdline.
+	 */
+	for (t = tags; t->hdr.size; t = tag_next(t)) {
+		if (t->hdr.tag == ATAG_CMDLINE) {
+			if (strstr(t->u.cmdline.cmdline, "bare_board=1")) {
+				bare_board = 1;
+			}
+			break;
+		}
+	}
+}
+
 MACHINE_START(TEUFEL, "Teufel")
 	.map_io = msm8960_map_io,
 	.reserve = msm8960_reserve,
@@ -2961,6 +3010,7 @@ MACHINE_START(TEUFEL, "Teufel")
 	.init_machine = msm8960_mmi_init,
 	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
+	.fixup = msm8960_fixup,
 MACHINE_END
 
 MACHINE_START(QINARA, "Qinara")
@@ -2972,6 +3022,7 @@ MACHINE_START(QINARA, "Qinara")
 	.init_machine = msm8960_mmi_init,
 	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
+	.fixup = msm8960_fixup,
 MACHINE_END
 
 MACHINE_START(VANQUISH, "Vanquish")
@@ -2983,17 +3034,19 @@ MACHINE_START(VANQUISH, "Vanquish")
 	.init_machine = msm8960_mmi_init,
 	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
+	.fixup = msm8960_fixup,
 MACHINE_END
 
 MACHINE_START(BECKER, "Becker")
-    .map_io = msm8960_map_io,
-    .reserve = msm8960_reserve,
-    .init_irq = msm8960_init_irq,
+	.map_io = msm8960_map_io,
+	.reserve = msm8960_reserve,
+	.init_irq = msm8960_init_irq,
 	.handle_irq = gic_handle_irq,
-    .timer = &msm_timer,
+	.timer = &msm_timer,
 	.init_machine = msm8960_mmi_init,
 	.init_early = mmi_init_early,
-    .init_very_early = msm8960_early_memory,
+	.init_very_early = msm8960_early_memory,
+	.fixup = msm8960_fixup,
 MACHINE_END
 
 MACHINE_START(ASANTI, "Asanti")
@@ -3005,6 +3058,7 @@ MACHINE_START(ASANTI, "Asanti")
 	.init_machine = msm8960_mmi_init,
 	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
+	.fixup = msm8960_fixup,
 MACHINE_END
 
 /* for use by products that are completely configured through device tree */
@@ -3017,4 +3071,5 @@ MACHINE_START(MSM8960DT, "msm8960dt")
 	.init_machine = msm8960_mmi_init,
 	.init_early = mmi_init_early,
 	.init_very_early = msm8960_early_memory,
+	.fixup = msm8960_fixup,
 MACHINE_END
