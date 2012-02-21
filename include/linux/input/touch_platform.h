@@ -68,7 +68,19 @@ struct touch_platform_data {
 	bool			invert_y;
 	char			fw_name[20];
 
-	int (*mux_fw_flash)(bool to_gpios);
+	int 			(*mux_fw_flash)(bool to_gpios);
+	void			(*int_latency)(void);
+	void			(*int_time)(void);
+	u32			(*get_avg_lat)(void);
+	u32			(*get_high_lat)(void);
+	u32			(*get_slow_cnt)(void);
+	u32			(*get_int_cnt)(void);
+	void			(*set_dbg_lvl)(u8 debug_level);
+	u8			(*get_dbg_lvl)(void);
+	u32			(*get_time_ptr)(u64 **timestamp);
+	u32			(*get_lat_ptr)(u32 **latency);
+	void			(*set_time_ptr)(unsigned long ptr);
+	void			(*set_lat_ptr)(unsigned long ptr);
 
 } __attribute__ ((packed));
 

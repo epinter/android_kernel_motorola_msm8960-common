@@ -5,6 +5,8 @@
  * Author: Dima Zavin <dima@android.com>
  *         Simon Wilson <simonwilson@google.com>
  *
+ * Copyright (C) 2012 Motorola Mobility, Inc.
+ *
  * ISP reflashing code based on original code from Melfas.
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -216,8 +218,24 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 
 	input_sync(info->input_dev);
 
+	if (info->pdata->get_dbg_lvl &&
+		(info->pdata->get_dbg_lvl() >= 1) &&
+		info->pdata->int_latency)
+			info->pdata->int_latency();
 out:
 	return IRQ_HANDLED;
+}
+
+static irqreturn_t mms_ts_primary_handler(int irq, void *handle)
+{
+	struct mms_ts_info *ts = (struct mms_ts_info *)handle;
+
+	if (ts->pdata->get_dbg_lvl &&
+		(ts->pdata->get_dbg_lvl() >= 1) &&
+			(ts->pdata->int_time))
+				ts->pdata->int_time();
+
+	return IRQ_WAKE_THREAD;
 }
 
 static void hw_reboot(struct mms_ts_info *info, bool bootloader)
@@ -639,9 +657,10 @@ static int mms_ts_finish_config(struct mms_ts_info *info)
 	struct i2c_client *client = info->client;
 	int ret;
 
-	ret = request_threaded_irq(client->irq, NULL, mms_ts_interrupt,
-				   IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-				   "mms_ts", info);
+	ret = request_threaded_irq(client->irq, mms_ts_primary_handler,
+				mms_ts_interrupt,
+				IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+				"mms_ts", info);
 	if (ret < 0) {
 		dev_err(&client->dev, "Failed to register interrupt\n");
 		goto err_req_irq;
@@ -816,6 +835,73 @@ static ssize_t melfas_ts_drv_debug_store(struct device *dev,
 static DEVICE_ATTR(drv_debug, S_IWUSR | S_IRUGO, melfas_ts_drv_debug_show,
 			melfas_ts_drv_debug_store);
 
+static ssize_t melfas_latency_debug_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct mms_ts_info *ts = dev_get_drvdata(dev);
+	int ret = 0;
+
+	if (ts->pdata->get_dbg_lvl)
+		ret = sprintf(buf, "Latency Debug Setting: %u\n", \
+				ts->pdata->get_dbg_lvl());
+
+	return ret;
+}
+
+static ssize_t melfas_latency_debug_store(struct device *dev,
+		 struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct mms_ts_info *ts = dev_get_drvdata(dev);
+	unsigned long value;
+	u64 *debug_ptr1;
+	u32 *debug_ptr2;
+	int err = kstrtoul(buf, 0, &value);
+	if (err < 0) {
+		pr_err("%s: illegal sysfs data\n", __func__);
+		return -EINVAL;
+	}
+
+	switch (value) {
+	case 0:
+	if (ts->pdata->get_lat_ptr && ts->pdata->get_time_ptr &&
+		ts->pdata->set_lat_ptr && ts->pdata->set_time_ptr) {
+			ts->pdata->get_lat_ptr(&debug_ptr2);
+			ts->pdata->get_time_ptr(&debug_ptr1);
+			if ((debug_ptr1 > 0) && (debug_ptr2 > 0)) {
+				kfree(debug_ptr1);
+				kfree(debug_ptr2);
+			}
+			ts->pdata->set_lat_ptr(0);
+			ts->pdata->set_time_ptr(0);
+		}
+	case 1:
+	if (ts->pdata->get_lat_ptr && ts->pdata->get_time_ptr &&
+		ts->pdata->set_lat_ptr && ts->pdata->set_time_ptr) {
+			ts->pdata->get_lat_ptr(&debug_ptr2);
+			ts->pdata->get_time_ptr(&debug_ptr1);
+			if ((debug_ptr1 > 0) && (debug_ptr2 > 0)) {
+				kfree(debug_ptr1);
+				kfree(debug_ptr2);
+			}
+			ts->pdata->set_lat_ptr(0);
+			ts->pdata->set_time_ptr(0);
+		}
+	case 2:
+		if (ts->pdata->set_dbg_lvl)
+			ts->pdata->set_dbg_lvl(value);
+		break;
+	default:
+		pr_err("%s: %d Is an invalid option", __func__, (int)value);
+		break;
+	}
+
+	if (ts->pdata->get_dbg_lvl && (ts->pdata->get_dbg_lvl() == value))
+		pr_info("%s: Latency debug setting=%d\n", __func__, (int)value);
+
+	return size;
+}
+static DEVICE_ATTR(latency_debug, S_IWUSR | S_IRUGO, \
+			melfas_latency_debug_show, melfas_latency_debug_store);
 
 /* interrupt status */
 static ssize_t melfas_ts_hw_irqstat_show(struct device *dev,
@@ -911,6 +997,58 @@ static ssize_t melfas_ts_ic_ver_show(struct device *dev,
 		info->version_info.priv_fw_ver, info->version_info.pub_fw_ver);
 }
 static DEVICE_ATTR(ic_ver, S_IWUSR | S_IRUGO, melfas_ts_ic_ver_show, NULL);
+
+static ssize_t melfas_latency_values_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct mms_ts_info *ts = dev_get_drvdata(dev);
+	int ret = 0;
+
+	if (ts->pdata->get_avg_lat && ts->pdata->get_high_lat &&
+		ts->pdata->get_slow_cnt && ts->pdata->get_int_cnt) {
+		ret = sprintf(buf, "Touch Latency Time: Average %duS,"\
+				" High %duS,%d interrupts of %d were slow\n",
+				ts->pdata->get_avg_lat(),
+				ts->pdata->get_high_lat(),
+				ts->pdata->get_slow_cnt(),
+				ts->pdata->get_int_cnt());
+	}
+
+	return ret;
+}
+static DEVICE_ATTR(latency_values, S_IWUSR | S_IRUGO, \
+			melfas_latency_values_show, NULL);
+
+static ssize_t melfas_all_latency_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct mms_ts_info *ts = dev_get_drvdata(dev);
+	u32 *latency_ptr;
+	u32 latency_len;
+	u32 buf_offset = 0;
+	u32 index = 0;
+
+	if (ts->pdata->get_lat_ptr && (ts->pdata->get_dbg_lvl() >= 2)) {
+		latency_len = ts->pdata->get_lat_ptr(&latency_ptr);
+		if (latency_ptr > 0) {
+			do {
+				/* if changing the string to be output to sysfs
+				also update the (PAGE_SIZE - x) below
+				so that x = the max number of bytes the string
+				can be + 1 for the null terminator.
+				sysfs limits the size of a single read to
+				be <= memory page size  */
+				buf_offset += sprintf(buf + buf_offset, "%d,",
+							latency_ptr[index++]);
+			} while ((buf_offset < (PAGE_SIZE - 13)) &&
+				(index < (latency_len / sizeof(u32))));
+		}
+	}
+
+	return buf_offset;
+}
+static DEVICE_ATTR(latency_times, S_IWUSR | S_IRUGO, \
+			melfas_all_latency_show, NULL);
 
 static int __devinit mms_ts_probe(struct i2c_client *client,
 				  const struct i2c_device_id *id)
@@ -1067,6 +1205,27 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 		goto err_create_hw_irqstat_failed;
 	}
 
+	ret = device_create_file(&info->client->dev, &dev_attr_latency_debug);
+	if (ret) {
+		pr_err("%s:latency debug file device creation failed: %d\n",
+		       __func__, ret);
+		ret = -ENODEV;
+	}
+
+	ret = device_create_file(&info->client->dev, &dev_attr_latency_values);
+	if (ret) {
+		pr_err("%s:latency values file device creation failed: %d\n",
+		       __func__, ret);
+		ret = -ENODEV;
+	}
+
+	ret = device_create_file(&info->client->dev, &dev_attr_latency_times);
+	if (ret) {
+		pr_err("%s:all latency file device creation failed: %d\n",
+		       __func__, ret);
+		ret = -ENODEV;
+	}
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	info->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
 	info->early_suspend.suspend = mms_ts_early_suspend;
@@ -1110,6 +1269,8 @@ err_check_functionality_failed:
 static int __devexit mms_ts_remove(struct i2c_client *client)
 {
 	struct mms_ts_info *info = i2c_get_clientdata(client);
+	u64 *debug_ptr1;
+	u32 *debug_ptr2;
 
 	if (info->irq >= 0)
 		free_irq(info->irq, info);
@@ -1119,6 +1280,21 @@ static int __devexit mms_ts_remove(struct i2c_client *client)
 	device_remove_file(&info->client->dev, &dev_attr_ic_ver);
 	device_remove_file(&info->client->dev, &dev_attr_drv_debug);
 	device_remove_file(&info->client->dev, &dev_attr_irq_enabled);
+	device_remove_file(&info->client->dev, &dev_attr_latency_debug);
+	device_remove_file(&info->client->dev, &dev_attr_latency_times);
+	device_remove_file(&info->client->dev, &dev_attr_latency_values);
+
+	if (info->pdata->get_lat_ptr && info->pdata->get_time_ptr &&
+		info->pdata->set_lat_ptr && info->pdata->set_time_ptr) {
+		info->pdata->get_lat_ptr(&debug_ptr2);
+		info->pdata->get_time_ptr(&debug_ptr1);
+		if ((debug_ptr1 > 0) && (debug_ptr2 > 0)) {
+			kfree(debug_ptr1);
+			kfree(debug_ptr2);
+		}
+		info->pdata->set_lat_ptr(0);
+		info->pdata->set_time_ptr(0);
+	}
 
 	kfree(info);
 
