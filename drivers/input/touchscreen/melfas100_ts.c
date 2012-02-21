@@ -151,9 +151,9 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 		dev_err(&client->dev, "%s bytes=%d\n", __func__, sz);
 		goto out;
 	}
-#if 0
-	dev_dbg(&client->dev, "bytes available: %d\n", sz);
-#endif
+	if (tsdebug >= TS_DBG_LVL_1) {
+		dev_dbg(&client->dev, "bytes available: %d\n", sz);
+	}
 	BUG_ON(sz > MAX_FINGERS*FINGER_EVENT_SZ);
 	if (sz == 0)
 		goto out;
@@ -189,7 +189,10 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 		}
 
 		if ((tmp[0] & 0x80) == 0) {
-			dev_dbg(&client->dev, "finger %d up\n", id);
+			if (tsdebug >= TS_DBG_LVL_1) {
+				dev_dbg(&client->dev,
+						"finger %d up\n", id);
+			}
 			input_mt_slot(info->input_dev, id);
 			input_mt_report_slot_state(info->input_dev,
 						   MT_TOOL_FINGER, false);
@@ -204,11 +207,11 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 		input_report_abs(info->input_dev, ABS_MT_POSITION_X, x);
 		input_report_abs(info->input_dev, ABS_MT_POSITION_Y, y);
 
-#if 0
-		dev_dbg(&client->dev,
-			"finger %d: x=%d y=%d p=%d w=%d\n", id, x, y, tmp[5],
-			tmp[4]);
-#endif
+		if (tsdebug >= TS_DBG_LVL_1) {
+			dev_dbg(&client->dev,
+				"finger %d: x=%d y=%d p=%d w=%d\n",
+				id, x, y, tmp[5], tmp[4]);
+		}
 	}
 
 	input_sync(info->input_dev);
@@ -254,8 +257,8 @@ static inline void mms_pwr_on_reset(struct mms_ts_info *info)
 	struct i2c_adapter *adapter = to_i2c_adapter(info->client->dev.parent);
 
 	if (!info->pdata->mux_fw_flash) {
-		dev_info(&info->client->dev,
-			 "missing platform data, can't do power-on-reset\n");
+		dev_err(&info->client->dev,
+			"missing platform data, can't do power-on-reset\n");
 		return;
 	}
 
@@ -451,9 +454,11 @@ static bool flash_is_erased(struct mms_ts_info *info)
 		val = flash_readl(info, addr);
 
 		if (val != 0xffffffff) {
-			dev_dbg(&client->dev,
+			if (tsdebug >= TS_DBG_LVL_1) {
+				dev_dbg(&client->dev,
 				"addr 0x%x not erased: 0x%08x != 0xffffffff\n",
 				addr, val);
+			}
 			return false;
 		}
 	}
@@ -505,7 +510,9 @@ static int fw_download(struct mms_ts_info *info, const u8 *data, size_t len)
 		return -EINVAL;
 	}
 
-	dev_info(&client->dev, "fw download start\n");
+	if (tsdebug >= TS_DBG_LVL_2) {
+		dev_info(&client->dev, "fw download started\n");
+	}
 
 	gpio_direction_output(info->pdata->gpio_reset, 0);
 	gpio_direction_output(info->pdata->gpio_sda, 0);
@@ -515,16 +522,23 @@ static int fw_download(struct mms_ts_info *info, const u8 *data, size_t len)
 	hw_reboot_bootloader(info);
 
 	val = flash_readl(info, ISP_IC_INFO_ADDR);
-	dev_info(&client->dev, "IC info: 0x%02x (%x)\n", val & 0xff, val);
+	if (tsdebug >= TS_DBG_LVL_2) {
+		dev_info(&client->dev,
+			"IC info: 0x%02x (%x)\n", val & 0xff, val);
+	}
 
-	dev_info(&client->dev, "fw erase...\n");
+	if (tsdebug >= TS_DBG_LVL_2) {
+		dev_info(&client->dev, "fw erase...\n");
+	}
 	flash_erase(info);
 	if (!flash_is_erased(info)) {
 		ret = -ENXIO;
 		goto err;
 	}
 
-	dev_info(&client->dev, "fw write...\n");
+	if (tsdebug >= TS_DBG_LVL_2) {
+		dev_info(&client->dev, "fw write...\n");
+	}
 	/* XXX: what does this do?! */
 	flash_writel(info, ISP_IC_INFO_ADDR, 0xffffff00 | (val & 0xff));
 	usleep_range(1000, 1500);
@@ -535,7 +549,9 @@ static int fw_download(struct mms_ts_info *info, const u8 *data, size_t len)
 
 	hw_reboot_normal(info);
 	usleep_range(1000, 1500);
-	dev_info(&client->dev, "fw download done...\n");
+	if (tsdebug >= TS_DBG_LVL_2) {
+		dev_info(&client->dev, "fw download done...\n");
+	}
 	return 0;
 
 err:
@@ -635,9 +651,11 @@ static int mms_ts_finish_config(struct mms_ts_info *info)
 	info->irq = client->irq;
 	barrier();
 
-	dev_info(&client->dev,
-		"%s: Melfas MMS-series touch controller initialized\n",
-		__func__);
+	if (tsdebug >= TS_DBG_LVL_2) {
+		dev_info(&client->dev,
+			"%s: Melfas MMS-series touch controller initialized\n",
+			__func__);
+	}
 
 	complete_all(&info->init_done);
 	return 0;
@@ -664,16 +682,21 @@ static void mms_ts_fw_load(const struct firmware *fw, void *context)
 	}
 
 	if (!fw) {
-		dev_info(&client->dev, "could not find firmware file '%s'\n",
-			info->fw_name);
+		if (tsdebug >= TS_DBG_LVL_2) {
+			dev_info(&client->dev,
+				"could not find firmware file '%s'\n",
+				info->fw_name);
+		}
 		goto done;
 	}
 
 	fw_img = (struct mms_fw_image *)fw->data;
 
 	if (ver == fw_img->fw_ver && !mms_force_reflash) {
-		dev_info(&client->dev,
-			 "fw version 0x%02x already present\n", ver);
+		if (tsdebug >= TS_DBG_LVL_2) {
+			dev_info(&client->dev,
+				"fw version 0x%02x already present\n", ver);
+		}
 		goto done;
 	}
 
@@ -696,25 +719,16 @@ static void mms_ts_fw_load(const struct firmware *fw, void *context)
 			dev_err(&client->dev,
 				"error updating firmware to version 0x%02x\n",
 				fw_img->fw_ver);
-			if (retries)
-				dev_err(&client->dev, "retrying flashing\n");
+			if (retries) {
+				if (tsdebug >= TS_DBG_LVL_2) {
+					dev_info(&client->dev,
+						"retrying flashing\n");
+				}
+			}
 			continue;
 		}
 
 		ver = get_fw_version(info);
-		/*
-		if (ver == fw_img->fw_ver) {
-			dev_info(&client->dev,
-				 "fw update done. ver = 0x%02x\n", ver);
-			goto done;
-		} else {
-			dev_err(&client->dev,
-	"ERROR: fw update succeeded, but fw version is still wrong (0x%x != 0x%x)\n",
-				ver, fw_img->fw_ver);
-		}
-		if (retries)
-			dev_err(&client->dev, "retrying flashing\n");
-		*/
 		goto done;
 	}
 
@@ -762,7 +776,7 @@ static int __devinit mms_ts_config(struct mms_ts_info *info, bool nowait)
 	}
 
 out:
-	return 0;
+	return ret;
 }
 
 /* Driver debugging */
@@ -907,7 +921,9 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 	struct input_dev *input_dev;
 	int ret = 0;
 
-	dev_dbg(&client->dev, "Entering probe\n");
+	if (tsdebug >= TS_DBG_LVL_1) {
+		dev_dbg(&client->dev, "Entering probe\n");
+	}
 	mms_force_reflash = false;
 	mms_flash_from_probe = false;
 	mms_die_on_flash_fail = false;
@@ -983,18 +999,24 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 		goto err_input_register_device_failed;
 	}
 
-	dev_info(&client->dev, "%s:Panel Version: %x,HW Revision: %x,HW Comp Grp: %x,"
-		" Core FW ver: %x,Private FW ver: %x,"
-		"Public FW ver: %x\n", __func__, info->version_info.panel_ver,
-		info->version_info.hw_ver, info->version_info.hw_comp_grp,
-		info->version_info.core_fw_ver,
-		info->version_info.priv_fw_ver, info->version_info.pub_fw_ver);
-
-	dev_info(&client->dev,
-		"%s: Platform data: core: %x, private: %x, public: %x\n",
-		__func__, pdata->fw->ver[0], pdata->fw->private_fw_v[0],
-		pdata->fw->public_fw_v[0]);
-
+	if (tsdebug >= TS_DBG_LVL_2) {
+		dev_info(&client->dev,
+			"%s:Panel Version: %x,HW Revision: %x,HW Comp Grp: %x,"
+			" Core FW ver: %x,Private FW ver: %x,"
+			"Public FW ver: %x\n", __func__,
+			info->version_info.panel_ver,
+			info->version_info.hw_ver,
+			info->version_info.hw_comp_grp,
+			info->version_info.core_fw_ver,
+			info->version_info.priv_fw_ver,
+			info->version_info.pub_fw_ver);
+		dev_info(&client->dev,
+			"%s: Platform data: core: %x, priv: %x, pub: %x\n",
+			__func__,
+			pdata->fw->ver[0],
+			pdata->fw->private_fw_v[0],
+			pdata->fw->public_fw_v[0]);
+	}
 	if (info->version_info.core_fw_ver != pdata->fw->ver[0] ||
 		info->version_info.priv_fw_ver < pdata->fw->private_fw_v[0] ||
 		info->version_info.pub_fw_ver < pdata->fw->public_fw_v[0]) {
@@ -1003,12 +1025,18 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 			dev_err(&client->dev,
 				"failed to initialize (%d)\n", ret);
 			goto err_config;
-		} else
-			dev_info(&client->dev, "mms_ts_config is finished\n");
+		} else {
+			if (tsdebug >= TS_DBG_LVL_2) {
+				dev_info(&client->dev,
+					"mms_ts_config is finished\n");
+			}
+		}
 	} else {
 		mms_ts_finish_config(info);
-		dev_info(&client->dev,
+		if (tsdebug >= TS_DBG_LVL_2) {
+			dev_info(&client->dev,
 				"New firmware is not going to be downloaded!");
+		}
 	}
 	ret = device_create_file(&info->client->dev, &dev_attr_drv_debug);
 	if (ret) {
@@ -1046,8 +1074,9 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 	register_early_suspend(&info->early_suspend);
 #endif
 
-	dev_info(&client->dev,
-		"Probe completed!\n");
+	if (tsdebug >= TS_DBG_LVL_2) {
+		dev_info(&client->dev, "Probe completed!\n");
+	}
 	return 0;
 
 err_create_hw_irqstat_failed:
