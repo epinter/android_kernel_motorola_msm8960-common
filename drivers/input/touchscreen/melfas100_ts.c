@@ -1072,10 +1072,17 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 	}
 
 	info = kzalloc(sizeof(struct mms_ts_info), GFP_KERNEL);
+	if (!info) {
+		ret = -ENOMEM;
+		dev_err(&client->dev, "Failed to allocate memory.\n");
+		goto err_alloc_info_failed;
+	}
+
 	input_dev = input_allocate_device();
-	if (!info || !input_dev) {
-		dev_err(&client->dev, "Failed to allocate memory\n");
-		goto err_alloc_data_failed;
+	if (!input_dev) {
+		ret = -ENOMEM;
+		dev_err(&client->dev, "Failed to allocate device.\n");
+		goto err_alloc_device_failed;
 	}
 
 	info->client = client;
@@ -1132,10 +1139,8 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 			MMS_TSP_REVISION,
 			sizeof(info->version_info),
 			(u8 *)&info->version_info);
-	if (ret < 0) {
-		pr_err("%s: i2c failed\n", __func__);
-		goto err_input_register_device_failed;
-	}
+	if (ret < 0)
+		pr_err("%s: i2c version read fail, force reflash\n", __func__);
 
 	if (tsdebug >= TS_DBG_LVL_2) {
 		dev_info(&client->dev,
@@ -1155,7 +1160,7 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 			pdata->fw->private_fw_v[0],
 			pdata->fw->public_fw_v[0]);
 	}
-	if (info->version_info.core_fw_ver != pdata->fw->ver[0] ||
+	if (ret < 0 || info->version_info.core_fw_ver != pdata->fw->ver[0] ||
 		info->version_info.priv_fw_ver < pdata->fw->private_fw_v[0] ||
 		info->version_info.pub_fw_ver < pdata->fw->public_fw_v[0]) {
 		ret = mms_ts_config(info, mms_flash_from_probe);
@@ -1239,30 +1244,22 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 	return 0;
 
 err_create_hw_irqstat_failed:
-	pr_err("%s: device creation for irq status failed\n", __func__);
 	device_remove_file(&info->client->dev, &dev_attr_ic_ver);
 err_create_ic_ver_device_failed:
-	pr_err("%s: device creation for ic_ver failed\n", __func__);
 	device_remove_file(&info->client->dev, &dev_attr_irq_enabled);
 err_create_irq_enabled_device_failed:
-	pr_err("%s: device creation for irq_enabled failed\n", __func__);
 	device_remove_file(&info->client->dev, &dev_attr_drv_debug);
 err_create_dbg_device_failed:
-	pr_err("%s: device creation for dbg failed\n", __func__);
+err_config:
 	input_unregister_device(info->input_dev);
 err_input_register_device_failed:
-	pr_err("%s: err_input_register_device failed\n", __func__);
 	input_free_device(info->input_dev);
-err_config:
-	input_free_device(input_dev);
-	input_unregister_device(input_dev);
 	input_dev = NULL;
-err_alloc_data_failed:
-	pr_err("%s: err_alloc_data failed_\n", __func__);
+err_alloc_device_failed:
 	kfree(info->fw_name);
 	kfree(info);
+err_alloc_info_failed:
 err_check_functionality_failed:
-	pr_err("%s: err_check_functionality failed_\n", __func__);
 	return ret;
 }
 
