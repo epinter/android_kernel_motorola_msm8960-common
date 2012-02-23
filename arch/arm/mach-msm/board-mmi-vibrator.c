@@ -28,14 +28,11 @@
 #include <linux/wakelock.h>
 #include <linux/err.h>
 #include <linux/platform_device.h>
-
-#ifdef CONFIG_ARM_OF
-#include <mach/dt_path.h>
-#include <asm/prom.h>
-#endif
+#include <linux/of_fdt.h>
+#include <linux/of.h>
 
 #define MAX_VIBS		1
-#define MAX_PWMS		8
+#define MAX_PWMS		9
 #define MAX_VOLT		4
 
 #define VIB_TYPE_GENENIC_ROTARY	0x00000017
@@ -65,6 +62,10 @@
 #define GPIO_VIB_DIRECTION 79
 #define VIB_REGULATOR_NAME  "8921_l16"
 
+/* DT Vibrator Node */
+#define DT_PATH_VIB		"/System@0/Vibrator@"
+#define DT_PROP_VIB_TYPE	"type"
+
 struct vib_pwm {
 	unsigned int time;
 	unsigned int period;
@@ -76,12 +77,13 @@ struct vib_pwm {
 struct vib_pwm vib_pwm_config[] =
 {
 	{   19999,       1,       1,       1 },
-	{   29999,   30000,   30000,   20000 },
-	{   39999,   40000,   40000,   30000 },
-	{   50999,   50000,   50000,   40000 },
-	{   51000,   40000,   40000,   20000 },
+	{   24999,   33000,   33000,   20000 },
+	{   32999,   40000,   40000,   25000 },
+	{   39999,   52000,   52000,   33000 },
 	{   60000,   60000,   60000,   40000 },
-	{   60001,   10000,    5000,   10000 },
+	{   60001,   40000,   39500,   40000 },
+	/* reverse vibration for factory test */
+	{ 30000000,  40000,   39500,       0 }
 };
 
 struct vib_ctrl_gpio {
@@ -139,6 +141,7 @@ struct vib_voltage {
 struct vib_regulator {
 	struct regulator *regulator;
 	int enabled;
+	u32 deferred_off;	/* in us */
 	struct vib_voltage volt[MAX_VOLT];
 	char name[REGULATOR_NAME_SIZE];
 };
@@ -549,7 +552,7 @@ static int vib_signal_init(struct vib_signal *vibs)
 
 
 
-static int vib_of_init(struct vibrator *vib, int vib_nr)
+static int vib_of_init_default(struct vibrator *vib, int vib_nr)
 {
 	vib->type = VIB_TYPE_GENENIC_ROTARY;
 	vib->ctrl.vib_en.name = VIB_EN;
@@ -586,6 +589,117 @@ static int vib_of_init(struct vibrator *vib, int vib_nr)
 	return 0;
 }
 
+static int vib_of_init(struct vibrator *vib, int vib_nr)
+{
+	struct device_node *node;
+	const void *prop = NULL;
+	int len = 0;
+	char dt_path_vib[sizeof(DT_PATH_VIB) + 3];
+
+	snprintf(dt_path_vib, sizeof(DT_PATH_VIB) + 2, "%s%1d",
+		DT_PATH_VIB, vib_nr % MAX_VIBS);
+	node = of_find_node_by_path(dt_path_vib);
+	if (!node)
+		return -ENODEV;
+
+	prop = of_get_property(node, DT_PROP_VIB_TYPE, &len);
+	if (prop && len)
+		vib->type = *((int *)prop);
+	else
+		return -ENODEV;
+
+	if ((vib->type != VIB_TYPE_GENENIC_ROTARY)
+		&& (vib->type != VIB_TYPE_GENENIC_LINEAR))
+		return -ENODEV;
+
+	prop = of_get_property(node, VIB_EN, &len);
+	if (prop && len) {
+		vib->ctrl.vib_en.of = *((struct vib_of_signal *)prop);
+		vib->ctrl.vib_en.name = VIB_EN;
+		vib->ctrl.vib_en.signal_type = SIGNAL_ENABLE;
+		if (vib_signal_init(&vib->ctrl.vib_en)) {
+			zfprintk("vib_en init failed\n");
+			return -ENODEV;
+		}
+	} else {
+		zfprintk("vib_en not found in %s\n", dt_path_vib);
+		return -ENODEV;
+	}
+
+	prop = of_get_property(node, "pwm", &len);
+	if (prop && len) {
+		int i, j = len / sizeof(struct vib_pwm);
+		dprintk("pwm len %d size %d\n", len,
+				len/sizeof(struct vib_pwm));
+		if (j > MAX_PWMS)
+			j = MAX_PWMS;
+		for (i = 0; i < j; i++)
+			vib->ctrl.vib_pwm[i] = *(((struct vib_pwm *)prop) + i);
+	} else {
+		zfprintk("pwm not found in %s\n", dt_path_vib);
+		return -ENODEV;
+	}
+
+	prop = of_get_property(node, VIB_DIR, &len);
+	if (prop && len) {
+		vib->ctrl.vib_dir.of = *((struct vib_of_signal *)prop);
+		vib->ctrl.vib_dir.name = VIB_DIR;
+		vib->ctrl.vib_dir.signal_type = SIGNAL_DIRECTION;
+		if (vib_signal_init(&vib->ctrl.vib_dir)) {
+			zfprintk("vib_dir init failed\n");
+			return -ENODEV;
+		}
+	} else {
+		if (vib->type == VIB_TYPE_GENENIC_LINEAR) {
+			zfprintk("vib_dir not found in %s\n", dt_path_vib);
+			return -ENODEV;
+		}
+	}
+
+	prop = of_get_property(node, "regulator", &len);
+	if (prop && len) {
+		strncpy(vib->reg.name, (char *)prop,
+				REGULATOR_NAME_SIZE - 1);
+		vib->reg.name[REGULATOR_NAME_SIZE - 1] = '\0';
+
+		prop = of_get_property(node, "deferred_off", &len);
+		if (prop && len) {
+			vib->reg.deferred_off = *(u32 *)prop;
+			zfprintk("deferred_off %u\n", vib->reg.deferred_off);
+		}
+		vib->reg.volt[0].time =  MAX_TIMEOUT;
+		vib->reg.volt[0].min_uV = 2800000;
+		vib->reg.volt[0].max_uV = 2800000;
+
+		prop = of_get_property(node, "voltage", &len);
+		if (prop && len) {
+			int i, j = len / sizeof(struct vib_voltage);
+			dprintk("voltage len %d size %d\n", len,
+				len/sizeof(struct vib_voltage));
+			if (j > MAX_VOLT)
+				j = MAX_VOLT;
+			for (i = 0; i < j; i++)
+				vib->reg.volt[i] =
+					*(((struct vib_voltage *)prop) + i);
+		}
+	}
+
+	prop = of_get_property(node, "min", &len);
+	if (prop && len)
+		vib->min_us = *((unsigned int *)prop);
+	else
+		vib->min_us = MIN_TIMEOUT;
+
+	prop = of_get_property(node, "max", &len);
+	if (prop && len)
+		vib->max_us = *((unsigned int *)prop);
+	else
+		vib->max_us = MAX_TIMEOUT;
+
+	of_node_put(node);
+	return 0;
+}
+
 
 struct vib_timed_platform_data vib_timed_pdata = {
 	.vibs = vib_timeds,
@@ -608,9 +722,12 @@ void __init mmi_vibrator_init(void)
 		vib = &vibrators[count];
 		vib_timed = &vib_timeds[count];
 
-		if (vib_of_init(vib, i))
-			continue;
-
+		if (vib_of_init(vib, i)) {
+			zfprintk("DT vibrator settings not found,"
+					" using defaults\n");
+			if (vib_of_init_default(vib, i))
+				continue;
+		}
 		vib_timed->dev_data = vib;
 		vib_timed->min_timeout = vib->min_us / USEC_PER_MSEC;
 		vib_timed->max_timeout = vib->max_us / USEC_PER_MSEC;
