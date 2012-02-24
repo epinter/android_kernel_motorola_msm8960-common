@@ -885,14 +885,6 @@ static int mipi_dsi_panel_power(int on)
 			return  -EINVAL;
 		}
 
-		if (is_smd() && system_rev >= HWREV_P1) {
-			rc = regulator_enable(reg_vci);
-			if (rc) {
-				pr_err("regulator enable failed, rc=%d\n", rc);
-				return  -EINVAL;
-			}
-		}
-
 		/*
 		 * This is a work around for Vanquish P1C HW ONLY.
 		 * There are 2 HW versions of vanquish P1C, wing board phone and
