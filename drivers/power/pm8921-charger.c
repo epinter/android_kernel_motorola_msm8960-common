@@ -1616,10 +1616,18 @@ static int get_prop_batt_status(struct pm8921_chg_chip *chip)
 #else
 #define MAX_TOLERABLE_BATT_TEMP_DDC	680
 #endif
+#define BATT_THERM_ON	BIT(4)
 static int get_prop_batt_temp(struct pm8921_chg_chip *chip)
 {
 	int rc;
 	struct pm8xxx_adc_chan_result result;
+
+	rc = pm_chg_masked_write(chip, CHG_CNTRL_2, BATT_THERM_ON,
+				 BATT_THERM_ON);
+	if (rc)
+		pr_err("Failed to Force Vref therm ON rc=%d\n", rc);
+
+	mdelay(6);
 
 	rc = pm8xxx_adc_read(chip->batt_temp_channel, &result);
 	if (rc) {
