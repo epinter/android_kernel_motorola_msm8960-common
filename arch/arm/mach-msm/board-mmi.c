@@ -752,6 +752,12 @@ static int is_smd(void) {
 	return !strncmp(panel_name, "mipi_mot_video_smd_hd_465", PANEL_NAME_MAX_LEN);
 }
 
+static int is_auo_hd_450(void)
+{
+	return !strncmp(panel_name, "mipi_mot_cmd_auo_hd_450",
+							PANEL_NAME_MAX_LEN);
+}
+
 /*
  * HACK: Ideally instead of basing code decisions on a string specifying the
  * name of the device, the device tree would contain a structure composed of
@@ -1089,10 +1095,16 @@ static int mipi_dsi_panel_power(int on)
 		if (is_smd() && lcd_reset1 != 0)
 			gpio_set_value_cansleep(lcd_reset1, 0);
 
-		if (!(is_smd()) && system_rev >= HWREV_P2)
+		if (is_auo_hd_450()) {
+			/* There is a HW issue of qinara P1, that if we release
+			 * reg_5V during suspend, then we will have problem to
+			 * turn it back on during resume
+			 */
+			if (system_rev >= HWREV_P2)
+				gpio_set_value(disp_5v_en, 0);
+		} else
 			gpio_set_value(disp_5v_en, 0);
-		else if (is_smd())
-			gpio_set_value(disp_5v_en, 0);
+
 		if (is_smd() && system_rev < HWREV_P1) {
 			gpio_set_value_cansleep(12, 0);
 		}
