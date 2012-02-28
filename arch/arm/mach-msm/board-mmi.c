@@ -3065,6 +3065,17 @@ MACHINE_START(ASANTI, "Asanti")
 	.fixup = msm8960_fixup,
 MACHINE_END
 
+MACHINE_START(ORDOG, "Ordog")
+	.map_io = msm8960_map_io,
+	.reserve = msm8960_reserve,
+	.init_irq = msm8960_init_irq,
+	.handle_irq = gic_handle_irq,
+	.timer = &msm_timer,
+	.init_machine = msm8960_mmi_init,
+	.init_early = mmi_init_early,
+	.init_very_early = msm8960_early_memory,
+MACHINE_END
+
 /* for use by products that are completely configured through device tree */
 MACHINE_START(MSM8960DT, "msm8960dt")
 	.map_io = msm8960_map_io,
