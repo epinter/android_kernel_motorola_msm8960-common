@@ -56,6 +56,9 @@ extern int mot_setup_touch_cyttsp3(struct i2c_board_info *info,
 extern int mot_setup_touch_atmxt(struct i2c_board_info *info,
 		struct device_node *node);
 
+extern int __init msm8960_tmp105_init(struct i2c_board_info *info,
+		struct device_node *child);
+
 extern struct pm8xxx_keypad_platform_data mmi_keypad_data;
 extern struct pm8xxx_keypad_platform_data mmi_qwerty_keypad_data;
 

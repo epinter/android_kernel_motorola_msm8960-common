@@ -308,3 +308,52 @@ void msm8960_get_dsps_fw_name(char *name)
 			 __func__, (char *)prop);
 	}
 }
+
+/*
+ * TMP105/LM75 temperature sensor
+ */
+
+static struct gpiomux_setting tmp105_int_act_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.pull = GPIOMUX_PULL_UP,
+};
+
+static struct gpiomux_setting tmp105_int_sus_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.pull = GPIOMUX_PULL_UP,
+};
+
+static struct msm_gpiomux_config tmp105_gpio_configs = {
+	.settings = {
+		[GPIOMUX_ACTIVE]    = &tmp105_int_act_cfg,
+		[GPIOMUX_SUSPENDED] = &tmp105_int_sus_cfg,
+	},
+};
+
+int  __init msm8960_tmp105_init(struct i2c_board_info *info,
+				struct device_node *child)
+{
+	int ret = 0;
+	int len = 0;
+	const void *prop;
+	unsigned gpio = 0;
+
+	pr_debug("msm8960_tmp105_init\n");
+
+	prop = of_get_property(child, "irq,gpio", &len);
+	if (!prop || (len != sizeof(u8)))
+		return -EINVAL;
+	gpio = *(u8 *)prop;
+	tmp105_gpio_configs.gpio = gpio;
+	msm_gpiomux_install(&tmp105_gpio_configs, 1);
+
+	ret = gpio_request(gpio, "tmp105_intr");
+	if (ret) {
+		pr_err("gpio_request tmp105_intr GPIO (%d) failed (%d)\n",
+			gpio, ret);
+		return ret;
+	}
+	gpio_direction_input(gpio);
+
+	return 0;
+}
