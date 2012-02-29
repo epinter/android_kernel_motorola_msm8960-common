@@ -209,7 +209,14 @@ module_param_cb(bms_end_cc_uah, &bms_ro_param_ops, &bms_end_cc_uah, 0644);
 static int bms_aged_capacity = 0;
 module_param(bms_aged_capacity, int, 0644);
 
+static int timestamp;
+
+module_param(timestamp, int, 0644);
+MODULE_PARM_DESC(timestamp, "Epoch format timestamp value which indicates last"
+	"time when cycle_count var was updated");
+
 static int interpolate_fcc(struct pm8921_bms_chip *chip, int batt_temp);
+
 static void readjust_fcc_table(void)
 {
 	struct single_row_lut *temp, *old;
