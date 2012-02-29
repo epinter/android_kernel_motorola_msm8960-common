@@ -7,7 +7,7 @@
  * CY8CTMA340
  *
  * Copyright (C) 2009-2011 Cypress Semiconductor, Inc.
- * Copyright (C) 2010-2011 Motorola Mobility, Inc.
+ * Copyright (C) 2010-2012 Motorola Mobility, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -1177,6 +1177,7 @@ static int _cyttsp_xy_worker(struct cyttsp *ts) {
 
 	input_sync(ts->input);
 _cyttsp_xy_worker_exit:
+		usleep(1000);
 		cyttsp_dbg( ts, CY_DBG_LVL_1,"%s: Exiting...",__func__);
 		return retval;
 }
