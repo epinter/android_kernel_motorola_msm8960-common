@@ -170,6 +170,7 @@ struct ct406_data {
 	u16 prox_covered_offset;
 	u16 prox_uncovered_offset;
 	u16 prox_recalibrate_offset;
+	u8 prox_pulse_count;
 	u8 prox_offset;
 	u16 pdata_max;
 	enum ct40x_hardware_type hw_type;
@@ -380,17 +381,22 @@ static int ct406_init_registers(struct ct406_data *ct)
 	if (error < 0)
 		return error;
 
-	/* write IR LED pulse count = 2 */
-	/* write proximity diode = ch1, proximity gain = 1/2, ALS gain = 1 */
+	/* write IR LED pulse count */
 	reg_data[0] = (CT406_PPCOUNT | CT406_COMMAND_AUTO_INCREMENT);
-	reg_data[1] = 2;
+	reg_data[1] = ct->prox_pulse_count;
+	error = ct406_i2c_write(ct, reg_data, 1);
+	if (error < 0)
+		return error;
+
+	/* write proximity diode = ch1, proximity gain = 1/2, ALS gain = 1 */
+	reg_data[0] = (CT406_CONTROL | CT406_COMMAND_AUTO_INCREMENT);
 	if (ct->hw_type == CT405_HW_TYPE)
-		reg_data[2] = CT406_CONTROL_PDIODE_CH1
+		reg_data[1] = CT406_CONTROL_PDIODE_CH1
 			| CT406_CONTROL_PGAIN_2X | CT406_CONTROL_AGAIN_1X;
 	else
-		reg_data[2] = CT406_CONTROL_PDIODE_CH1
+		reg_data[1] = CT406_CONTROL_PDIODE_CH1
 			| CT406_CONTROL_PGAIN_1X | CT406_CONTROL_AGAIN_1X;
-	error = ct406_i2c_write(ct, reg_data, 2);
+	error = ct406_i2c_write(ct, reg_data, 1);
 	if (error < 0)
 		return error;
 
@@ -1503,6 +1509,7 @@ static int ct406_probe(struct i2c_client *client,
 			= ct->pdata->ct405_prox_uncovered_offset;
 		ct->prox_recalibrate_offset
 			= ct->pdata->ct405_prox_recalibrate_offset;
+		ct->prox_pulse_count = ct->pdata->ct405_prox_pulse_count;
 		ct->prox_offset = ct->pdata->ct405_prox_offset;
 		ct->pdata_max = CT405_PDATA_MAX;
 		ct->hw_type = CT405_HW_TYPE;
@@ -1515,6 +1522,7 @@ static int ct406_probe(struct i2c_client *client,
 			= ct->pdata->ct406_prox_uncovered_offset;
 		ct->prox_recalibrate_offset
 			= ct->pdata->ct406_prox_recalibrate_offset;
+		ct->prox_pulse_count = ct->pdata->ct406_prox_pulse_count;
 		ct->prox_offset = ct->pdata->ct406_prox_offset;
 		ct->pdata_max = CT406_PDATA_MAX;
 		ct->hw_type = CT406_HW_TYPE;

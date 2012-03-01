@@ -60,11 +60,13 @@ struct ct406_platform_data mp_ct406_pdata = {
 	.ct405_prox_covered_offset = 0x008c,
 	.ct405_prox_uncovered_offset = 0x0046,
 	.ct405_prox_recalibrate_offset = 0x0046,
+	.ct405_prox_pulse_count = 0x02,
 	.ct405_prox_offset = 0x00,
 	.ct406_prox_saturation_threshold = 0x0208,
 	.ct406_prox_covered_offset = 0x008c,
 	.ct406_prox_uncovered_offset = 0x0046,
 	.ct406_prox_recalibrate_offset = 0x0046,
+	.ct406_prox_pulse_count = 0x02,
 	.ct406_prox_offset = 0x00,
 	.als_lens_transmissivity = 20,
 };
@@ -131,6 +133,9 @@ int __init ct406_init(struct i2c_board_info *info, struct device_node *child)
 	prop = of_get_property(child, "ct406_prox_recalibrate_offset", &len);
 	if (prop && (len == sizeof(u16)))
 		mp_ct406_pdata.ct406_prox_recalibrate_offset = *(u16 *)prop;
+	prop = of_get_property(child, "ct406_prox_pulse_count", &len);
+	if (prop && (len == sizeof(u8)))
+		mp_ct406_pdata.ct406_prox_pulse_count = *(u8 *)prop;
 	prop = of_get_property(child, "ct406_prox_offset", &len);
 	if (prop && (len == sizeof(u8)))
 		mp_ct406_pdata.ct406_prox_offset = *(u8 *)prop;
