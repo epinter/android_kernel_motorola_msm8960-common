@@ -351,7 +351,7 @@ static int __devinit lm3532_led_probe(struct i2c_client *client, int control)
 	INIT_WORK(&led_dat->work, lm3532_led_work);
 
 	dev_info(&client->dev, "Registering %s LED class\n",
-		pdata->ctrl_a_name);
+		led_dat->cdev.name);
 	ret = led_classdev_register(&client->dev, &led_dat->cdev);
 	if (ret) {
 		dev_err(&client->dev, "failed to register LED %d\n",
@@ -631,7 +631,6 @@ int lm3532_register_init(struct lm3532_bl *data)
 	ctrl_en &= 0xf8;
 
 	if (pdata->ctrl_a_usage == LM3532_BACKLIGHT_DEVICE) {
-		data->backlight_controller = LM3532_CNTRL_A;
 		data->cached_daylight_max = pdata->ctrl_a_l4_daylight;
 
 		fdbck_en |= lm3532_get_feedback_enable_bits(pdata,
@@ -642,7 +641,6 @@ int lm3532_register_init(struct lm3532_bl *data)
 
 		ctrl_en |= 0x01;
 	} else if (pdata->ctrl_b_usage == LM3532_BACKLIGHT_DEVICE) {
-		data->backlight_controller = LM3532_CNTRL_B;
 		data->cached_daylight_max = pdata->ctrl_b_l4_daylight;
 
 		fdbck_en |= lm3532_get_feedback_enable_bits(pdata,
@@ -653,7 +651,6 @@ int lm3532_register_init(struct lm3532_bl *data)
 
 		ctrl_en |= 0x02;
 	} else if (pdata->ctrl_c_usage == LM3532_BACKLIGHT_DEVICE) {
-		data->backlight_controller = LM3532_CNTRL_C;
 		data->cached_daylight_max = pdata->ctrl_c_l4_daylight;
 
 		fdbck_en |= lm3532_get_feedback_enable_bits(pdata,
@@ -872,7 +869,7 @@ static DEVICE_ATTR(registers, 0664, lm3532_registers_show, NULL);
 static int __devinit lm3532_probe(struct i2c_client *client,
 					const struct i2c_device_id *id)
 {
-	struct backlight_device *bl;
+	struct backlight_device *bl = NULL;
 	struct lm3532_bl *data;
 	struct lm3532_backlight_platform_data *pdata =
 		client->dev.platform_data;
@@ -892,13 +889,13 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 		return -EINVAL;
 	}
 
-	if(pdata->power_up)
-		if(pdata->power_up())
+	if (pdata->power_up)
+		if (pdata->power_up())
 			dev_err(&client->dev, "Power up failed\n");
 
-	if(pdata->reset_release)
+	if (pdata->reset_release)
 		pdata->reset_release();
-		
+
 	ret = lm3532_write(client, LM3532_REVISION, 0xFF);
 	if (ret < 0)
 		return -EIO;
@@ -928,7 +925,7 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 	data->revid = reg_val;
 	data->client = client;
 	data->pdata = pdata;
-	data->current_brightness = -1;
+	data->current_brightness = pdata->boot_brightness;
 	i2c_set_clientdata(client, data);
 
 	dev_info(&client->dev, "Revision %X backlight\n", data->revid);
@@ -937,14 +934,19 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 
 	INIT_DELAYED_WORK(&data->work, lm3532_bl_work);
 
-	if (pdata->ctrl_a_usage == LM3532_BACKLIGHT_DEVICE)
+	if (pdata->ctrl_a_usage == LM3532_BACKLIGHT_DEVICE) {
 		backlight_name = pdata->ctrl_a_name;
-	else if (pdata->ctrl_b_usage == LM3532_BACKLIGHT_DEVICE)
+		data->backlight_controller = LM3532_CNTRL_A;
+	} else if (pdata->ctrl_b_usage == LM3532_BACKLIGHT_DEVICE) {
 		backlight_name = pdata->ctrl_b_name;
-	else if (pdata->ctrl_c_usage == LM3532_BACKLIGHT_DEVICE)
+		data->backlight_controller = LM3532_CNTRL_B;
+	} else if (pdata->ctrl_c_usage == LM3532_BACKLIGHT_DEVICE) {
 		backlight_name = pdata->ctrl_c_name;
-	else
-		backlight_name = "lcd-backlight";
+		data->backlight_controller = LM3532_CNTRL_C;
+	} else {
+		dev_err(&client->dev, "No backlight controller specified\n");
+		goto out;
+	}
 
 	bl = backlight_device_register(backlight_name,
 			&client->dev, data, &lm3532_bl_ops, NULL);
@@ -957,8 +959,6 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 	bl->props.max_brightness = LM3532_MAX_BRIGHTNESS;
 	bl->props.brightness = pdata->boot_brightness;
 	data->bl = bl;
-
-	lm3532_register_init(data);
 
 	if (data->revid == LM3532_REV1) {
 		/* backlight must use LM3532_CNTRL_A and LM3532_LED_D1
@@ -977,12 +977,6 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 		return 0;
 	}
 
-	ret = device_create_file(&client->dev, &dev_attr_registers);
-	if (ret) {
-		/* This is not a fatal error */
-		dev_err(&client->dev, "unable to create \'registers\' device file\n");
-	}
-
 	if ((pdata->ctrl_a_usage == LM3532_LED_DEVICE)
 			|| (pdata->ctrl_a_usage == LM3532_LED_DEVICE_FDBCK))
 		lm3532_led_probe(client, LM3532_CNTRL_A);
@@ -992,6 +986,14 @@ static int __devinit lm3532_probe(struct i2c_client *client,
 	if ((pdata->ctrl_c_usage == LM3532_LED_DEVICE)
 			|| (pdata->ctrl_c_usage == LM3532_LED_DEVICE_FDBCK))
 		lm3532_led_probe(client, LM3532_CNTRL_C);
+
+	lm3532_bl_init(data);
+
+	ret = device_create_file(&client->dev, &dev_attr_registers);
+	if (ret) {
+		/* This is not a fatal error */
+		dev_err(&client->dev, "unable to create \'registers\' device file\n");
+	}
 
 	if (pdata->pwm_init_delay_ms)
 		schedule_delayed_work(&data->work,
