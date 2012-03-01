@@ -1160,7 +1160,11 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 			pdata->fw->private_fw_v[0],
 			pdata->fw->public_fw_v[0]);
 	}
-	if (ret < 0 || info->version_info.core_fw_ver != pdata->fw->ver[0] ||
+	/* if the version of the IC firmware is 0x56, always reflash. It was a
+	 * bad version number from Melfas
+	 */
+	if (ret < 0 || (info->version_info.core_fw_ver == 0x56) ||
+		info->version_info.core_fw_ver < pdata->fw->ver[0] ||
 		info->version_info.priv_fw_ver < pdata->fw->private_fw_v[0] ||
 		info->version_info.pub_fw_ver < pdata->fw->public_fw_v[0]) {
 		ret = mms_ts_config(info, mms_flash_from_probe);
