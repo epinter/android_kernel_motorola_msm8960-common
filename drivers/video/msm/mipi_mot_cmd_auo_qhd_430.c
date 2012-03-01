@@ -33,38 +33,111 @@ static struct mipi_dsi_phy_ctrl dsi_cmd_mode_phy_db = {
 };
 
 
-static char sw_reset[2] = {DCS_CMD_SOFT_RESET, 0x00};
 static char enter_sleep[2] = {DCS_CMD_ENTER_SLEEP_MODE, 0x00};
 static char exit_sleep[2] = {DCS_CMD_EXIT_SLEEP_MODE, 0x00};
 static char display_off[2] = {DCS_CMD_SET_DISPLAY_OFF, 0x00};
 static char display_on[2] = {DCS_CMD_SET_DISPLAY_ON, 0x00};
 
 static char led_pwm1[2] = {DCS_CMD_SET_BRIGHTNESS, 0xFF};
-static char led_pwm2[2] = {DCS_CMD_SET_CTRL_DISP, 0x2C};
+static char led_pwm2[2] = {DCS_CMD_SET_CABC, 0x03};
+static char led_pwm3[2] = {DCS_CMD_SET_CTRL_DISP, 0x28};
+static char led_pwm4[2] = {DCS_CMD_SET_CTRL_DISP, 0x2C};
+
 static char inverted_mode[2] = {DCS_CMD_SET_INVERTED_MODE, 0xD0};
-/* static char led_pwm3[2] = {DCS_CMD_SET_CABC, 0x00}; */
 
 static bool rotate_display;
 
+static char enable_l2_cmd_1[4] = {0xFF, 0x96, 0x01, 0x01};
+static char enable_l2_cmd_2[3] = {0xFF, 0x96, 0x01};
+static char disable_l2_cmd_1[3] = {0xFF, 0x00, 0x00};
+static char disable_l2_cmd_2[4] = {0xFF, 0x00, 0x00, 0x00};
+
+static char cmd_00_00[2] = {0x00, 0x00};
+static char cmd_00_80[2] = {0x00, 0x80};
+static char cmd_00_92[2] = {0x00, 0x92};
+static char cmd_C4_60[2] = {0x00, 0x60};
+static char cmd_00_96[2] = {0x00, 0x96};
+static char cmd_C4_40[2] = {0x00, 0x40};
+
+static char set_2_dot_inversion_1[2] = {0x00, 0xB3};
+static char set_2_dot_inversion_2[2] = {0xC0, 0x10};
+
 static struct dsi_cmd_desc mot_cmd_on_cmds[] = {
-	{DTYPE_DCS_WRITE, 1, 0, 0, 20, sizeof(sw_reset), sw_reset},
 	{DTYPE_DCS_WRITE, 1, 0, 0, 120, sizeof(exit_sleep), exit_sleep},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1), led_pwm1},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm2), led_pwm2},
 	{DTYPE_DCS_WRITE, 1, 0, 0, 1, sizeof(display_on), display_on},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm3), led_pwm3},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm4), led_pwm4},
 };
 
 static struct dsi_cmd_desc mot_cmd_inverted_on_cmds[] = {
-	{DTYPE_DCS_WRITE, 1, 0, 0, 20, sizeof(sw_reset), sw_reset},
 	{DTYPE_DCS_WRITE, 1, 0, 0, 120, sizeof(exit_sleep), exit_sleep},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1), led_pwm1},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm2), led_pwm2},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm3), led_pwm3},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm4), led_pwm4},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(inverted_mode), inverted_mode},
+};
+
+static struct dsi_cmd_desc mot_cmd_2_dot_on_cmds[] = {
+	{DTYPE_GEN_LWRITE, 1, 0, 0, 0, sizeof(enable_l2_cmd_1),
+						enable_l2_cmd_1},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_00_80), cmd_00_80},
+	{DTYPE_GEN_LWRITE, 1, 0, 0, 0, sizeof(enable_l2_cmd_2),
+						enable_l2_cmd_2},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(set_2_dot_inversion_1),
+						set_2_dot_inversion_1},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(set_2_dot_inversion_2),
+						set_2_dot_inversion_2},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_00_92), cmd_00_92},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_C4_60), cmd_C4_60},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_00_96), cmd_00_96},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_C4_40), cmd_C4_40},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_00_80), cmd_00_80},
+	{DTYPE_GEN_LWRITE, 1, 0, 0, 0, sizeof(disable_l2_cmd_1),
+						disable_l2_cmd_1},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_00_00), cmd_00_00},
+	{DTYPE_GEN_LWRITE, 1, 0, 0, 0, sizeof(disable_l2_cmd_2),
+						disable_l2_cmd_2},
+	{DTYPE_DCS_WRITE, 1, 0, 0, 120, sizeof(exit_sleep), exit_sleep},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1), led_pwm1},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm2), led_pwm2},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm3), led_pwm3},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm4), led_pwm4},
+};
+
+static struct dsi_cmd_desc mot_cmd_2_dot_inverted_on_cmds[] = {
+	{DTYPE_GEN_LWRITE, 1, 0, 0, 0, sizeof(enable_l2_cmd_1),
+						enable_l2_cmd_1},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_00_80), cmd_00_80},
+	{DTYPE_GEN_LWRITE, 1, 0, 0, 0, sizeof(enable_l2_cmd_2),
+						enable_l2_cmd_2},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(set_2_dot_inversion_1),
+						set_2_dot_inversion_1},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(set_2_dot_inversion_2),
+						set_2_dot_inversion_2},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_00_92), cmd_00_92},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_C4_60), cmd_C4_60},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_00_96), cmd_00_96},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_C4_40), cmd_C4_40},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_00_80), cmd_00_80},
+	{DTYPE_GEN_LWRITE, 1, 0, 0, 0, sizeof(disable_l2_cmd_1),
+						disable_l2_cmd_1},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0, sizeof(cmd_00_00), cmd_00_00},
+	{DTYPE_GEN_LWRITE, 1, 0, 0, 0, sizeof(disable_l2_cmd_2),
+						disable_l2_cmd_2},
+	{DTYPE_DCS_WRITE, 1, 0, 0, 120, sizeof(exit_sleep), exit_sleep},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1), led_pwm1},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm2), led_pwm2},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm3), led_pwm3},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm4), led_pwm4},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(inverted_mode), inverted_mode},
 };
 
 static struct dsi_cmd_desc mot_display_off_cmds[] = {
+	{DTYPE_DCS_WRITE, 1, 0, 0, 10, sizeof(display_off), display_off},
 	{DTYPE_DCS_WRITE, 1, 0, 0, 120, sizeof(enter_sleep), enter_sleep},
-	{DTYPE_DCS_WRITE, 1, 0, 0, 1, sizeof(display_off), display_off},
 };
 
 static int panel_enable(struct msm_fb_data_type *mfd)
@@ -78,13 +151,28 @@ static int panel_enable(struct msm_fb_data_type *mfd)
 
 	dsi_tx_buf = mot_panel->mot_tx_buf;
 
-	if (rotate_display == true) {
-		mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_cmd_inverted_on_cmds,
-					ARRAY_SIZE(mot_cmd_inverted_on_cmds));
+	if (mipi_mot_get_controller_ver(mfd) <= 2) {
+		if (rotate_display == true) {
+			mipi_dsi_cmds_tx(mfd, dsi_tx_buf,
+				mot_cmd_2_dot_inverted_on_cmds,
+				ARRAY_SIZE(mot_cmd_2_dot_inverted_on_cmds));
+		} else {
+			mipi_dsi_cmds_tx(mfd, dsi_tx_buf,
+				mot_cmd_2_dot_on_cmds,
+				ARRAY_SIZE(mot_cmd_2_dot_on_cmds));
+		}
 	} else {
-		mipi_dsi_cmds_tx(mfd, dsi_tx_buf, mot_cmd_on_cmds,
-					ARRAY_SIZE(mot_cmd_on_cmds));
+		if (rotate_display == true) {
+			mipi_dsi_cmds_tx(mfd, dsi_tx_buf,
+				mot_cmd_inverted_on_cmds,
+				ARRAY_SIZE(mot_cmd_inverted_on_cmds));
+		} else {
+			mipi_dsi_cmds_tx(mfd, dsi_tx_buf,
+				mot_cmd_on_cmds,
+				ARRAY_SIZE(mot_cmd_on_cmds));
+		}
 	}
+
 	return 0;
 }
 
@@ -161,8 +249,11 @@ out:
 	pinfo->bl_min = 1;
 	pinfo->fb_num = 2;
 	pinfo->clk_rate = 442350000;
-	pinfo->lcd.vsync_enable = FALSE;
-	pinfo->lcd.hw_vsync_mode = FALSE;
+	pinfo->lcd.vsync_enable = TRUE;
+	pinfo->lcd.hw_vsync_mode = TRUE;
+	pinfo->lcd.v_back_porch = 2;
+	pinfo->lcd.v_front_porch = 2;
+	pinfo->lcd.v_pulse_width = 2;
 	pinfo->lcd.refx100 = 6000; /* adjust refx100 to prevent tearing */
 
 	pinfo->mipi.mode = DSI_CMD_MODE;
@@ -174,9 +265,9 @@ out:
 	pinfo->mipi.t_clk_post = 0x04;
 	pinfo->mipi.t_clk_pre = 0x1B;
 	pinfo->mipi.stream = 0;	/* dma_p */
-	pinfo->mipi.mdp_trigger = DSI_CMD_TRIGGER_SW;
+	pinfo->mipi.mdp_trigger = DSI_CMD_TRIGGER_NONE;
 	pinfo->mipi.dma_trigger = DSI_CMD_TRIGGER_SW;
-	pinfo->mipi.te_sel = 0; /* TE from vsycn gpio */
+	pinfo->mipi.te_sel = 1; /* TE from vsycn gpio */
 	pinfo->mipi.interleave_max = 1;
 	pinfo->mipi.insert_dcs_cmd = TRUE;
 	pinfo->mipi.wr_mem_continue = 0x3c;
@@ -194,6 +285,7 @@ out:
 		pr_err("%s: failed to register device!\n", __func__);
 
 	pr_debug("%s device registered\n", __func__);
+
 	return ret;
 }
 
