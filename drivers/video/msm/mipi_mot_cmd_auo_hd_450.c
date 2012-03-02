@@ -21,12 +21,12 @@ static struct mipi_mot_panel *mot_panel;
 static struct mipi_dsi_phy_ctrl dsi_cmd_mode_phy_db = {
 		{0x03, 0x0a, 0x04, 0x00, 0x20},	/* regulator */
 		/* timing   */
-		{0xad, 0x8b, 0x19, 0x00, 0x93, 0x96, 0x1c,
-		0x8d, 0x1c, 0x03, 0x04, 0xa0},
+		{0xb4, 0x8d, 0x1d, 0x00, 0x96, 0x94, 0x21,
+		0x8f, 0x21, 0x03, 0x04, 0xa0},
 		{0x5f, 0x00, 0x00, 0x10},	/* phy ctrl */
 		{0xff, 0x00, 0x06, 0x00},	/* strength */
 		/* pll control */
-		{0x00, 0x8f, 0x01, 0x1a, 0x00, 0x50, 0x48, 0x63,
+		{0x00, 0xcb, 0x01, 0x1a, 0x00, 0x50, 0x48, 0x63,
 		/* 4 MIPI lanes */
 		0x41, 0x0f, 0x03,
 		0x00, 0x14, 0x03, 0x0, 0x02, 0x00, 0x20, 0x00, 0x01},
@@ -40,13 +40,14 @@ static char display_on[2] = {DCS_CMD_SET_DISPLAY_ON, 0x00};
 
 static char led_pwm1[2] = {DCS_CMD_SET_BRIGHTNESS, 0xFF};
 static char led_pwm2[2] = {DCS_CMD_SET_CTRL_DISP, 0x2C};
-/* static char led_pwm3[2] = {DCS_CMD_SET_CABC, 0x00}; */
+static char led_pwm3[2] = {DCS_CMD_SET_CABC, 0x03};
 
 static struct dsi_cmd_desc mot_cmd_on_cmds[] = {
 	{DTYPE_DCS_WRITE, 1, 0, 0, 120, sizeof(exit_sleep), exit_sleep},
-	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1), led_pwm1},
-	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm2), led_pwm2},
 	{DTYPE_DCS_WRITE, 1, 0, 0, 1, sizeof(display_on), display_on},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 0, sizeof(led_pwm1), led_pwm1},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 0, sizeof(led_pwm2), led_pwm2},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 0, sizeof(led_pwm3), led_pwm3},
 };
 
 static struct dsi_cmd_desc mot_display_off_cmds[] = {
@@ -144,7 +145,7 @@ static int __init mipi_cmd_mot_auo_qhd_450_init(void)
 	pinfo->mipi.data_lane2 = TRUE;
 	pinfo->mipi.data_lane3 = TRUE;
 	pinfo->mipi.t_clk_post = 0x19;
-	pinfo->mipi.t_clk_pre = 0x2e;
+	pinfo->mipi.t_clk_pre = 0x2f;
 	pinfo->mipi.stream = 0;	/* dma_p */
 	pinfo->mipi.mdp_trigger = DSI_CMD_TRIGGER_NONE;
 	pinfo->mipi.dma_trigger = DSI_CMD_TRIGGER_SW;
