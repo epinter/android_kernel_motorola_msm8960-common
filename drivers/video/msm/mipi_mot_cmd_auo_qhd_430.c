@@ -249,6 +249,9 @@ out:
 	pinfo->bl_min = 1;
 	pinfo->fb_num = 2;
 	pinfo->clk_rate = 442350000;
+	pinfo->physical_width_mm = 54;
+	pinfo->physical_height_mm = 95;
+
 	pinfo->lcd.vsync_enable = TRUE;
 	pinfo->lcd.hw_vsync_mode = TRUE;
 	pinfo->lcd.v_back_porch = 2;

@@ -557,6 +557,8 @@ static int __init mipi_video_mot_hd_pt_init(void)
 	pinfo->bl_max = NUMBER_BRIGHTNESS_LEVELS - 1;
 	pinfo->bl_min = 0;
 	pinfo->fb_num = 2;
+	pinfo->physical_width_mm = 58;
+	pinfo->physical_height_mm = 103;
 
 	pinfo->mipi.mode = DSI_VIDEO_MODE;
 	pinfo->mipi.pulse_mode_hsa_he = TRUE;
