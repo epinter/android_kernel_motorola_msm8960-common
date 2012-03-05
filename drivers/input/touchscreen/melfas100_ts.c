@@ -597,8 +597,7 @@ static int mms_ts_enable(struct mms_ts_info *info)
 	if (info->enabled)
 		goto out;
 	/* wake up the touch controller. */
-	i2c_smbus_write_byte_data(info->client, 0, 0);
-	usleep_range(3000, 5000);
+	gpio_set_value(info->pdata->gpio_reset, 1);
 	info->enabled = true;
 	enable_irq(info->irq);
 out:
@@ -612,8 +611,7 @@ static int mms_ts_disable(struct mms_ts_info *info)
 	if (!info->enabled)
 		goto out;
 	disable_irq(info->irq);
-	i2c_smbus_write_byte_data(info->client, MMS_MODE_CONTROL, 0);
-	usleep_range(10000, 12000);
+	gpio_set_value(info->pdata->gpio_reset, 0);
 	info->enabled = false;
 out:
 	mutex_unlock(&info->lock);
@@ -953,12 +951,14 @@ static ssize_t melfas_ts_irq_enabled_store(struct device *dev,
 
 	switch (value) {
 	case 0:
-		mms_ts_disable(ts);
+		disable_irq(ts->irq);
+		ts->enabled = false;
 		pr_info("%s: touch irq disabled, %d\n",
 				__func__, ts->enabled);
 	break;
 	case 1:
-		mms_ts_enable(ts);
+		ts->enabled = true;
+		enable_irq(ts->irq);
 		pr_info("%s: touch irq enabled, %d\n",
 				__func__, ts->enabled);
 	break;
@@ -972,6 +972,53 @@ static ssize_t melfas_ts_irq_enabled_store(struct device *dev,
 }
 static DEVICE_ATTR(irq_enabled, S_IWUSR | S_IRUGO, melfas_ts_irq_enabled_show,
 					melfas_ts_irq_enabled_store);
+
+static ssize_t melfas_ts_reset_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct mms_ts_info *ts = i2c_get_clientdata(client);
+	int	pin = gpio_get_value(ts->pdata->gpio_reset);
+	return sprintf(buf, "Reset: %s\n",
+				(pin ? "HIGH" : "LOW"));
+}
+
+static ssize_t melfas_ts_reset_set(struct device *dev,
+			struct device_attribute *attr,
+			const char *buf, size_t size)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct mms_ts_info *ts = i2c_get_clientdata(client);
+	unsigned long value;
+	int	pin = -1;
+	int err = kstrtoul(buf, 0, &value);
+	if (err < 0) {
+		pr_err("%s: illegal sysfs data\n", __func__);
+		return -EINVAL;
+	}
+
+	switch (value) {
+	case 0:
+		gpio_set_value(ts->pdata->gpio_reset, 0);
+	break;
+	case 1:
+		gpio_set_value(ts->pdata->gpio_reset, 1);
+	break;
+	default:
+		pin = gpio_get_value(ts->pdata->gpio_reset);
+		pr_info("%s: failed: No value\n", __func__);
+
+	break;
+	}
+	pin = gpio_get_value(ts->pdata->gpio_reset);
+	pr_info("%s: reset is set to %s\n",
+		__func__,
+		(pin ? "HIGH" : "LOW"));
+
+	return size;
+}
+static DEVICE_ATTR(drv_reset, S_IWUSR | S_IRUGO, melfas_ts_reset_show,
+					melfas_ts_reset_set);
 
 
 static ssize_t melfas_ts_ic_ver_show(struct device *dev,
@@ -1185,6 +1232,13 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 				"New firmware is not going to be downloaded!");
 		}
 	}
+	ret = device_create_file(&info->client->dev, &dev_attr_drv_reset);
+	if (ret) {
+		pr_err("%s:File device creation failed: %d\n", __func__, ret);
+		ret = -ENODEV;
+		goto err_create_drv_reset_device_failed;
+	}
+
 	ret = device_create_file(&info->client->dev, &dev_attr_drv_debug);
 	if (ret) {
 		pr_err("%s:File device creation failed: %d\n", __func__, ret);
@@ -1254,6 +1308,8 @@ err_create_ic_ver_device_failed:
 err_create_irq_enabled_device_failed:
 	device_remove_file(&info->client->dev, &dev_attr_drv_debug);
 err_create_dbg_device_failed:
+	device_remove_file(&info->client->dev, &dev_attr_drv_reset);
+err_create_drv_reset_device_failed:
 err_config:
 	input_unregister_device(info->input_dev);
 err_input_register_device_failed:
