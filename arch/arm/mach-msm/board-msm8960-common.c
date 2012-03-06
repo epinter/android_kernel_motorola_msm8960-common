@@ -2809,6 +2809,7 @@ struct msm_otg_platform_data msm_otg_pdata = {
 #ifdef CONFIG_MSM_BUS_SCALING
 	.bus_scale_table        = &usb_bus_scale_pdata,
 #endif
+	.disable_reset_on_disconnect = true,
 };
 
 static struct android_usb_platform_data android_usb_pdata = {
