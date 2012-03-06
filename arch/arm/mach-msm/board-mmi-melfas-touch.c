@@ -67,9 +67,9 @@ static u8 touch_get_latency_debug_level(void);
 static struct touch_firmware	ts_firmware;
 static uint8_t	fw_version[] = { 0x45 };
 /* should be used to compare to public firmware version */
-static uint8_t	priv_v[] = { 0x01 };
-static uint8_t	pub_v[] = { 0x01 };
-static uint8_t fw_file_name[] = "melfas_45_1_1.fw";
+static uint8_t	priv_v[] = { 0x03 };
+static uint8_t	pub_v[] = { 0x12 };
+static uint8_t fw_file_name[] = "melfas_45_3_12.fw";
 
 static struct gpiomux_setting i2c_gpio_config = {
 	.func = GPIOMUX_FUNC_GPIO,
