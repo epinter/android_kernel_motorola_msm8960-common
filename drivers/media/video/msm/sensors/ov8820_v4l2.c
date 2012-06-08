@@ -53,8 +53,8 @@ static struct msm_camera_i2c_reg_conf ov8820_1080_settings[] = {
 	{0x3004, 0xce},
 	{0x3005, 0x10},
 	{0x3006, 0x00},
-	{0x3501, 0x74},
-	{0x3502, 0x60},
+	//{0x3501, 0x74},
+	//{0x3502, 0x60},
 	{0x370e, 0x00},
 	{0x3801, 0x00},
 	{0x3802, 0x01},
@@ -91,8 +91,8 @@ static struct msm_camera_i2c_reg_conf ov8820_prev_settings[] = {
 	{0x3004, 0xd5},
 	{0x3005, 0x11},
 	{0x3006, 0x11},
-	{0x3501, 0x4e},
-	{0x3502, 0xa0},
+	//{0x3501, 0x4e},
+	//{0x3502, 0xa0},
 	{0x370e, 0x08},
 	{0x3801, 0x00},
 	{0x3802, 0x00},
@@ -129,8 +129,8 @@ static struct msm_camera_i2c_reg_conf ov8820_snap_settings[] = {
 	{0x3004, 0xbf},
 	{0x3005, 0x10},
 	{0x3006, 0x00},
-	{0x3501, 0x9a},
-	{0x3502, 0xa0},
+	//{0x3501, 0x9a},
+	//{0x3502, 0xa0},
 	{0x370e, 0x00},
 	{0x3801, 0x00},
 	{0x3712, 0xcc},
@@ -911,6 +911,39 @@ static int32_t ov8820_get_module_info(struct msm_sensor_ctrl_t *s_ctrl,
 	return 0;
 }
 
+int32_t ov8820_adjust_frame_lines(struct msm_sensor_ctrl_t *s_ctrl,
+		uint16_t res)
+{
+	uint16_t cur_line = 0;
+	uint16_t exp_fl_lines = 0;
+	uint8_t int_time[3];
+	if (s_ctrl->sensor_exp_gain_info) {
+		msm_camera_i2c_read_seq(s_ctrl->sensor_i2c_client,
+				s_ctrl->sensor_exp_gain_info->coarse_int_time_addr-1,
+				&int_time[0], 3);
+		cur_line |= int_time[0] << 12;
+		cur_line |= int_time[1] << 4;
+		cur_line |= int_time[2] >> 4;
+		exp_fl_lines = cur_line +
+				s_ctrl->sensor_exp_gain_info->vert_offset;
+		if (exp_fl_lines > s_ctrl->msm_sensor_reg->
+				output_settings[res].frame_length_lines)
+			msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
+					s_ctrl->sensor_output_reg_addr->
+					frame_length_lines,
+					exp_fl_lines,
+					MSM_CAMERA_I2C_WORD_DATA);
+		CDBG("%s cur_line %x cur_fl_lines %x, exp_fl_lines %x\n",
+				__func__,
+				cur_line,
+				s_ctrl->msm_sensor_reg->
+				output_settings[res].frame_length_lines,
+				exp_fl_lines);
+	}
+	return 0;
+}
+
+
 static int __init msm_sensor_init_module(void)
 {
 	return i2c_add_driver(&ov8820_i2c_driver);
@@ -946,6 +979,7 @@ static struct msm_sensor_fn_t ov8820_func_tbl = {
 	.sensor_power_up                = ov8820_power_up,
 	.sensor_power_down              = ov8820_power_down,
 	.sensor_match_id                = ov8820_match_id,
+	.sensor_adjust_frame_lines      = ov8820_adjust_frame_lines,
 	.sensor_get_module_info         = ov8820_get_module_info,
 };
 
