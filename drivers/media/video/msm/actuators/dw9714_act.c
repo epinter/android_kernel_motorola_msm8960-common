@@ -13,6 +13,7 @@
 
 #include "msm_actuator.h"
 #include <linux/debugfs.h>
+#include "media/msm_camera_query.h"
 
 #define DW9714_TOTAL_STEPS_NEAR_TO_FAR_MAX 45
 
@@ -258,6 +259,16 @@ static int32_t dw9714_set_params(struct msm_actuator_ctrl_t *a_ctrl)
 
 	msm_camera_i2c_write(&a_ctrl->i2c_client,
 		0xDC, 0x51, MSM_CAMERA_I2C_BYTE_DATA);
+
+	/* Need to set the calibrated Macro and infinity positions */
+	if (af_info.af_liftoff_cal != 0 && af_info.af_macro_cal != 0) {
+		dw9714_regions[0].code_per_step = af_info.af_liftoff_cal /
+			dw9714_regions[0].step_bound[0];
+
+		dw9714_regions[1].code_per_step =
+			(((af_info.af_macro_cal - af_info.af_liftoff_cal)*100)/
+			DW9714_TOTAL_STEPS_NEAR_TO_FAR_MAX + 50)/100;
+	}
 	return 0;
 }
 
