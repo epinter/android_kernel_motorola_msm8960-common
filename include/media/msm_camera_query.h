@@ -5,4 +5,5 @@ struct otp_info_t {
 	uint8_t otp_info[256];
 };
 
+extern uint16_t af_type;
 #endif /* __LINUX_MSM_CAMERA_QUERY_H_ */
