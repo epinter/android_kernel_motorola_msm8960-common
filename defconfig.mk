@@ -9,6 +9,10 @@ ifneq ($(TARGET_BUILD_VARIANT), user)
 PRODUCT_SPECIFIC_DEFCONFIGS += ${LJAPDEFCONFIGSRC}/eng_bld.config
 endif
 
+ifeq ($(TARGET_HAVE_VMWARE),true)
+PRODUCT_SPECIFIC_DEFCONFIGS += ${LJAPDEFCONFIGSRC}/vmw_bld.config
+endif
+
 #
 # make combined defconfig file
 #---------------------------------------

@@ -234,6 +234,10 @@ config GENERIC_BUG
 	def_bool y
 	depends on BUG
 
+config SUPPORT_VMW
+       bool "Support VM ware"
+
+
 source "init/Kconfig"
 
 source "kernel/Kconfig.freezer"
