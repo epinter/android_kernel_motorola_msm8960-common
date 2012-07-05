@@ -464,7 +464,7 @@ void mdp4_overlay_dsi_video_wait4event(struct msm_fb_data_type *mfd,
 
 	data = inpdw(MDP_BASE + DSI_VIDEO_BASE);
 	data &= 0x01;
-	if (data == 0)	/* timing generator disabled */
+	if (data == 0 || !dsi_video_enabled)	/* timing generator disabled */
 		return;
 
 	spin_lock_irqsave(&mdp_spin_lock, flag);
