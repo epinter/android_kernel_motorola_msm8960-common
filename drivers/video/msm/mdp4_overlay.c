@@ -2553,8 +2553,13 @@ int mdp4_overlay_unset(struct fb_info *info, int ndx)
 			}
 			mfd->use_ov0_blt &= ~(1 << (pipe->pipe_ndx-1));
 			mdp4_overlay_update_blt_mode(mfd);
-			if (!mfd->use_ov0_blt)
+			if (!mfd->use_ov0_blt) {
+				if (mfd->ov0_wb_buf->phys_addr) {
+					mdp4_dsi_cmd_dma_busy_wait(mfd);
+					mdp4_dsi_blt_dmap_busy_wait(mfd);
+				}
 				mdp4_free_writeback_buf(mfd, MDP4_MIXER0);
+			}
 		} else {	/* mixer1, DTV, ATV */
 			if (ctrl->panel_mode & MDP4_PANEL_DTV) {
 				mdp4_overlay_dtv_unset(mfd, pipe);
