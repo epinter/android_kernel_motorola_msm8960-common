@@ -920,13 +920,9 @@ static int __init mipi_video_mot_hd_pt_init(void)
 	pinfo->lcdc.h_pulse_width = 12;
 	pinfo->mipi.hsa_power_stop = FALSE;
 
-	/*
-	 * qcom requires the sum of the vertical back porch + pulse width
-	 * should >= 5, otherwise have underrun in some upscaling use cases
-	 */
-	pinfo->lcdc.v_back_porch = 3;
+	pinfo->lcdc.v_back_porch = 2;
 	pinfo->lcdc.v_front_porch = 13;
-	pinfo->lcdc.v_pulse_width = 2;
+	pinfo->lcdc.v_pulse_width = 1;
 
 	pinfo->lcdc.border_clr = 0x0;
 	pinfo->lcdc.underflow_clr = 0xff;
