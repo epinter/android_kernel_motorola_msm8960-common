@@ -3330,10 +3330,22 @@ static __init void register_i2c_devices_from_dt(int bus)
 					msm_camera_sensor_ov8820_data.
 						sensor_platform_info->
 						digital_en = 0;
+				prop = of_get_property(child, "drv_strength",
+						&len);
+				if (prop && (len == sizeof(u8)))
+					update_camera_gpio_cfg(
+						msm_camera_sensor_ov8820_data,
+						*(uint8_t *)prop);
 				info.platform_data =
 					&msm_camera_sensor_ov8820_data;
 				break;
 			case 0x00290001: /* Omnivision_OV7736 */
+				prop = of_get_property(child, "drv_strength",
+						&len);
+				if (prop && (len == sizeof(u8)))
+					update_camera_gpio_cfg(
+						msm_camera_sensor_ov7736_data,
+						*(uint8_t *)prop);
 				info.platform_data =
 					&msm_camera_sensor_ov7736_data;
 				break;

@@ -248,6 +248,8 @@ extern struct platform_device msm_tsens_device;
 extern struct msm_otg_platform_data msm_otg_pdata;
 
 extern bool camera_single_mclk;
+extern void update_camera_gpio_cfg(struct msm_camera_sensor_info sensor_info,
+		uint8_t drv_strength);
 
 extern void msm8960_init_hdmi(struct platform_device *hdmi_dev,
 						struct msm_hdmi_platform_data *hdmi_data);
