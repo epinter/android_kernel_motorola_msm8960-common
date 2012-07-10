@@ -26,6 +26,7 @@
 #include <mach/peripheral-loader.h>
 #include "smd_private.h"
 #include "ramdump.h"
+#include "wcnss_coredump.h"
 
 #define MODULE_NAME			"wcnss_8960"
 
@@ -37,6 +38,7 @@ static DECLARE_WORK(riva_fatal_work, riva_fatal_fn);
 
 static struct delayed_work cancel_vote_work;
 static void *riva_ramdump_dev;
+static void *riva_coredump_dev;
 static int riva_crash;
 static int ss_restart_inprogress;
 static int enable_riva_ssr;
@@ -156,7 +158,7 @@ static int riva_ramdump(int enable, const struct subsys_data *subsys)
 				riva_segments,
 				ARRAY_SIZE(riva_segments));
 	else
-		return 0;
+		return do_riva_coredump(riva_coredump_dev);
 }
 
 /* Riva crash handler */
@@ -227,6 +229,13 @@ static int __init riva_ssr_module_init(void)
 	if (!riva_ramdump_dev) {
 		pr_err("%s: Unable to create ramdump device.\n",
 				MODULE_NAME);
+		ret = -ENOMEM;
+		goto out;
+	}
+	riva_coredump_dev = create_riva_coredump_device("riva");
+	if (!riva_coredump_dev) {
+		pr_err("%s: Unable to create riva coredump device. (%d)\n",
+				__func__, -ENOMEM);
 		ret = -ENOMEM;
 		goto out;
 	}
