@@ -168,6 +168,7 @@ config ARCH_MSM8960
 	select MULTI_IRQ_HANDLER
 	select MSM_PM8X60 if PM
 	select HOLES_IN_ZONE if SPARSEMEM
+	select KRAIT_ERRATA32
 
 config ARCH_MSM8930
 	bool "MSM8930"
@@ -2152,4 +2153,9 @@ config MSM_DCVS
 	  algorithm and the algorithm returns a frequency for the core which is
 	  passed to the frequency change driver.
 
+config KRAIT_ERRATA32
+	bool "Use workaround for MSM8960 Errata 32"
+	default n
+	help
+	  Disable WFI/WFE until used for MSM8960 Errata 32.
 endif

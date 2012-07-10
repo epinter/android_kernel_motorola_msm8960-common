@@ -25,7 +25,21 @@ ENTRY(msm_secondary_startup)
 	sub	r4, r4, r5		@ determine virtual/phys offsets
 	add	r6, r6, r4		@ apply
 pen:
+#ifdef CONFIG_KRAIT_ERRATA32
+	mrs	r7, cpsr		@ stash CPSR
+	cpsid	if			@ disable irq, fiq
+	mrc	p15, 7, r3, c15, c0, 5
+	bic	r3, r3, #0x10000	@ clear NOPWFE
+	mcr	p15, 7, r3, c15, c0, 5
+	isb
+	wfe				@ WFE
+	orr	r3, r3, #0x10000
+	mcr	p15, 7, r3, c15, c0, 5	@ set NOPWFE
+	isb
+	msr	cpsr_c, r7		@ Restore CPSR
+#else
 	wfe
+#endif
 	dsb				@ ensure subsequent access is
 					@ after event
 
