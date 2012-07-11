@@ -76,7 +76,7 @@ static char  set_reg_offset_19[2] = {0xb0, 0x13};
 static char  set_reg_offset_0[2] = {0xb0, 0x0};
 
 /* DTYPE_DCS_LWRITE */
-static char display_condition_set[4] = {0xf2, 0x80, 0x03, 0x0d};
+static char display_condition_set[4] = {0xf2, 0x80, 0x05, 0x0d};
 
 static char gamma_ltps_set_update[2] = {0xf7, 0x03};
 

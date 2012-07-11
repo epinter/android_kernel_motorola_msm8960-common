@@ -211,6 +211,8 @@ static void mipi_mot_mipi_busy_wait(struct msm_fb_data_type *mfd)
 		mdp4_dsi_blt_dmap_busy_wait(mfd);
 	} else if (mfd->panel_info.type == MIPI_VIDEO_PANEL) {
 		mdp4_overlay_dsi_video_wait4event(mfd, INTR_PRIMARY_VSYNC);
+		mdp4_dsi_cmd_dma_busy_wait(mfd);
+		mdp4_dsi_blt_dmap_busy_wait(mfd);
 	}
 
 }
@@ -227,6 +229,16 @@ static int mipi_read_cmd_locked(struct msm_fb_data_type *mfd,
 	} else {
 		mipi_set_tx_power_mode(0);
 		mipi_mot_mipi_busy_wait(mfd);
+		/* For video mode panel, after INTR_PRIMARY_VSYNC happened,
+		 * only have 5H(VSA+VBP) left for blanking period, might not
+		 * have enough time to complete read command. Want to
+		 * wait for 100us more (about 5H * 13us per line = 65us)
+		 * before calling mdp to send out read command.
+		 * with this delay, guarant mdp will send out read command
+		 * at the beginning of next blanking period.
+		 */
+		if (mfd->panel_info.type == MIPI_VIDEO_PANEL)
+			udelay(100);
 		*rd_data = (u8)get_panel_info(mfd, mot_panel, cmd);
 	}
 
