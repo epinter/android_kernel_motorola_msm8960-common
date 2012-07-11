@@ -267,7 +267,7 @@ static int32_t dw9714_set_params(struct msm_actuator_ctrl_t *a_ctrl)
 
 		dw9714_regions[1].code_per_step =
 			(((af_info.af_macro_cal - af_info.af_liftoff_cal)*100)/
-			DW9714_TOTAL_STEPS_NEAR_TO_FAR_MAX + 50)/100;
+			(DW9714_TOTAL_STEPS_NEAR_TO_FAR_MAX-1) + 50)/100;
 	}
 	return 0;
 }
