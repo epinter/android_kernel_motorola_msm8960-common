@@ -90,7 +90,7 @@ static int coredump_read(struct file *filep, char __user *buf, size_t count,
 	}
 
 	/* TODO get riva coredump. For now, returning fixed message. */
-	copy_size = strnlen(coredump_mem) + 1;
+	copy_size = strlen(coredump_mem) + 1;
 	device_mem = kmalloc(copy_size, GFP_KERNEL);
 	if (!device_mem) {
 		pr_err("Coredump(%s): Couldn't allocate coredump memory. %d",
