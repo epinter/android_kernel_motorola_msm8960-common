@@ -28,7 +28,7 @@
 DEFINE_MUTEX(ov8820_mut);
 static struct msm_sensor_ctrl_t ov8820_s_ctrl;
 
-static struct regulator *reg_1p8, *reg_2p8;
+static struct regulator *reg_1p8;
 
 static struct otp_info_t otp_info;
 uint16_t af_type;
@@ -757,13 +757,12 @@ static int32_t ov8820_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 	struct msm_camera_sensor_platform_info *pinfo =
 		s_ctrl->sensordata->sensor_platform_info;
 
-	pr_info("ov8820_power_up R:%d P:%d D:%d A:%d 1.8:%s 2.8:%s\n",
+	pr_info("ov8820_power_up R:%d P:%d D:%d A:%d 1.8:%s\n",
 			pinfo->sensor_reset,
 			pinfo->sensor_pwd,
 			pinfo->digital_en,
 			pinfo->analog_en,
-			(pinfo->reg_1p8 ? pinfo->reg_1p8 : "-"),
-			pinfo->reg_2p8);
+			(pinfo->reg_1p8 ? pinfo->reg_1p8 : "-"));
 
 	/*obtain gpios*/
 	rc = gpio_request(pinfo->analog_en, "ov8820");
@@ -800,14 +799,7 @@ static int32_t ov8820_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 			goto power_up_done;
 	}
 
-	/*Turn on AF regulator*/
-	rc = ov8820_regulator_on(&reg_2p8, pinfo->reg_2p8, 2800000);
-	if (rc < 0)
-		goto power_up_done;
-
-	usleep(10000);
-
-	/* Enable AVDD supply*/
+	/* Enable AVDD and AF supplies*/
 	gpio_direction_output(pinfo->analog_en, 1);
 	usleep(200);
 
@@ -844,7 +836,7 @@ static int32_t ov8820_power_down(
 	msm_sensor_probe_off(&s_ctrl->sensor_i2c_client->client->dev);
 	usleep(10000);
 
-	/*Disable AVDD*/
+	/*Disable AVDD and AF supplies*/
 	gpio_direction_output(pinfo->analog_en, 0);
 	usleep(15000);
 
@@ -853,9 +845,6 @@ static int32_t ov8820_power_down(
 		gpio_direction_output(pinfo->digital_en, 0);
 	else
 		ov8820_regulator_off(reg_1p8, "1.8");
-
-	ov8820_regulator_off(reg_2p8, "2.8");
-	usleep(10000);
 
 	/*Set PWRDWN Low*/
 	gpio_direction_output(pinfo->sensor_pwd, 0);
