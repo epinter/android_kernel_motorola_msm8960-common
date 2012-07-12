@@ -2320,9 +2320,10 @@ static u32 mdp4_overlay_blt_enable(struct mdp_overlay *req,
 	struct msm_fb_data_type *mfd, uint32 perf_level)
 {
 	u32 clk_rate = mfd->panel_info.clk_rate;
-	u32 pull_mode = 0, use_blt = 0;
+	u32 blt_chq_req = 0, use_blt = 0;
 
-	if (mfd->panel_info.type == MIPI_VIDEO_PANEL)
+	if ((mfd->panel_info.type == MIPI_VIDEO_PANEL) ||
+		(mfd->panel_info.type == MIPI_CMD_PANEL))
 		clk_rate = (&mfd->panel_info.mipi)->dsi_pclk_rate;
 
 	if (mfd->panel_info.type == DTV_PANEL)
@@ -2330,10 +2331,11 @@ static u32 mdp4_overlay_blt_enable(struct mdp_overlay *req,
 
 	if ((mfd->panel_info.type == LCDC_PANEL) ||
 	    (mfd->panel_info.type == MIPI_VIDEO_PANEL) ||
-	    (mfd->panel_info.type == DTV_PANEL))
-		pull_mode = 1;
+	    (mfd->panel_info.type == DTV_PANEL) ||
+	    (mfd->panel_info.type == MIPI_CMD_PANEL))
+		blt_chq_req = 1;
 
-	if (pull_mode && (req->src_rect.h > req->dst_rect.h ||
+	if (blt_chq_req && (req->src_rect.h > req->dst_rect.h ||
 		req->src_rect.w > req->dst_rect.w)) {
 		if (mdp4_overlay_validate_downscale(req, mfd, perf_level,
 			clk_rate))
