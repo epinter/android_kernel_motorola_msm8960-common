@@ -200,7 +200,7 @@ end:
 	return 0;
 }
 
-static void mipi_mot_mipi_busy_wait(struct msm_fb_data_type *mfd)
+void mipi_mot_mipi_busy_wait(struct msm_fb_data_type *mfd)
 {
 	/* Todo: consider to remove mdp4_dsi_cmd_dma_busy_wait
 	 * mipi_dsi_cmds_tx/rx wait for dma completion already.
