@@ -31,8 +31,6 @@ static struct msm_sensor_ctrl_t ov8820_s_ctrl;
 static struct regulator *reg_1p8;
 
 static struct otp_info_t otp_info;
-uint16_t af_type;
-struct af_info_t af_info;
 
 static struct msm_camera_i2c_reg_conf ov8820_start_settings[] = {
 	{0x0100, 0x01},
@@ -660,16 +658,6 @@ static int32_t ov8820_read_otp(struct msm_sensor_ctrl_t *s_ctrl)
 	}
 
 	memcpy((void *)&otp_info, otp, sizeof(struct otp_info_t));
-	memcpy(&af_type, &(otp_info.otp_info[25]), sizeof(uint16_t));
-	af_type = (af_type << 8) | ((af_type >> 8) & 0x00FF);
-
-	memcpy(&af_info, &(otp_info.otp_info[44]), sizeof(struct af_info_t));
-	af_info.af_liftoff_cal = (af_info.af_liftoff_cal << 8) |
-		((af_info.af_liftoff_cal >> 8) & 0x00FF);
-	af_info.af_macro_cal = (af_info.af_macro_cal << 8) |
-		((af_info.af_macro_cal >> 8) & 0x00FF);
-	af_info.af_inf_cal = (af_info.af_inf_cal << 8) |
-		((af_info.af_inf_cal >> 8) & 0x00FF);
 	return rc;
 }
 
