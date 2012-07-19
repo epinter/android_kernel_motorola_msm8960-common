@@ -180,6 +180,9 @@ static int bms_start_cc_uah;
 static int bms_end_percent;
 static int bms_end_ocv_uv;
 static int bms_end_cc_uah;
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+static int bms_meter_offset;
+#endif
 
 static int bms_ro_ops_set(const char *val, const struct kernel_param *kp)
 {
@@ -197,6 +200,9 @@ module_param_cb(bms_start_cc_uah, &bms_ro_param_ops, &bms_start_cc_uah, 0644);
 module_param_cb(bms_end_percent, &bms_ro_param_ops, &bms_end_percent, 0644);
 module_param_cb(bms_end_ocv_uv, &bms_ro_param_ops, &bms_end_ocv_uv, 0644);
 module_param_cb(bms_end_cc_uah, &bms_ro_param_ops, &bms_end_cc_uah, 0644);
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+module_param_cb(bms_meter_offset, &bms_ro_param_ops, &bms_meter_offset, 0644);
+#endif
 
 static int bms_aged_capacity = 0;
 module_param(bms_aged_capacity, int, 0644);
@@ -1528,6 +1534,9 @@ void pm8921_bms_charging_began(void)
 	the_chip->start_percent = calculate_state_of_charge(the_chip, &raw,
 					batt_temp, last_chargecycles);
 	bms_start_percent = the_chip->start_percent;
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+	bms_meter_offset = (int) the_chip->meter_offset;
+#endif
 	bms_start_ocv_uv = raw.last_good_ocv_uv;
 	calculate_cc_uah(the_chip, raw.cc, &bms_start_cc_uah);
 	pm_bms_masked_write(the_chip, BMS_TOLERANCES,
@@ -2295,6 +2304,9 @@ static ssize_t pm8921_override_write(struct file *filp,
 		chip->user_override_is_chg = 1;
 		the_chip->start_percent = usr_data.soc;
 		bms_start_percent = usr_data.soc;
+#ifdef CONFIG_PM8921_EXTENDED_INFO
+		bms_meter_offset = 0;
+#endif
 		bms_start_ocv_uv = last_ocv_uv;
 		bms_start_cc_uah = usr_data.cc_uah;
 	} else if (chip->user_override_is_chg && !usr_data.is_charging) {
