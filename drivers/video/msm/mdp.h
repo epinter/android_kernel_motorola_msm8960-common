@@ -803,10 +803,53 @@ void __mdp_histogram_reset(struct mdp_hist_mgmt *mgmt);
 void mdp_footswitch_ctrl(boolean on);
 
 static inline void mdp_hang_panic(void) {
-	print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_OFFSET, 32, 4,
-		       (void *)MDP_BASE + 0xE0000, 0x100, false);
-	pr_err("MDP dump finished.\n");
-	BUG();
+	static bool dump_reg;
+
+	if (dump_reg == false) {
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE , 0x4c, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x50, 0xc, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x60, 0x1c, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x90 , 0xc, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0xa0 , 0x0c, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0xb0 , 0xc, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x200, 0x24, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x10000, 0x32, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x10100, 0x32, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x20000, 0x92, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x21004, 0x32, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x30000 , 0x8e, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x40000, 0x32, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x40058, 0x3e, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x41000, 0x32, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x50000, 0x82, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x51000, 0x32, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0x90000, 0x32, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0xD0000, 0x68, false);
+		print_hex_dump(KERN_ERR, "MDP_HANG:", DUMP_PREFIX_ADDRESS,
+			32, 4, (void *)MDP_BASE + 0xE0000, 0x32, false);
+
+		dump_reg = true;
+		pr_err("MDP dump finished.\n");
+	}
 }
 
 #ifdef CONFIG_FB_MSM_MDP303

@@ -594,8 +594,13 @@ static void mdp4_overlay_dtv_wait4dmae(struct msm_fb_data_type *mfd)
 	mdp_intr_mask |= INTR_DMA_E_DONE;
 	outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
-	if (!wait_for_completion_killable_timeout(&dtv_pipe->comp, HZ))
+	if (!wait_for_completion_killable_timeout(&dtv_pipe->comp, HZ)) {
+		pr_err("%s: wait timeout for dtv_pipe->comp\n", __func__);
 		mdp_hang_panic();
+		spin_lock_irqsave(&mdp_spin_lock, flag);
+		mfd->dma->waiting = FALSE;
+		spin_unlock_irqrestore(&mdp_spin_lock, flag);
+	}
 	mdp_disable_irq(MDP_DMA_E_TERM);
 }
 

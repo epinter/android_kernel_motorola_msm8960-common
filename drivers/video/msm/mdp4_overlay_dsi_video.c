@@ -475,8 +475,13 @@ void mdp4_overlay_dsi_video_wait4event(struct msm_fb_data_type *mfd,
 	outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 	mdp_enable_irq(MDP_DMA2_TERM);  /* enable intr */
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
-	if (!wait_for_completion_timeout(&dsi_video_comp, HZ))
+	if (!wait_for_completion_timeout(&dsi_video_comp, HZ)) {
+		pr_err("%s: Wait timeout for dsi_video_comp\n", __func__);
 		mdp_hang_panic();
+		spin_lock_irqsave(&mdp_spin_lock, flag);
+		mfd->dma->waiting = FALSE;
+		spin_unlock_irqrestore(&mdp_spin_lock, flag);
+	}
 	mdp_disable_irq(MDP_DMA2_TERM);
 }
 
@@ -497,8 +502,13 @@ static void mdp4_overlay_dsi_video_dma_busy_wait(struct msm_fb_data_type *mfd)
 	if (need_wait) {
 		/* wait until DMA finishes the current job */
 		pr_debug("%s: pending pid=%d\n", __func__, current->pid);
-		if (!wait_for_completion_timeout(&mfd->dma->comp, HZ))
+		if (!wait_for_completion_timeout(&mfd->dma->comp, HZ)) {
+			pr_err("%s: wait timeout for dma->comp\n", __func__);
 			mdp_hang_panic();
+			spin_lock_irqsave(&mdp_spin_lock, flag);
+			mfd->dma->busy = FALSE;
+			spin_unlock_irqrestore(&mdp_spin_lock, flag);
+		}
 	}
 	pr_debug("%s: done pid=%d\n", __func__, current->pid);
 }
