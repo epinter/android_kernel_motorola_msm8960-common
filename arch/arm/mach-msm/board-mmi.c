@@ -1855,7 +1855,7 @@ static struct msm_camera_sensor_flash_data flash_ov7736 = {
 };
 
 static struct msm_camera_sensor_platform_info sensor_board_info_ov7736 = {
-	.mount_angle  = 90,
+	.mount_angle  = 270,
 	.sensor_reset = 76,
 	.sensor_pwd   = 89,
 	.analog_en    = 82,
