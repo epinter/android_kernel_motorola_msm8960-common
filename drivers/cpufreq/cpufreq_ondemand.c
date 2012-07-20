@@ -467,9 +467,9 @@ static ssize_t store_powersave_bias(struct kobject *a, struct attribute *b,
 
 			dbs_info = &per_cpu(od_cpu_dbs_info, cpu);
 			if (dbs_info->cur_policy) {
+				dbs_timer_exit(dbs_info);
 				/* cpu using ondemand, cancel dbs timer */
 				mutex_lock(&dbs_info->timer_mutex);
-				dbs_timer_exit(dbs_info);
 
 				ondemand_powersave_bias_setspeed(
 					dbs_info->cur_policy,
