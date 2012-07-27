@@ -107,7 +107,7 @@ static struct msm_camera_i2c_reg_conf ov8820_prev_settings[] = {
 	{0x380c, 0x06},
 	{0x380d, 0xde},
 	{0x380e, 0x05},
-	{0x380f, 0x05},
+	{0x380f, 0x06},
 	{0x3811, 0x08},
 	{0x3813, 0x04},
 	{0x3814, 0x31},
@@ -291,7 +291,7 @@ static struct msm_camera_i2c_reg_conf ov8820_recommend_settings[] = {
 	{0x380c, 0x06},
 	{0x380d, 0xde},
 	{0x380e, 0x05},
-	{0x380f, 0x05},
+	{0x380f, 0x06},
 	{0x3810, 0x00},
 	{0x3811, 0x08},
 	{0x3812, 0x00},
@@ -512,7 +512,7 @@ static struct msm_sensor_output_info_t ov8820_dimensions[] = {
 		.x_output = 0x660,
 		.y_output = 0x4C8,
 		.line_length_pclk = 0x6DE,
-		.frame_length_lines = 0x505,
+		.frame_length_lines = 0x506,
 		.vt_pixel_clk = 66700000,
 		.op_pixel_clk = 88000000,
 		.binning_factor = 2,
@@ -916,12 +916,14 @@ int32_t ov8820_adjust_frame_lines(struct msm_sensor_ctrl_t *s_ctrl,
 		exp_fl_lines = cur_line +
 				s_ctrl->sensor_exp_gain_info->vert_offset;
 		if (exp_fl_lines > s_ctrl->msm_sensor_reg->
-				output_settings[res].frame_length_lines)
+				output_settings[res].frame_length_lines) {
+			exp_fl_lines += (exp_fl_lines & 0x1);
 			msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 					s_ctrl->sensor_output_reg_addr->
 					frame_length_lines,
 					exp_fl_lines,
 					MSM_CAMERA_I2C_WORD_DATA);
+		}
 		CDBG("%s cur_line %x cur_fl_lines %x, exp_fl_lines %x\n",
 				__func__,
 				cur_line,
