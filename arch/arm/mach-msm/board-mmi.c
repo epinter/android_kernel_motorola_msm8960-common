@@ -1280,6 +1280,8 @@ int mipi_panel_power_en(int on)
 		if (is_smd_hd_465() && lcd_reset1 != 0)
 			gpio_set_value_cansleep(lcd_reset1, 0);
 
+		mdelay(10);
+
 		if (is_auo_hd_450()) {
 			/* There is a HW issue of qinara P1, that if we release
 			 * reg_5V during suspend, then we will have problem to
