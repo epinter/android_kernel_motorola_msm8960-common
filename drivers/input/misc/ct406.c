@@ -34,7 +34,7 @@
 #include <linux/uaccess.h>
 #include <linux/workqueue.h>
 
-#define CT406_I2C_RETRIES	5
+#define CT406_I2C_RETRIES	2
 #define CT406_I2C_RETRY_DELAY	10
 
 #define CT406_COMMAND_SELECT		0x80
