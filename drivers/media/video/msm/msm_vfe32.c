@@ -1401,6 +1401,11 @@ static int vfe32_proc_general(struct msm_isp_cmd *cmd)
 		}
 		break;
 	case VFE_CMD_STATS_AF_START: {
+		if (!vfe32_ctrl->vfebase) {
+		pr_err("vfebase is NULL!!!");
+		return -EFAULT;
+		}
+
 		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
 		if (!cmdp) {
 			rc = -ENOMEM;
