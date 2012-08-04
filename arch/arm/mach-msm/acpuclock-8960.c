@@ -1331,7 +1331,7 @@ static const int krait_needs_vmin(void)
 	case 0x510F06F0:
 		return 1;
 	default:
-		return 0;
+		return 1;
 	};
 }
 
