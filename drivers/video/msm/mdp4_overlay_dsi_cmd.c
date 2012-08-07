@@ -170,7 +170,7 @@ void mdp4_blt_dmap_cfg(struct mdp4_overlay_pipe *pipe)
 	uint32 off, addr;
 	int bpp;
 
-	if (pipe->blt_addr == 0)
+	if (pipe->ov_blt_addr == 0)
 		return;
 
 #ifdef BLT_RGB565
@@ -181,7 +181,7 @@ void mdp4_blt_dmap_cfg(struct mdp4_overlay_pipe *pipe)
 	off = 0;
 	if (pipe->blt_dmap_done & 0x01)
 		off = pipe->src_height * pipe->src_width * bpp;
-	addr = pipe->blt_addr + off;
+	addr = pipe->dma_blt_addr + off;
 
 	/* dmap */
 	MDP_OUTP(MDP_BASE + 0x90008, addr);
@@ -194,7 +194,7 @@ void mdp4_blt_overlay0_cfg(struct mdp4_overlay_pipe *pipe)
 	int bpp;
 	char *overlay_base;
 
-	if (pipe->blt_addr == 0)
+	if (pipe->ov_blt_addr == 0)
 		return;
 
 #ifdef BLT_RGB565
@@ -205,7 +205,7 @@ void mdp4_blt_overlay0_cfg(struct mdp4_overlay_pipe *pipe)
 	off = 0;
 	if (pipe->blt_ov_done & 0x01)
 		off = pipe->src_height * pipe->src_width * bpp;
-	addr = pipe->blt_addr + off;
+	addr = pipe->ov_blt_addr + off;
 	/* overlay 0 */
 	overlay_base = MDP_BASE + MDP4_OVERLAYPROC0_BASE;/* 0x10000 */
 	outpdw(overlay_base + 0x000c, addr);
@@ -347,7 +347,7 @@ int mdp4_dsi_cmd_pipe_commit(void)
 		mdp4_overlay_dmap_xy(pipe);
 	}
 
-	if (pipe->blt_addr) {
+	if (pipe->ov_blt_addr) {
 		diff = pipe->blt_ov_koff - pipe->blt_ov_done;
 		if (diff < 1) {
 			mdp4_blt_overlay0_cfg(pipe);
@@ -449,7 +449,7 @@ void mdp4_dmap_done_dsi_cmd(int cndx)
 	vctrl->dmap_intr_tot++;
 	pipe = vctrl->base_pipe;
 
-	if (pipe->blt_addr == 0) {
+	if (pipe->ov_blt_addr == 0) {
 		mdp4_overlay_dma_commit(cndx);
 		return;
 	}
@@ -465,7 +465,8 @@ void mdp4_dmap_done_dsi_cmd(int cndx)
 	if (diff <= 0) {
 		if (pipe->blt_end) {
 			pipe->blt_end = 0;
-			pipe->blt_addr = 0;
+			pipe->ov_blt_addr = 0;
+			pipe->dma_blt_addr = 0;
 			pipe->blt_changed = 1;
 			pr_info("%s: BLT-END\n", __func__);
 		}
@@ -496,7 +497,7 @@ void mdp4_overlay0_done_dsi_cmd(int cndx)
 			__func__, pipe->blt_ov_done, pipe->blt_dmap_done,
 			pipe->blt_ov_koff, pipe->blt_dmap_koff, diff);
 
-	if (pipe->blt_addr == 0) {
+	if (pipe->ov_blt_addr == 0) {
 		/* blt disabled */
 		pr_debug("%s: NON-BLT\n", __func__);
 		return;
@@ -702,7 +703,8 @@ void mdp4_overlay_update_dsi_cmd(struct msm_fb_data_type *mfd)
 
 	vctrl->base_pipe = pipe; /* keep it */
 	mdp4_init_writeback_buf(mfd, MDP4_MIXER0);
-	pipe->blt_addr = 0;
+	pipe->ov_blt_addr = 0;
+	pipe->dma_blt_addr = 0;
 
 	MDP_OUTP(MDP_BASE + 0x021c, 0x10); /* read pointer */
 
@@ -823,16 +825,16 @@ int mdp4_dsi_overlay_blt_start(struct msm_fb_data_type *mfd)
 	pipe = vctrl->base_pipe;
 
 	pr_debug("%s: blt_end=%d blt_addr=%x pid=%d\n",
-		 __func__, pipe->blt_end, (int)pipe->blt_addr, current->pid);
+		 __func__, pipe->blt_end, (int)pipe->ov_blt_addr, current->pid);
 
 	mdp4_allocate_writeback_buf(mfd, MDP4_MIXER0);
 
-	if (mfd->ov0_wb_buf->phys_addr == 0) {
+	if (mfd->ov0_wb_buf->write_addr == 0) {
 		pr_err("%s: no blt_base assigned\n", __func__);
 		return -EBUSY;
 	}
 
-	if (pipe->blt_addr == 0) {
+	if (pipe->ov_blt_addr == 0) {
 		spin_lock_irqsave(&vctrl->spin_lock, flag);
 		pipe->blt_end = 0;
 		pipe->blt_cnt = 0;
@@ -843,7 +845,8 @@ int mdp4_dsi_overlay_blt_start(struct msm_fb_data_type *mfd)
 		pipe->blt_dmap_koff = 0;
 		pipe->blt_ov_done = 0;
 		pipe->blt_dmap_done = 0;
-		pipe->blt_addr = mfd->ov0_wb_buf->phys_addr;
+		pipe->ov_blt_addr = mfd->ov0_wb_buf->write_addr;
+		pipe->dma_blt_addr = mfd->ov0_wb_buf->read_addr;
 		mdp4_stat.blt_dsi_cmd++;
 		spin_unlock_irqrestore(&vctrl->spin_lock, flag);
 		return 0;
@@ -863,9 +866,9 @@ int mdp4_dsi_overlay_blt_stop(struct msm_fb_data_type *mfd)
 	pipe = vctrl->base_pipe;
 
 	pr_info("%s: blt_end=%d blt_addr=%x pid=%d\n",
-		 __func__, pipe->blt_end, (int)pipe->blt_addr, current->pid);
+		 __func__, pipe->blt_end, (int)pipe->ov_blt_addr, current->pid);
 
-	if ((pipe->blt_end == 0) && pipe->blt_addr) {
+	if ((pipe->blt_end == 0) && pipe->ov_blt_addr) {
 		spin_lock_irqsave(&vctrl->spin_lock, flag);
 		pipe->blt_end = 1;	/* mark as end */
 		spin_unlock_irqrestore(&vctrl->spin_lock, flag);
