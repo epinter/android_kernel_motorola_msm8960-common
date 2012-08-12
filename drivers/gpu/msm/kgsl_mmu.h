@@ -186,12 +186,8 @@ void kgsl_mmu_set_mmutype(char *mmutype);
 unsigned int kgsl_mmu_get_current_ptbase(struct kgsl_device *device);
 enum kgsl_mmutype kgsl_mmu_get_mmutype(void);
 unsigned int kgsl_mmu_get_ptsize(void);
+int kgsl_mmu_gpuaddr_in_range(unsigned int gpuaddr);
 
-static inline int kgsl_mmu_gpuaddr_in_range(unsigned int gpuaddr)
-{
-	return ((gpuaddr >= KGSL_PAGETABLE_BASE) &&
-		(gpuaddr <
-		 (KGSL_PAGETABLE_BASE + CONFIG_MSM_KGSL_PAGE_TABLE_SIZE)));
 }
 
 #endif /* __KGSL_MMU_H */
