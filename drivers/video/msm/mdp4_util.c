@@ -3316,3 +3316,16 @@ void mdp4_clear_dump_flags(void)
 	dump_mdp_stats = false;
 	mipi_dsi_clear_dump_flag();
 }
+u32 mdp4_get_mixer_num(u32 panel_type)
+{
+	u32 mixer_num;
+	if ((panel_type == TV_PANEL) ||
+			(panel_type == DTV_PANEL))
+		mixer_num = MDP4_MIXER1;
+	else if (panel_type == WRITEBACK_PANEL) {
+		mixer_num = MDP4_MIXER2;
+	} else {
+		mixer_num = MDP4_MIXER0;
+	}
+	return mixer_num;
+}
