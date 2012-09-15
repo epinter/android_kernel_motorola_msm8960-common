@@ -4508,6 +4508,7 @@ static int lcdc_panel_power(int on)
 
 	if (unlikely(!lcdc_power_initialized)) {
 		quickvx_mddi_client = 0;
+		regulator_put(mddi_ldo20);
 		display_common_init();
 		lcdc_power_initialized = 1;
 	}
