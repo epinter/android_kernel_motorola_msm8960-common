@@ -359,6 +359,7 @@ void pmmExitBmpsRequestHandler(tpAniSirGlobal pMac, tpExitBmpsInfo pExitBmpsInfo
 
         respStatus = eSIR_SME_INVALID_PMM_STATE;
         pmmBmpsUpdateInvalidStateCnt(pMac);
+        palFreeMemory( pMac->hHdd, (tANI_U8 *) pExitBmpsInfo);
         goto failure;
     }
     return;
@@ -1835,7 +1836,7 @@ failure:
     PELOGE(pmmLog(pMac, LOGE,
         FL("pmmUapsd: Waking up from UAPSD mode failed, Ret Code: %d, Next State: %d\n"),
         retStatus, pMac->pmm.gPmmState);)
-    limSendSmeRsp(pMac, eWNI_PMC_EXIT_IMPS_RSP, resultCode, 0, 0);
+    limSendSmeRsp(pMac, eWNI_PMC_EXIT_UAPSD_RSP, resultCode, 0, 0);
 }
 
 
