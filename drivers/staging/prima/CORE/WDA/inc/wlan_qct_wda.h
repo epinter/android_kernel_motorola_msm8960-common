@@ -281,6 +281,8 @@ typedef enum
 #define WDA_DS_TX_START_XMIT  WLANTL_TX_START_XMIT
 #define WDA_DS_FINISH_ULA     WLANTL_FINISH_ULA
 
+/* Approximate amount of time to wait for WDA to stop WDI considering 1 pendig req too*/
+#define WDA_STOP_TIMEOUT ( (WDI_RESPONSE_TIMEOUT * 2) + WDI_SET_POWER_STATE_TIMEOUT + 5)
 /*--------------------------------------------------------------------------
   Functions
  --------------------------------------------------------------------------*/
@@ -396,6 +398,8 @@ typedef struct
    tSirLinkState        linkState;
    /* set, when BT AMP session is going on */
    v_BOOL_t             wdaAmpSessionOn;
+   v_U32_t              VosPacketToFree;
+   v_BOOL_t             needShutdown;
 } tWDA_CbContext ; 
 
 typedef struct
@@ -442,6 +446,17 @@ VOS_STATUS WDA_close(v_PVOID_t pVosContext);
  * Shutdown will not close the control transport, added by SSR
  */
 VOS_STATUS WDA_shutdown(v_PVOID_t pVosContext, wpt_boolean closeTransport);
+
+/*
+ * FUNCTION: WDA_stopFailed
+ * WDA stop is failed
+ */
+void WDA_stopFailed(v_PVOID_t pVosContext);
+/*
+ * FUNCTION: WDA_needShutdown
+ * WDA requires a shutdown rather than a close
+ */
+v_BOOL_t WDA_needShutdown(v_PVOID_t pVosContext);
 
 /*
  * FUNCTION: WDA_McProcessMsg
