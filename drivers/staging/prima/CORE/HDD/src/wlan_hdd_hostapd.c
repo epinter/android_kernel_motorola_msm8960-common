@@ -574,7 +574,7 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             vos_status = hdd_softap_GetStaId(pHostapdAdapter, &pSapEvent->sapevt.sapStationDisassocCompleteEvent.staMac, &staId);
             if (!VOS_IS_STATUS_SUCCESS(vos_status))
             {
-                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR, ("ERROR: HDD Failed to find sta id!!\n"));
+                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR, FL("ERROR: HDD Failed to find sta id!!"));
                 return VOS_STATUS_E_FAILURE;
             }
             hdd_softap_DeregisterSTA(pHostapdAdapter, staId);
@@ -1400,6 +1400,7 @@ int iw_softap_get_channel_list(struct net_device *dev,
     v_REGDOMAIN_t domainIdCurrentSoftap;
     tpChannelListInfo channel_list = (tpChannelListInfo) extra;
     eCsrBand curBand = eCSR_BAND_ALL;
+
     if (eHAL_STATUS_SUCCESS != sme_GetFreqBand(hHal, &curBand))
     {
         hddLog(LOGE,FL("not able get the current frequency band\n"));
@@ -1418,13 +1419,8 @@ int iw_softap_get_channel_list(struct net_device *dev,
         bandStartChannel = RF_CHAN_36;
         bandEndChannel = RF_CHAN_165;
     }
-    else 
-    {
-        bandStartChannel = RF_CHAN_1;
-        bandEndChannel = RF_CHAN_165;
-    }
 
-    hddLog(LOGE, FL("\n nBandCapability = %d, bandStartChannel = %hu, "
+    hddLog(LOG1, FL("\n nBandCapability = %d, bandStartChannel = %hu, "
                 "bandEndChannel = %hu \n"), pHddCtx->cfg_ini->nBandCapability, 
                 bandStartChannel, bandEndChannel );
 
@@ -2337,7 +2333,7 @@ int iw_get_softap_linkspeed(struct net_device *dev,
 
    if (!VOS_IS_STATUS_SUCCESS(status ))
    {
-      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR, ("ERROR: HDD Failed to find sta id!!\n"));
+      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR, FL("ERROR: HDD Failed to find sta id!!"));
       link_speed = 0;
    }
    else

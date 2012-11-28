@@ -730,7 +730,7 @@ v_U8_t* wlan_hdd_cfg80211_get_ie_ptr(v_U8_t *pIes, int length, v_U8_t eid)
         if(elem_len > left)
         {
             hddLog(VOS_TRACE_LEVEL_FATAL,
-                    "****Invalid IEs eid = %d elem_len=%d left=%d*****\n",
+                    FL("****Invalid IEs eid = %d elem_len=%d left=%d*****"),
                                                     eid,elem_len,left);
             return NULL;
         }
@@ -1221,7 +1221,33 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
     (WLAN_HDD_GET_AP_CTX_PTR(pHostapdAdapter))->uPrivacy = pConfig->privacy;
 
     /*Set wps station to configured*/
-    pConfig->wps_state = 0;
+     pIe = wlan_hdd_get_wps_ie_ptr(pBeacon->tail, pBeacon->tail_len);
+     if(pIe)
+     {
+        if(pIe[1] < (2 + WPS_OUI_TYPE_SIZE))
+        {
+            hddLog( VOS_TRACE_LEVEL_ERROR, "**Wps Ie Length is too small***\n");
+            return -EINVAL;
+        }
+        else if(memcmp(&pIe[2], WPS_OUI_TYPE, WPS_OUI_TYPE_SIZE) == 0)
+        {
+             hddLog( VOS_TRACE_LEVEL_INFO, "** WPS IE(len %d) ***", (pIe[1]+2));
+             /* Check 15 bit of WPS IE as it contain information for wps state
+              * WPS state
+              */
+              if(SAP_WPS_ENABLED_UNCONFIGURED == pIe[15])
+              {
+                  pConfig->wps_state = SAP_WPS_ENABLED_UNCONFIGURED;
+              } else if(SAP_WPS_ENABLED_CONFIGURED == pIe[15])
+              {
+                  pConfig->wps_state = SAP_WPS_ENABLED_CONFIGURED;
+              }
+        }
+    }
+    else
+    {
+        pConfig->wps_state = SAP_WPS_DISABLED;
+    }
     pConfig->fwdWPSPBCProbeReq  = 1; // Forward WPS PBC probe request frame up 
 
     pConfig->RSNWPAReqIELength = 0;
@@ -1420,7 +1446,7 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
         return -EINVAL;
     }
 
-    hddLog(LOGE, 
+    hddLog(LOG1, 
            FL("Waiting for Scan to complete(auto mode) and BSS to start"));
 
     status = vos_wait_single_event(&pHostapdState->vosEvent, 10000);
@@ -1549,36 +1575,38 @@ static int wlan_hdd_cfg80211_del_beacon(struct wiphy *wiphy,
     VOS_STATUS status = 0;
 
     ENTER();
+
     if (NULL == pAdapter)
     {
         VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
-                   "%s: HDD adapter context is Null", __FUNCTION__);
+                "%s: HDD adapter context is Null", __FUNCTION__);
         return -ENODEV;
     }
-    
+
     pHddCtx  =  (hdd_context_t*)pAdapter->pHddCtx;
+
     if (NULL == pHddCtx)
     {
         VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
-                   "%s: HDD context is Null", __FUNCTION__);
+                "%s: HDD context is Null", __FUNCTION__);
         return -ENODEV;
     }
-
+    
     staAdapter = hdd_get_adapter(pAdapter->pHddCtx, WLAN_HDD_INFRA_STATION);
 
-    if (!staAdapter)
+    if (NULL == staAdapter)
     {
         staAdapter = hdd_get_adapter(pAdapter->pHddCtx, WLAN_HDD_P2P_CLIENT);
-        if (!staAdapter)
+        if (NULL == pHddCtx)
         {
             VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
-                    "%s: HDD adapter context is Null", __FUNCTION__);
+                    "%s: HDD sta adapter is Null", __FUNCTION__);
             return -ENODEV;
         }
     }
 
     pScanInfo =  &pHddCtx->scan_info;
-    
+
     if ((WLAN_HDD_GET_CTX(pAdapter))->isLogpInProgress)
     {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL, "%s:LOGP in Progress. Ignore!!!",__func__);

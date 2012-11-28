@@ -1378,7 +1378,7 @@ tANI_U8 limWriteDeferredMsgQ(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
             if( LIM_MAX_NUM_MGMT_FRAME_DEFERRED < count )
             {
                 //We reach the quota for management frames, drop this one
-                PELOGE(limLog(pMac, LOGE, FL("Cannot deferred. Msg: %d Too many (count=%d) already\n"), limMsg->type, count);)
+                PELOGW(limLog(pMac, LOGW, FL("Cannot deferred. Msg: %d Too many (count=%d) already"), limMsg->type, count);)
                 //Return error, caller knows what to do
                 return TX_QUEUE_FULL;
             }
@@ -7719,7 +7719,7 @@ v_U8_t* limGetIEPtr(tpAniSirGlobal pMac, v_U8_t *pIes, int length, v_U8_t eid,eS
         if(elem_len > left)
         {
             limLog(pMac, LOGE,
-                    "****Invalid IEs eid = %d elem_len=%d left=%d*****\n",
+                    FL("****Invalid IEs eid = %d elem_len=%d left=%d*****"),
                                                     eid,elem_len,left);
             return NULL;
         }

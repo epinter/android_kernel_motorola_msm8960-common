@@ -148,7 +148,7 @@ int wlan_hdd_ftm_start(hdd_context_t *pAdapter);
 
 static struct wake_lock wlan_wake_lock;
 /* set when SSR is needed after unload */
-static v_U8_t      isSsrRequired;
+static e_hdd_ssr_required isSsrRequired = HDD_SSR_NOT_REQUIRED;
 
 //internal function declaration
 static VOS_STATUS wlan_hdd_framework_restart(hdd_context_t *pHddCtx);
@@ -384,7 +384,7 @@ int hdd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
    
            /* First 8 bytes will have "SETBAND " and 
             * 9 byte will have band setting value */
-           VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+           VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                     "%s: SetBandCommand Info  comm %s UL %d, TL %d", __FUNCTION__, priv_data.buf, priv_data.used_len, priv_data.total_len);
         
            /* Change band request received */
@@ -760,7 +760,7 @@ void hdd_full_pwr_cbk(void *callbackContext, eHalStatus status)
 {
    hdd_context_t *pHddCtx = (hdd_context_t*)callbackContext;
 
-   hddLog(VOS_TRACE_LEVEL_ERROR,"HDD full Power callback status = %d", status);
+   hddLog(VOS_TRACE_LEVEL_INFO_HIGH,"HDD full Power callback status = %d", status);
    if(&pHddCtx->full_pwr_comp_var)
    {
       complete(&pHddCtx->full_pwr_comp_var);
@@ -2022,13 +2022,16 @@ VOS_STATUS hdd_reconnect_all_adapters( hdd_context_t *pHddCtx )
    return VOS_STATUS_SUCCESS;
 }
 
-v_U8_t hdd_is_ssr_required( void)
+bool hdd_is_ssr_required( void)
 {
-    return isSsrRequired;
+    return (isSsrRequired == HDD_SSR_REQUIRED);
 }
 
-void hdd_set_ssr_required( v_U8_t value)
+/* Once SSR is disabled then it cannot be set. */
+void hdd_set_ssr_required( e_hdd_ssr_required value)
 {
+    if (HDD_SSR_DISABLED == isSsrRequired)
+        return;
     isSsrRequired = value;
 }
 
@@ -3836,9 +3839,9 @@ static int __init hdd_module_init ( void)
        * This is done here for safety purposes in case we re-initialize without turning
        * it OFF in any error scenario.
        */
-      hddLog(VOS_TRACE_LEVEL_ERROR, "In module init: Ensure Force XO Core is OFF"
+      hddLog(VOS_TRACE_LEVEL_INFO, "In module init: Ensure Force XO Core is OFF"
                                        " when  WLAN is turned ON so Core toggles"
-                                       " unless we enter PS\n");
+                                       " unless we enter PSD");
       if (vos_chipVoteXOCore(NULL, NULL, NULL, VOS_FALSE) != VOS_STATUS_SUCCESS)
       {
           hddLog(VOS_TRACE_LEVEL_ERROR, "Could not cancel XO Core ON vote. Not returning failure."
@@ -4213,10 +4216,10 @@ static void wlan_hdd_restart_deinit(hdd_context_t* pHddCtx)
    /* Cleanup */
    vos_status = vos_timer_stop( &pHddCtx->hdd_restart_timer );
    if (!VOS_IS_STATUS_SUCCESS(vos_status))
-          hddLog(LOGE, FL("Failed to stop HDD restart timer\n"));
+          hddLog(LOGW, FL("Failed to stop HDD restart timer"));
    vos_status = vos_timer_destroy(&pHddCtx->hdd_restart_timer);
    if (!VOS_IS_STATUS_SUCCESS(vos_status))
-          hddLog(LOGE, FL("Failed to destroy HDD restart timer\n"));
+          hddLog(LOGW, FL("Failed to destroy HDD restart timer"));
 
 }
 
