@@ -1637,6 +1637,10 @@ limProcessMlmPurgeStaInd(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
                 psessionEntry->limSmeState = eLIM_SME_IDLE_STATE;
                 MTRACE(macTrace(pMac, TRACE_CODE_SME_STATE, 0, pMac->lim.gLimSmeState));
 
+                if(limSetLinkState(pMac, eSIR_LINK_IDLE_STATE,psessionEntry->bssId,
+                    psessionEntry->selfMacAddr, NULL, NULL) != eSIR_SUCCESS)
+                   PELOGE(limLog(pMac, LOGE,  FL("Failed to set the LinkState.\n"));)
+
 #if defined(ANI_AP_CLIENT_SDK)
                 // Whenever there is a disassoc notification, make sure the bssId is cleared so that
                 // if the station finds the same AP to which it was associated, it can try to associate
