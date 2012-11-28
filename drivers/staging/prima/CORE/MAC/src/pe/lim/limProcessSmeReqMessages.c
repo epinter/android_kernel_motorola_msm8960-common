@@ -1227,6 +1227,36 @@ __limProcessSmeScanReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
 
 } /*** end __limProcessSmeScanReq() ***/
 
+#ifdef FEATURE_OEM_DATA_SUPPORT
+
+static void __limProcessSmeOemDataReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
+{
+    tpSirOemDataReq    pOemDataReq;
+    tLimMlmOemDataReq* pMlmOemDataReq;
+
+    pOemDataReq = (tpSirOemDataReq) pMsgBuf; 
+
+    //post the lim mlm message now
+    if(eHAL_STATUS_SUCCESS != palAllocateMemory(pMac->hHdd, (void**)&pMlmOemDataReq, (sizeof(tLimMlmOemDataReq))))
+    {
+        limLog(pMac, LOGP, FL("palAllocateMemory failed for mlmOemDataReq\n"));
+        return;
+    }
+
+    //Initialize this buffer
+    palZeroMemory(pMac->hHdd, pMlmOemDataReq, (sizeof(tLimMlmOemDataReq)));
+
+    palCopyMemory(pMac->hHdd, pMlmOemDataReq->selfMacAddr, pOemDataReq->selfMacAddr, sizeof(tSirMacAddr)); 
+    palCopyMemory(pMac->hHdd, pMlmOemDataReq->oemDataReq, pOemDataReq->oemDataReq, OEM_DATA_REQ_SIZE);
+
+    //Issue LIM_MLM_OEM_DATA_REQ to MLM
+    limPostMlmMessage(pMac, LIM_MLM_OEM_DATA_REQ, (tANI_U32*)pMlmOemDataReq);
+
+    return;
+
+} /*** end __limProcessSmeOemDataReq() ***/
+
+#endif //FEATURE_OEM_DATA_SUPPORT
 
 
 /**
@@ -2200,6 +2230,19 @@ __limProcessSmeDisassocReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
                     psessionEntry->limSmeState= eLIM_SME_WT_DISASSOC_STATE;
                     MTRACE(macTrace(pMac, TRACE_CODE_SME_STATE, 0, pMac->lim.gLimSmeState));
                     limLog(pMac, LOG1, FL("Rcvd SME_DISASSOC_REQ while in SME_WT_DEAUTH_STATE. \n"));
+                    break;
+
+                case eLIM_SME_WT_DISASSOC_STATE:
+                    /* PE Recieved a Disassoc frame. Normally it gets DISASSOC_CNF but it
+                     * received DISASSOC_REQ. Which means host is also trying to disconnect.
+                     * PE can continue processing DISASSOC_REQ and send the response instead
+                     * of failing the request. SME will anyway ignore DEAUTH_IND that was sent
+                     * for disassoc frame.
+                     *
+                     * It will send a disassoc, which is ok. However, we can use the global flag
+                     * sendDisassoc to not send disassoc frame.
+                     */
+                    limLog(pMac, LOG1, FL("Rcvd SME_DISASSOC_REQ while in SME_WT_DISASSOC_STATE. \n"));
                     break;
 
                 case eLIM_SME_JOIN_FAILURE_STATE: {
@@ -4316,6 +4359,7 @@ __limProcessSmeStatsRequest(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
     if((psessionEntry = peFindSessionByBssid(pMac,pStatsReq->bssId,&sessionId))== NULL)
     {
         limLog(pMac, LOGE, FL("session does not exist for given bssId\n"));
+        palFreeMemory( pMac, pMsgBuf );
         return;
     }
 
@@ -4361,6 +4405,7 @@ __limProcessSmeStatsRequest(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
 
     if( eSIR_SUCCESS != (wdaPostCtrlMsg( pMac, &msgQ ))){
         limLog(pMac, LOGP, "Unable to forward request\n");
+        palFreeMemory( pMac, pMsgBuf );
         return;
     }
 
@@ -4805,6 +4850,12 @@ limProcessSmeReqMessages(tpAniSirGlobal pMac, tpSirMsgQ pMsg)
 
             break;
 
+#ifdef FEATURE_OEM_DATA_SUPPORT
+        case eWNI_SME_OEM_DATA_REQ:
+            __limProcessSmeOemDataReq(pMac, pMsgBuf);
+
+            break;
+#endif
 #ifdef WLAN_FEATURE_P2P
         case eWNI_SME_REMAIN_ON_CHANNEL_REQ:
             bufConsumed = limProcessRemainOnChnlReq(pMac, pMsgBuf);

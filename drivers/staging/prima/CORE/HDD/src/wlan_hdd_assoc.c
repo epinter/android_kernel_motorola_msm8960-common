@@ -608,7 +608,13 @@ static eHalStatus hdd_DisConnectHandler( hdd_adapter_t *pAdapter, tCsrRoamInfo *
             /* To avoid wpa_supplicant sending "HANGED" CMD to ICS UI */
             if( eCSR_ROAM_LOSTLINK == roamStatus )
             {
-                cfg80211_disconnected(dev, WLAN_REASON_DISASSOC_DUE_TO_INACTIVITY, NULL, 0, GFP_KERNEL);
+                /* TODO: Need to pass proper reason code
+                   currently we are passing only one reason code.
+                   Currently we are passing WLAN_REASON_DISASSOC_STA_HAS_LEFT
+                   rather than WLAN_REASON_DISASSOC_DUE_TO_INACTIVITY
+                   to avoid the supplicant fast reconnect */
+
+                cfg80211_disconnected(dev, WLAN_REASON_DISASSOC_STA_HAS_LEFT, NULL, 0, GFP_KERNEL);
             }
             else
             {
@@ -970,10 +976,13 @@ static eHalStatus hdd_AssociationCompletionHandler( hdd_adapter_t *pAdapter, tCs
 
         netif_tx_disable(dev);
         netif_carrier_off(dev);
-
-        /* Association failed; Reset the country code information 
-         * so that it re-initialize the valid channel list*/
-        hdd_ResetCountryCodeAfterDisAssoc(pAdapter);
+        
+        if (WLAN_HDD_P2P_CLIENT != pAdapter->device_mode)
+        {
+            /* Association failed; Reset the country code information
+             * so that it re-initialize the valid channel list*/
+            hdd_ResetCountryCodeAfterDisAssoc(pAdapter);
+        }
     }
 
     return eHAL_STATUS_SUCCESS;
@@ -1403,10 +1412,12 @@ eHalStatus hdd_smeRoamCallback( void *pContext, tCsrRoamInfo *pRoamInfo, tANI_U3
                 }
 #endif
 #endif
-                /* Disconnected from current AP. Reset the country code information
-                 * so that it re-initialize the valid channel list*/
-                hdd_ResetCountryCodeAfterDisAssoc(pAdapter);
-
+                if (WLAN_HDD_P2P_CLIENT != pAdapter->device_mode)
+                {
+                    /* Disconnected from current AP. Reset the country code information
+                     * so that it re-initialize the valid channel list*/
+                    hdd_ResetCountryCodeAfterDisAssoc(pAdapter);
+                }
             }
             break;
         case eCSR_ROAM_IBSS_LEAVE:
