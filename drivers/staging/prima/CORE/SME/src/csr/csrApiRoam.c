@@ -402,6 +402,12 @@ eHalStatus csrSetRegInfo(tHalHandle hHal,  tANI_U8 *apCntryCode)
      * 3rd charater is optional for indoor/outdoor setting */
     cntryCodeLength = strlen(apCntryCode);
 
+    if (cntryCodeLength > WNI_CFG_COUNTRY_CODE_LEN)
+    {
+       smsLog( pMac, LOGW, FL(" Invalid Country Code Length\n") );
+       return eHAL_STATUS_FAILURE;
+    }
+
     status = csrGetRegulatoryDomainForCountry(pMac, apCntryCode, &regId);
     if (status != eHAL_STATUS_SUCCESS)
     {
@@ -8561,17 +8567,20 @@ eHalStatus csrRoamLostLink( tpAniSirGlobal pMac, tANI_U32 sessionId, tANI_U32 ty
         result = eCSR_ROAM_RESULT_DISASSOC_IND;
         pDisassocIndMsg = (tSirSmeDisassocInd *)pSirMsg;
         pSession->roamingStatusCode = pDisassocIndMsg->statusCode;
+        pSession->joinFailStatusCode.reasonCode = pDisassocIndMsg->reasonCode;
     }
     else if ( eWNI_SME_DEAUTH_IND == type )
     {
         result = eCSR_ROAM_RESULT_DEAUTH_IND;
         pDeauthIndMsg = (tSirSmeDeauthInd *)pSirMsg;
         pSession->roamingStatusCode = pDeauthIndMsg->statusCode;
+        pSession->joinFailStatusCode.reasonCode = pDeauthIndMsg->reasonCode;
     }
     else
     {
         smsLog(pMac, LOGW, FL("gets an unknown type (%d)\n"), type);
         result = eCSR_ROAM_RESULT_NONE;
+        pSession->joinFailStatusCode.reasonCode = 1;
     }
     
     // call profile lost link routine here
