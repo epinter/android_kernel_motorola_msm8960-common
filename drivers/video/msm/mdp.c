@@ -1984,9 +1984,7 @@ void mdp4_hw_init(void)
 static int mdp_on(struct platform_device *pdev)
 {
 	int ret = 0;
-#ifdef CONFIG_FB_MSM_MDP40
 	struct msm_fb_data_type *mfd;
-
 	mfd = platform_get_drvdata(pdev);
 
 	if (!(mfd->cont_splash_done)) {
