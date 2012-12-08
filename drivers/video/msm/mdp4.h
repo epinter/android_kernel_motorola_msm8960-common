@@ -626,6 +626,14 @@ void mdp4_mddi_overlay_dmas_restore(void);
 void mdp4_dsi_panel_on(struct msm_fb_data_type *mfd);
 void mdp4_dsi_panel_off(struct msm_fb_data_type *mfd);
 
+static inline void mdp4_dsi_cmd_dma_busy_wait(struct msm_fb_data_type *mfd)
+{
+    /* empty */
+}
+static inline void mdp4_dsi_blt_dmap_busy_wait(struct msm_fb_data_type *mfd)
+{
+    /* empty */
+}
 #ifndef CONFIG_FB_MSM_MIPI_DSI
 void mdp4_mddi_dma_busy_wait(struct msm_fb_data_type *mfd);
 void mdp4_mddi_overlay_restore(void);

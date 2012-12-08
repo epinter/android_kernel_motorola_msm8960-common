@@ -93,10 +93,6 @@ static void vsync_irq_disable(int intr, int term)
 	unsigned long flag;
 
 	spin_lock_irqsave(&mdp_spin_lock, flag);
-
-	if ((dsi_state != ST_DSI_RESUME) && (state == ST_DSI_RESUME))
-		dsi_panel_on = false;
-
 	/* no need to clrear other interrupts for comamnd mode */
 	mdp_intr_mask &= ~intr;
 	outp32(MDP_INTR_ENABLE, mdp_intr_mask);
@@ -773,7 +769,6 @@ void mdp4_dsi_cmd_base_swap(int cndx, struct mdp4_overlay_pipe *pipe)
 static void mdp4_overlay_setup_pipe_addr(struct msm_fb_data_type *mfd,
 			struct mdp4_overlay_pipe *pipe)
 {
-	static int first_time = 1;
 	MDPIBUF *iBuf = &mfd->ibuf;
 	struct fb_info *fbi;
 	int bpp;
@@ -1022,8 +1017,6 @@ int mdp4_dsi_cmd_on(struct platform_device *pdev)
 
 int mdp4_dsi_cmd_off(struct platform_device *pdev)
 {
-	static int dma_wait_timeout_cnt;
-
 	int ret = 0;
 	int cndx = 0;
 	struct msm_fb_data_type *mfd;
@@ -1108,15 +1101,15 @@ void mdp_dsi_cmd_overlay_suspend(struct msm_fb_data_type *mfd)
 
 void mdp4_dsi_cmd_overlay(struct msm_fb_data_type *mfd)
 {
+	struct vsycn_ctrl *vctrl;
+	struct mdp4_overlay_pipe *pipe;
+	unsigned long flags;
+	int cndx = 0;
+
 	if (mfd == NULL) {
 		pr_err("%s:invalid mfd\n", __func__);
 		return;
 	}
-
-	int cndx = 0;
-	struct vsycn_ctrl *vctrl;
-	struct mdp4_overlay_pipe *pipe;
-	unsigned long flags;
 
 	vctrl = &vsync_ctrl_db[cndx];
 

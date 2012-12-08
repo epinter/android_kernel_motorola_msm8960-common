@@ -534,7 +534,6 @@ int mdp4_dsi_video_on(struct platform_device *pdev)
 		mfd->cont_splash_done = 1;
 		mdp_pipe_ctrl(MDP_CMD_BLOCK,
 			      MDP_BLOCK_POWER_OFF, FALSE);
-		mdp4_overlay_dsi_video_wait4event(mfd, INTR_DMA_P_DONE);
 		/* disable timing generator */
 		MDP_OUTP(MDP_BASE + DSI_VIDEO_BASE, 0);
 		mipi_dsi_controller_cfg(0);

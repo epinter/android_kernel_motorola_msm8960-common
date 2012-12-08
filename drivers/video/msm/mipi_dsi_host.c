@@ -1046,14 +1046,7 @@ void mipi_dsi_mdp_busy_wait(struct msm_fb_data_type *mfd)
 		/* wait until DMA finishes the current job */
 		pr_debug("%s: pending pid=%d\n",
 				__func__, current->pid);
-		if (wait_for_completion_timeout(&dsi_mdp_comp,
-					msecs_to_jiffies(100)) == 0) {
-			pr_err("failed to wait for MDP complete\n");
-			spin_lock_irqsave(&dsi_mdp_lock, flag);
-			dsi_mdp_busy = false;
-			mipi_dsi_disable_irq_nosync();
-			spin_unlock_irqrestore(&dsi_mdp_lock, flag);
-		}
+        wait_for_completion(&dsi_mdp_comp);
 	}
 	pr_debug("%s: done pid=%d\n",
 			__func__, current->pid);
@@ -1219,6 +1212,7 @@ int mipi_dsi_cmds_rx(struct msm_fb_data_type *mfd,
 	u32 dsi_ctrl, ctrl;
 	static int cur_pkt_size;
 	bool send_max_pkt_size = false;
+    unsigned long flag;
 
 	/*
 	 * turn on cmd mode
@@ -1241,13 +1235,7 @@ int mipi_dsi_cmds_rx(struct msm_fb_data_type *mfd,
 #ifdef CONFIG_FB_MSM_MDP303
 			mdp3_dsi_cmd_dma_busy_wait(mfd);
 #endif
-		} else
-			/*
-			 * wait for vsync before we start to transfer data
-			 * in video mode
-			 */
-			mdp4_overlay_dsi_video_wait4event(mfd,
-							INTR_PRIMARY_VSYNC);
+		}
 	}
 
 	if (rlen != cur_pkt_size) {
@@ -1895,7 +1883,7 @@ int mipi_reg_write(struct msm_fb_data_type *mfd, __u16 size, __u8 *buf,
 		mipi_set_tx_power_mode(new_tx_mode);
 	}
 
-	mipi_dsi_cmds_tx(mfd, &mot_tx_buf, &reg_write_cmd, 1);
+	mipi_dsi_cmds_tx(&mot_tx_buf, &reg_write_cmd, 1);
 
 	if (old_tx_mode != new_tx_mode) {
 		pr_debug("%s restoring old tx mode %d\n", __func__,
