@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -478,16 +478,20 @@ static void mdp_dma2_update_sub(struct msm_fb_data_type *mfd)
 void mdp_dma2_update(struct msm_fb_data_type *mfd)
 #endif
 {
+	unsigned long flag;
+
 	down(&mfd->dma->mutex);
 	if ((mfd) && (!mfd->dma->busy) && (mfd->panel_power_on)) {
 		down(&mfd->sem);
 		mfd->ibuf_flushed = TRUE;
 		mdp_dma2_update_lcd(mfd);
 
+		spin_lock_irqsave(&mdp_spin_lock, flag);
 		mdp_enable_irq(MDP_DMA2_TERM);
 		mfd->dma->busy = TRUE;
 		INIT_COMPLETION(mfd->dma->comp);
 
+		spin_unlock_irqrestore(&mdp_spin_lock, flag);
 		/* schedule DMA to start */
 		mdp_dma_schedule(mfd, MDP_DMA2_TERM);
 		up(&mfd->sem);
@@ -518,14 +522,20 @@ void mdp_set_dma_pan_info(struct fb_info *info, struct mdp_dirty_region *dirty,
 			  boolean sync)
 {
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+	struct fb_info *fbi = mfd->fbi;
 	MDPIBUF *iBuf;
 	int bpp = info->var.bits_per_pixel / 8;
 
 	down(&mfd->sem);
+
 	iBuf = &mfd->ibuf;
-	iBuf->buf = (uint8 *) info->fix.smem_start;
-	iBuf->buf += info->var.xoffset * bpp +
-			info->var.yoffset * info->fix.line_length;
+
+	if (mfd->display_iova)
+		iBuf->buf = (uint8 *)mfd->display_iova;
+	else
+		iBuf->buf = (uint8 *) info->fix.smem_start;
+
+	iBuf->buf += calc_fb_offset(mfd, fbi, bpp);
 
 	iBuf->ibuf_width = info->var.xres_virtual;
 	iBuf->bpp = bpp;

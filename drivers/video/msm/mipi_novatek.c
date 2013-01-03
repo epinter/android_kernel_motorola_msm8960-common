@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,6 +14,7 @@
 #ifdef CONFIG_SPI_QUP
 #include <linux/spi/spi.h>
 #endif
+#include <linux/leds.h>
 #include "msm_fb.h"
 #include "mipi_dsi.h"
 #include "mipi_novatek.h"
@@ -25,6 +26,8 @@ static struct mipi_dsi_panel_platform_data *mipi_novatek_pdata;
 static struct dsi_buf novatek_tx_buf;
 static struct dsi_buf novatek_rx_buf;
 static int mipi_novatek_lcd_init(void);
+
+static int wled_trigger_initialized;
 
 #define MIPI_DSI_NOVATEK_SPI_DEVICE_NAME	"dsi_novatek_3d_panel_spi"
 #define HPCI_FPGA_READ_CMD	0x84
@@ -427,16 +430,18 @@ static int mipi_novatek_lcd_off(struct platform_device *pdev)
 	return 0;
 }
 
-
+DEFINE_LED_TRIGGER(bkl_led_trigger);
 
 static void mipi_novatek_set_backlight(struct msm_fb_data_type *mfd)
 {
 	struct mipi_panel_info *mipi;
-	static int bl_level_old;
 
-	mipi  = &mfd->panel_info.mipi;
-	if (bl_level_old == mfd->bl_level)
+	if ((mipi_novatek_pdata->enable_wled_bl_ctrl)
+	    && (wled_trigger_initialized)) {
+		led_trigger_event(bkl_led_trigger, mfd->bl_level);
 		return;
+	}
+	mipi  = &mfd->panel_info.mipi;
 
 	mutex_lock(&mfd->dma->ov_mutex);
 	if (mdp4_overlay_dsi_state_get() <= ST_DSI_SUSPEND) {
@@ -451,7 +456,6 @@ static void mipi_novatek_set_backlight(struct msm_fb_data_type *mfd)
 	led_pwm1[1] = (unsigned char)(mfd->bl_level);
 	mipi_dsi_cmds_tx(mfd, &novatek_tx_buf, novatek_cmd_backlight_cmds,
 			ARRAY_SIZE(novatek_cmd_backlight_cmds));
-	bl_level_old = mfd->bl_level;
 	mutex_unlock(&mfd->dma->ov_mutex);
 	return;
 }
@@ -465,6 +469,7 @@ static int __devinit mipi_novatek_lcd_probe(struct platform_device *pdev)
 	struct mipi_panel_info *mipi;
 	struct platform_device *current_pdev;
 	static struct mipi_dsi_phy_ctrl *phy_settings;
+	static char dlane_swap;
 
 	if (pdev->id == 0) {
 		mipi_novatek_pdata = pdev->dev.platform_data;
@@ -472,6 +477,11 @@ static int __devinit mipi_novatek_lcd_probe(struct platform_device *pdev)
 		if (mipi_novatek_pdata
 			&& mipi_novatek_pdata->phy_ctrl_settings) {
 			phy_settings = (mipi_novatek_pdata->phy_ctrl_settings);
+		}
+
+		if (mipi_novatek_pdata
+			&& mipi_novatek_pdata->dlane_swap) {
+			dlane_swap = (mipi_novatek_pdata->dlane_swap);
 		}
 
 		if (mipi_novatek_pdata
@@ -503,6 +513,9 @@ static int __devinit mipi_novatek_lcd_probe(struct platform_device *pdev)
 
 		if (phy_settings != NULL)
 			mipi->dsi_phy_db = phy_settings;
+
+		if (dlane_swap)
+			mipi->dlane_swap = dlane_swap;
 	}
 	return 0;
 }
@@ -633,6 +646,10 @@ static int mipi_novatek_lcd_init(void)
 	} else
 		pr_info("%s: SUCCESS (SPI)\n", __func__);
 #endif
+
+	led_trigger_register_simple("bkl_trigger", &bkl_led_trigger);
+	pr_info("%s: SUCCESS (WLED TRIGGER)\n", __func__);
+	wled_trigger_initialized = 1;
 
 	mipi_dsi_buf_alloc(&novatek_tx_buf, DSI_BUF_SIZE);
 	mipi_dsi_buf_alloc(&novatek_rx_buf, DSI_BUF_SIZE);

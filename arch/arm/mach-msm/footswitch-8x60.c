@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -10,6 +10,8 @@
  * GNU General Public License for more details.
  */
 
+#define pr_fmt(fmt) "%s: " fmt, __func__
+
 #include <linux/kernel.h>
 #include <linux/io.h>
 #include <linux/delay.h>
@@ -19,7 +21,6 @@
 #include <linux/regulator/machine.h>
 #include <linux/clk.h>
 #include <mach/msm_iomap.h>
-#include <mach/msm_bus_board.h>
 #include <mach/msm_bus.h>
 #include <mach/scm-io.h>
 #include "clock.h"
@@ -48,9 +49,12 @@
 #define ENABLE_BIT		BIT(8)
 #define RETENTION_BIT		BIT(9)
 
+#define GFS_DELAY_CNT		31
+
 #define RESET_DELAY_US		1
-/* Core clock rate to use if one has not previously been set. */
-#define DEFAULT_CLK_RATE	27000000
+/* Clock rate to use if one has not previously been set. */
+#define DEFAULT_RATE		27000000
+#define MAX_CLKS		10
 
 /*
  * Lock is only needed to protect against the first footswitch_enable()
@@ -58,72 +62,68 @@
  */
 static DEFINE_MUTEX(claim_lock);
 
-struct clock_state {
-	int ahb_clk_en;
-	int axi_clk_en;
-	int core_clk_rate;
-};
-
 struct footswitch {
 	struct regulator_dev	*rdev;
 	struct regulator_desc	desc;
 	void			*gfs_ctl_reg;
-	int			bus_port1, bus_port2;
+	int			bus_port0, bus_port1;
 	bool			is_enabled;
 	bool			is_claimed;
-	const bool		has_axi_clk;
+	struct fs_clk_data	*clk_data;
 	struct clk		*core_clk;
-	struct clk		*ahb_clk;
-	struct clk		*axi_clk;
-	unsigned int		reset_rate;
-	struct clock_state	clk_state;
-	unsigned int		gfs_delay_cnt:5;
 };
 
 static int setup_clocks(struct footswitch *fs)
 {
 	int rc = 0;
+	struct fs_clk_data *clock;
+	long rate;
 
 	/*
-	 * Enable all clocks in the power domain. If a core requires a
-	 * specific clock rate when being reset, apply it.
+	 * Enable all clocks in the power domain. If a specific clock rate is
+	 * required for reset timing, set that rate before enabling the clocks.
 	 */
-	fs->clk_state.core_clk_rate = clk_get_rate(fs->core_clk);
-	if (!fs->clk_state.core_clk_rate || fs->reset_rate) {
-		int rate = fs->reset_rate ? fs->reset_rate : DEFAULT_CLK_RATE;
-		rc = clk_set_rate(fs->core_clk, rate);
-		if (rc) {
-			pr_err("%s: Failed to set core_clk rate to %d Hz.\n",
-				__func__, fs->reset_rate);
-			return rc;
+	for (clock = fs->clk_data; clock->clk; clock++) {
+		clock->rate = clk_get_rate(clock->clk);
+		if (!clock->rate || clock->reset_rate) {
+			rate = clock->reset_rate ?
+					clock->reset_rate : DEFAULT_RATE;
+			rc = clk_set_rate(clock->clk, rate);
+			if (rc && rc != -ENOSYS) {
+				pr_err("Failed to set %s %s rate to %lu Hz.\n",
+				       fs->desc.name, clock->name, clock->rate);
+				for (clock--; clock >= fs->clk_data; clock--) {
+					if (clock->enabled)
+						clk_disable_unprepare(
+								clock->clk);
+					clk_set_rate(clock->clk, clock->rate);
+				}
+				return rc;
+			}
 		}
+		/*
+		 * Some clocks are for reset purposes only. These clocks will
+		 * fail to enable. Ignore the failures but keep track of them so
+		 * we don't try to disable them later and crash due to
+		 * unbalanced calls.
+		 */
+		clock->enabled = !clk_prepare_enable(clock->clk);
 	}
-	clk_enable(fs->core_clk);
 
-	/*
-	 * Some AHB and AXI clocks are for reset purposes only. These clocks
-	 * will fail to enable. Keep track of them so we don't try to disable
-	 * them later and crash.
-	 */
-	fs->clk_state.ahb_clk_en = !clk_enable(fs->ahb_clk);
-	if (fs->axi_clk)
-		fs->clk_state.axi_clk_en = !clk_enable(fs->axi_clk);
-
-	return rc;
+	return 0;
 }
 
 static void restore_clocks(struct footswitch *fs)
 {
+	struct fs_clk_data *clock;
+
 	/* Restore clocks to their orignal states before setup_clocks(). */
-	if (fs->axi_clk && fs->clk_state.axi_clk_en)
-		clk_disable(fs->axi_clk);
-	if (fs->clk_state.ahb_clk_en)
-		clk_disable(fs->ahb_clk);
-	clk_disable(fs->core_clk);
-	if (fs->clk_state.core_clk_rate) {
-		if (clk_set_rate(fs->core_clk, fs->clk_state.core_clk_rate))
-			pr_err("%s: Failed to restore core_clk rate.\n",
-				__func__);
+	for (clock = fs->clk_data; clock->clk; clock++) {
+		if (clock->enabled)
+			clk_disable_unprepare(clock->clk);
+		if (clock->rate && clk_set_rate(clock->clk, clock->rate))
+			pr_err("Failed to restore %s %s rate to %lu Hz.\n",
+			       fs->desc.name, clock->name, clock->rate);
 	}
 }
 
@@ -137,6 +137,7 @@ static int footswitch_is_enabled(struct regulator_dev *rdev)
 static int footswitch_enable(struct regulator_dev *rdev)
 {
 	struct footswitch *fs = rdev_get_drvdata(rdev);
+	struct fs_clk_data *clock;
 	uint32_t regval, rc = 0;
 
 	mutex_lock(&claim_lock);
@@ -151,21 +152,21 @@ static int footswitch_enable(struct regulator_dev *rdev)
 	/* Make sure required clocks are on at the correct rates. */
 	rc = setup_clocks(fs);
 	if (rc)
-		goto out;
+		return rc;
 
 	/* Un-halt all bus ports in the power domain. */
+	if (fs->bus_port0) {
+		rc = msm_bus_axi_portunhalt(fs->bus_port0);
+		if (rc) {
+			pr_err("%s port 0 unhalt failed.\n", fs->desc.name);
+			goto err;
+		}
+	}
 	if (fs->bus_port1) {
 		rc = msm_bus_axi_portunhalt(fs->bus_port1);
 		if (rc) {
-			pr_err("%s: Port 1 unhalt failed.\n", __func__);
-			goto out;
-		}
-	}
-	if (fs->bus_port2) {
-		rc = msm_bus_axi_portunhalt(fs->bus_port2);
-		if (rc) {
-			pr_err("%s: Port 2 unhalt failed.\n", __func__);
-			goto out;
+			pr_err("%s port 1 unhalt failed.\n", fs->desc.name);
+			goto err_port2_halt;
 		}
 	}
 
@@ -174,10 +175,10 @@ static int footswitch_enable(struct regulator_dev *rdev)
 	 * footswitch_enable() is first called before footswitch_disable()
 	 * and resets should be asserted before power is restored.
 	 */
-	if (fs->axi_clk)
-		clk_reset(fs->axi_clk, CLK_RESET_ASSERT);
-	clk_reset(fs->ahb_clk, CLK_RESET_ASSERT);
-	clk_reset(fs->core_clk, CLK_RESET_ASSERT);
+	for (clock = fs->clk_data; clock->clk; clock++)
+		; /* Do nothing */
+	for (clock--; clock >= fs->clk_data; clock--)
+		clk_reset(clock->clk, CLK_RESET_ASSERT);
 	/* Wait for synchronous resets to propagate. */
 	udelay(RESET_DELAY_US);
 
@@ -193,10 +194,8 @@ static int footswitch_enable(struct regulator_dev *rdev)
 	writel_relaxed(regval, fs->gfs_ctl_reg);
 
 	/* Deassert resets for all clocks in the power domain. */
-	clk_reset(fs->core_clk, CLK_RESET_DEASSERT);
-	clk_reset(fs->ahb_clk, CLK_RESET_DEASSERT);
-	if (fs->axi_clk)
-		clk_reset(fs->axi_clk, CLK_RESET_DEASSERT);
+	for (clock = fs->clk_data; clock->clk; clock++)
+		clk_reset(clock->clk, CLK_RESET_DEASSERT);
 	/* Toggle core reset again after first power-on (required for GFX3D). */
 	if (fs->desc.id == FS_GFX3D) {
 		clk_reset(fs->core_clk, CLK_RESET_ASSERT);
@@ -205,17 +204,26 @@ static int footswitch_enable(struct regulator_dev *rdev)
 		udelay(RESET_DELAY_US);
 	}
 
+	/* Prevent core memory from collapsing when its clock is gated. */
+	clk_set_flags(fs->core_clk, CLKFLAG_RETAIN);
+
 	/* Return clocks to their state before this function. */
 	restore_clocks(fs);
 
 	fs->is_enabled = true;
-out:
+	return 0;
+
+err_port2_halt:
+	msm_bus_axi_porthalt(fs->bus_port0);
+err:
+	restore_clocks(fs);
 	return rc;
 }
 
 static int footswitch_disable(struct regulator_dev *rdev)
 {
 	struct footswitch *fs = rdev_get_drvdata(rdev);
+	struct fs_clk_data *clock;
 	uint32_t regval, rc = 0;
 
 	/* Return early if already disabled. */
@@ -226,20 +234,23 @@ static int footswitch_disable(struct regulator_dev *rdev)
 	/* Make sure required clocks are on at the correct rates. */
 	rc = setup_clocks(fs);
 	if (rc)
-		goto out;
+		return rc;
+
+	/* Allow core memory to collapse when its clock is gated. */
+	clk_set_flags(fs->core_clk, CLKFLAG_NORETAIN);
 
 	/* Halt all bus ports in the power domain. */
+	if (fs->bus_port0) {
+		rc = msm_bus_axi_porthalt(fs->bus_port0);
+		if (rc) {
+			pr_err("%s port 0 halt failed.\n", fs->desc.name);
+			goto err;
+		}
+	}
 	if (fs->bus_port1) {
 		rc = msm_bus_axi_porthalt(fs->bus_port1);
 		if (rc) {
-			pr_err("%s: Port 1 halt failed.\n", __func__);
-			goto out;
-		}
-	}
-	if (fs->bus_port2) {
-		rc = msm_bus_axi_porthalt(fs->bus_port2);
-		if (rc) {
-			pr_err("%s: Port 1 halt failed.\n", __func__);
+			pr_err("%s port 1 halt failed.\n", fs->desc.name);
 			goto err_port2_halt;
 		}
 	}
@@ -248,12 +259,20 @@ static int footswitch_disable(struct regulator_dev *rdev)
 	 * Assert resets for all clocks in the clock domain so that
 	 * outputs settle prior to clamping.
 	 */
-	if (fs->axi_clk)
-		clk_reset(fs->axi_clk, CLK_RESET_ASSERT);
-	clk_reset(fs->ahb_clk, CLK_RESET_ASSERT);
-	clk_reset(fs->core_clk, CLK_RESET_ASSERT);
+	for (clock = fs->clk_data; clock->clk; clock++)
+		; /* Do nothing */
+	for (clock--; clock >= fs->clk_data; clock--)
+		clk_reset(clock->clk, CLK_RESET_ASSERT);
 	/* Wait for synchronous resets to propagate. */
 	udelay(RESET_DELAY_US);
+
+	/*
+	 * Return clocks to their state before this function. For robustness
+	 * if memory-retention across collapses is required, clocks should
+	 * be disabled before asserting the clamps. Assuming clocks were off
+	 * before entering footswitch_disable(), this will be true.
+	 */
+	restore_clocks(fs);
 
 	/*
 	 * Clamp the I/O ports of the core to ensure the values
@@ -266,22 +285,21 @@ static int footswitch_disable(struct regulator_dev *rdev)
 	regval &= ~ENABLE_BIT;
 	writel_relaxed(regval, fs->gfs_ctl_reg);
 
-	/* Return clocks to their state before this function. */
-	restore_clocks(fs);
-
 	fs->is_enabled = false;
-
-	return rc;
+	return 0;
 
 err_port2_halt:
-	msm_bus_axi_portunhalt(fs->bus_port1);
-out:
+	msm_bus_axi_portunhalt(fs->bus_port0);
+err:
+	clk_set_flags(fs->core_clk, CLKFLAG_RETAIN);
+	restore_clocks(fs);
 	return rc;
 }
 
 static int gfx2d_footswitch_enable(struct regulator_dev *rdev)
 {
 	struct footswitch *fs = rdev_get_drvdata(rdev);
+	struct fs_clk_data *clock;
 	uint32_t regval, rc = 0;
 
 	mutex_lock(&claim_lock);
@@ -296,31 +314,31 @@ static int gfx2d_footswitch_enable(struct regulator_dev *rdev)
 	/* Make sure required clocks are on at the correct rates. */
 	rc = setup_clocks(fs);
 	if (rc)
-		goto out;
+		return rc;
 
 	/* Un-halt all bus ports in the power domain. */
-	if (fs->bus_port1) {
-		rc = msm_bus_axi_portunhalt(fs->bus_port1);
+	if (fs->bus_port0) {
+		rc = msm_bus_axi_portunhalt(fs->bus_port0);
 		if (rc) {
-			pr_err("%s: Port 1 unhalt failed.\n", __func__);
-			goto out;
+			pr_err("%s port 0 unhalt failed.\n", fs->desc.name);
+			goto err;
 		}
 	}
 
 	/* Disable core clock. */
-	clk_disable(fs->core_clk);
+	clk_disable_unprepare(fs->core_clk);
 
 	/*
 	 * (Re-)Assert resets for all clocks in the clock domain, since
 	 * footswitch_enable() is first called before footswitch_disable()
 	 * and resets should be asserted before power is restored.
 	 */
-	if (fs->axi_clk)
-		clk_reset(fs->axi_clk, CLK_RESET_ASSERT);
-	clk_reset(fs->ahb_clk, CLK_RESET_ASSERT);
-	clk_reset(fs->core_clk, CLK_RESET_ASSERT);
+	for (clock = fs->clk_data; clock->clk; clock++)
+		; /* Do nothing */
+	for (clock--; clock >= fs->clk_data; clock--)
+		clk_reset(clock->clk, CLK_RESET_ASSERT);
 	/* Wait for synchronous resets to propagate. */
-	udelay(20);
+	udelay(RESET_DELAY_US);
 
 	/* Enable the power rail at the footswitch. */
 	regval |= ENABLE_BIT;
@@ -333,26 +351,31 @@ static int gfx2d_footswitch_enable(struct regulator_dev *rdev)
 	writel_relaxed(regval, fs->gfs_ctl_reg);
 
 	/* Deassert resets for all clocks in the power domain. */
-	if (fs->axi_clk)
-		clk_reset(fs->axi_clk, CLK_RESET_DEASSERT);
-	clk_reset(fs->ahb_clk, CLK_RESET_DEASSERT);
-	clk_reset(fs->core_clk, CLK_RESET_DEASSERT);
-	udelay(20);
+	for (clock = fs->clk_data; clock->clk; clock++)
+		clk_reset(clock->clk, CLK_RESET_DEASSERT);
+	udelay(RESET_DELAY_US);
 
 	/* Re-enable core clock. */
-	clk_enable(fs->core_clk);
+	clk_prepare_enable(fs->core_clk);
+
+	/* Prevent core memory from collapsing when its clock is gated. */
+	clk_set_flags(fs->core_clk, CLKFLAG_RETAIN);
 
 	/* Return clocks to their state before this function. */
 	restore_clocks(fs);
 
 	fs->is_enabled = true;
-out:
+	return 0;
+
+err:
+	restore_clocks(fs);
 	return rc;
 }
 
 static int gfx2d_footswitch_disable(struct regulator_dev *rdev)
 {
 	struct footswitch *fs = rdev_get_drvdata(rdev);
+	struct fs_clk_data *clock;
 	uint32_t regval, rc = 0;
 
 	/* Return early if already disabled. */
@@ -363,30 +386,33 @@ static int gfx2d_footswitch_disable(struct regulator_dev *rdev)
 	/* Make sure required clocks are on at the correct rates. */
 	rc = setup_clocks(fs);
 	if (rc)
-		goto out;
+		return rc;
+
+	/* Allow core memory to collapse when its clock is gated. */
+	clk_set_flags(fs->core_clk, CLKFLAG_NORETAIN);
 
 	/* Halt all bus ports in the power domain. */
-	if (fs->bus_port1) {
-		rc = msm_bus_axi_porthalt(fs->bus_port1);
+	if (fs->bus_port0) {
+		rc = msm_bus_axi_porthalt(fs->bus_port0);
 		if (rc) {
-			pr_err("%s: Port 1 halt failed.\n", __func__);
-			goto out;
+			pr_err("%s port 0 halt failed.\n", fs->desc.name);
+			goto err;
 		}
 	}
 
 	/* Disable core clock. */
-	clk_disable(fs->core_clk);
+	clk_disable_unprepare(fs->core_clk);
 
 	/*
 	 * Assert resets for all clocks in the clock domain so that
 	 * outputs settle prior to clamping.
 	 */
-	if (fs->axi_clk)
-		clk_reset(fs->axi_clk, CLK_RESET_ASSERT);
-	clk_reset(fs->ahb_clk, CLK_RESET_ASSERT);
-	clk_reset(fs->core_clk, CLK_RESET_ASSERT);
+	for (clock = fs->clk_data; clock->clk; clock++)
+		; /* Do nothing */
+	for (clock--; clock >= fs->clk_data; clock--)
+		clk_reset(clock->clk, CLK_RESET_ASSERT);
 	/* Wait for synchronous resets to propagate. */
-	udelay(20);
+	udelay(5);
 
 	/*
 	 * Clamp the I/O ports of the core to ensure the values
@@ -400,14 +426,17 @@ static int gfx2d_footswitch_disable(struct regulator_dev *rdev)
 	writel_relaxed(regval, fs->gfs_ctl_reg);
 
 	/* Re-enable core clock. */
-	clk_enable(fs->core_clk);
+	clk_prepare_enable(fs->core_clk);
 
 	/* Return clocks to their state before this function. */
 	restore_clocks(fs);
 
 	fs->is_enabled = false;
+	return 0;
 
-out:
+err:
+	clk_set_flags(fs->core_clk, CLKFLAG_RETAIN);
+	restore_clocks(fs);
 	return rc;
 }
 
@@ -423,8 +452,7 @@ static struct regulator_ops gfx2d_fs_ops = {
 	.disable = gfx2d_footswitch_disable,
 };
 
-#define FOOTSWITCH(_id, _name, _ops, _gfs_ctl_reg, _dc, _axi_clk, \
-		   _reset_rate, _bp1, _bp2) \
+#define FOOTSWITCH(_id, _name, _ops, _gfs_ctl_reg) \
 	[(_id)] = { \
 		.desc = { \
 			.id = (_id), \
@@ -434,51 +462,26 @@ static struct regulator_ops gfx2d_fs_ops = {
 			.owner = THIS_MODULE, \
 		}, \
 		.gfs_ctl_reg = (_gfs_ctl_reg), \
-		.gfs_delay_cnt = (_dc), \
-		.bus_port1 = (_bp1), \
-		.bus_port2 = (_bp2), \
-		.has_axi_clk = (_axi_clk), \
-		.reset_rate = (_reset_rate), \
 	}
 static struct footswitch footswitches[] = {
-	FOOTSWITCH(FS_GFX2D0, "fs_gfx2d0", &gfx2d_fs_ops,
-		GFX2D0_GFS_CTL_REG, 31, false, 0,
-		MSM_BUS_MASTER_GRAPHICS_2D_CORE0, 0),
-	FOOTSWITCH(FS_GFX2D1, "fs_gfx2d1", &gfx2d_fs_ops,
-		GFX2D1_GFS_CTL_REG, 31, false, 0,
-		MSM_BUS_MASTER_GRAPHICS_2D_CORE1, 0),
-	FOOTSWITCH(FS_GFX3D, "fs_gfx3d", &standard_fs_ops,
-		GFX3D_GFS_CTL_REG, 31, false, 27000000,
-		MSM_BUS_MASTER_GRAPHICS_3D, 0),
-	FOOTSWITCH(FS_IJPEG, "fs_ijpeg", &standard_fs_ops,
-		GEMINI_GFS_CTL_REG, 31, true, 0,
-		MSM_BUS_MASTER_JPEG_ENC, 0),
-	FOOTSWITCH(FS_MDP, "fs_mdp", &standard_fs_ops,
-		MDP_GFS_CTL_REG, 31, true, 0,
-		MSM_BUS_MASTER_MDP_PORT0,
-		MSM_BUS_MASTER_MDP_PORT1),
-	FOOTSWITCH(FS_ROT, "fs_rot", &standard_fs_ops,
-		ROT_GFS_CTL_REG, 31, true, 0,
-		MSM_BUS_MASTER_ROTATOR, 0),
-	FOOTSWITCH(FS_VED, "fs_ved", &standard_fs_ops,
-		VED_GFS_CTL_REG, 31, true, 0,
-		MSM_BUS_MASTER_HD_CODEC_PORT0,
-		MSM_BUS_MASTER_HD_CODEC_PORT1),
-	FOOTSWITCH(FS_VFE, "fs_vfe", &standard_fs_ops,
-		VFE_GFS_CTL_REG, 31, true, 0,
-		MSM_BUS_MASTER_VFE, 0),
-	FOOTSWITCH(FS_VPE, "fs_vpe", &standard_fs_ops,
-		VPE_GFS_CTL_REG, 31, true, 0,
-		MSM_BUS_MASTER_VPE, 0),
-	FOOTSWITCH(FS_VCAP, "fs_vcap", &standard_fs_ops,
-		VCAP_GFS_CTL_REG, 31, true, 0,
-		MSM_BUS_MASTER_VIDEO_CAP, 0),
+	FOOTSWITCH(FS_GFX2D0, "fs_gfx2d0", &gfx2d_fs_ops, GFX2D0_GFS_CTL_REG),
+	FOOTSWITCH(FS_GFX2D1, "fs_gfx2d1", &gfx2d_fs_ops, GFX2D1_GFS_CTL_REG),
+	FOOTSWITCH(FS_GFX3D,  "fs_gfx3d", &standard_fs_ops, GFX3D_GFS_CTL_REG),
+	FOOTSWITCH(FS_IJPEG,  "fs_ijpeg", &standard_fs_ops, GEMINI_GFS_CTL_REG),
+	FOOTSWITCH(FS_MDP,    "fs_mdp",   &standard_fs_ops, MDP_GFS_CTL_REG),
+	FOOTSWITCH(FS_ROT,    "fs_rot",   &standard_fs_ops, ROT_GFS_CTL_REG),
+	FOOTSWITCH(FS_VED,    "fs_ved",   &standard_fs_ops, VED_GFS_CTL_REG),
+	FOOTSWITCH(FS_VFE,    "fs_vfe",   &standard_fs_ops, VFE_GFS_CTL_REG),
+	FOOTSWITCH(FS_VPE,    "fs_vpe",   &standard_fs_ops, VPE_GFS_CTL_REG),
+	FOOTSWITCH(FS_VCAP,   "fs_vcap",  &standard_fs_ops, VCAP_GFS_CTL_REG),
 };
 
 static int footswitch_probe(struct platform_device *pdev)
 {
 	struct footswitch *fs;
 	struct regulator_init_data *init_data;
+	struct fs_driver_data *driver_data;
+	struct fs_clk_data *clock;
 	uint32_t regval, rc = 0;
 
 	if (pdev == NULL)
@@ -487,33 +490,23 @@ static int footswitch_probe(struct platform_device *pdev)
 	if (pdev->id >= MAX_FS)
 		return -ENODEV;
 
-	fs = &footswitches[pdev->id];
 	init_data = pdev->dev.platform_data;
+	driver_data = init_data->driver_data;
+	fs = &footswitches[pdev->id];
+	fs->clk_data = driver_data->clks;
+	fs->bus_port0 = driver_data->bus_port0;
+	fs->bus_port1 = driver_data->bus_port1;
 
-	/* Setup core clock. */
-	fs->core_clk = clk_get(&pdev->dev, "core_clk");
-	if (IS_ERR(fs->core_clk)) {
-		pr_err("%s: clk_get(core_clk) failed\n", __func__);
-		rc = PTR_ERR(fs->core_clk);
-		goto err_core_clk;
-	}
-
-	/* Setup AHB clock. */
-	fs->ahb_clk = clk_get(&pdev->dev, "iface_clk");
-	if (IS_ERR(fs->ahb_clk)) {
-		pr_err("%s: clk_get(iface_clk) failed\n", __func__);
-		rc = PTR_ERR(fs->ahb_clk);
-		goto err_ahb_clk;
-	}
-
-	/* Setup AXI clock. */
-	if (fs->has_axi_clk) {
-		fs->axi_clk = clk_get(&pdev->dev, "bus_clk");
-		if (IS_ERR(fs->axi_clk)) {
-			pr_err("%s: clk_get(bus_clk) failed\n", __func__);
-			rc = PTR_ERR(fs->axi_clk);
-			goto err_axi_clk;
+	for (clock = fs->clk_data; clock->name; clock++) {
+		clock->clk = clk_get(&pdev->dev, clock->name);
+		if (IS_ERR(clock->clk)) {
+			rc = PTR_ERR(clock->clk);
+			pr_err("%s clk_get(%s) failed\n", fs->desc.name,
+			       clock->name);
+			goto err;
 		}
+		if (!strncmp(clock->name, "core_clk", 8))
+			fs->core_clk = clock->clk;
 	}
 
 	/*
@@ -522,40 +515,35 @@ static int footswitch_probe(struct platform_device *pdev)
 	 * clear so disabling the footswitch will power-collapse the core.
 	 */
 	regval = readl_relaxed(fs->gfs_ctl_reg);
-	regval |= fs->gfs_delay_cnt;
+	regval |= GFS_DELAY_CNT;
 	regval &= ~RETENTION_BIT;
 	writel_relaxed(regval, fs->gfs_ctl_reg);
 
-	fs->rdev = regulator_register(&fs->desc, &pdev->dev, init_data, fs);
+	fs->rdev = regulator_register(&fs->desc, &pdev->dev,
+							init_data, fs, NULL);
 	if (IS_ERR(footswitches[pdev->id].rdev)) {
-		pr_err("%s: regulator_register(\"%s\") failed\n",
-			__func__, fs->desc.name);
+		pr_err("regulator_register(\"%s\") failed\n",
+			fs->desc.name);
 		rc = PTR_ERR(footswitches[pdev->id].rdev);
-		goto err_register;
+		goto err;
 	}
 
 	return 0;
 
-err_register:
-	if (fs->has_axi_clk)
-		clk_put(fs->axi_clk);
-err_axi_clk:
-	clk_put(fs->ahb_clk);
-err_ahb_clk:
-	clk_put(fs->core_clk);
-err_core_clk:
+err:
+	for (clock = fs->clk_data; clock->clk; clock++)
+		clk_put(clock->clk);
+
 	return rc;
 }
 
 static int __devexit footswitch_remove(struct platform_device *pdev)
 {
 	struct footswitch *fs = &footswitches[pdev->id];
+	struct fs_clk_data *clock;
 
-	clk_put(fs->core_clk);
-	clk_put(fs->ahb_clk);
-	if (fs->axi_clk)
-		clk_put(fs->axi_clk);
-
+	for (clock = fs->clk_data; clock->clk; clock++)
+		clk_put(clock->clk);
 	regulator_unregister(fs->rdev);
 
 	return 0;

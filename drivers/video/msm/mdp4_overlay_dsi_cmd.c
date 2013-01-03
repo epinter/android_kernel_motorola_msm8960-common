@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -45,8 +45,6 @@ static int vsync_start_y_adjust = 4;
 
 struct timer_list dsi_clock_timer;
 
-static int writeback_offset;
-
 void mdp4_overlay_dsi_state_set(int state)
 {
 	unsigned long flag;
@@ -65,7 +63,6 @@ static void dsi_clock_tout(unsigned long data)
 {
 	if (mipi_dsi_clk_on) {
 		if (dsi_state == ST_DSI_PLAYING) {
-			mdp4_stat.dsi_clkoff++;
 			mipi_dsi_turn_off_clks();
 			mdp4_overlay_dsi_state_set(ST_DSI_CLK_OFF);
 		}
@@ -117,10 +114,14 @@ void mdp4_mipi_vsync_enable(struct msm_fb_data_type *mfd,
 	}
 }
 
+void mdp4_dsi_cmd_base_swap(struct mdp4_overlay_pipe *pipe)
+{
+	dsi_pipe = pipe;
+}
+
 void mdp4_overlay_update_dsi_cmd(struct msm_fb_data_type *mfd)
 {
 	MDPIBUF *iBuf = &mfd->ibuf;
-	struct fb_info *fbi = mfd->fbi;
 	uint8 *src;
 	int ptype;
 	struct mdp4_overlay_pipe *pipe;
@@ -160,17 +161,20 @@ void mdp4_overlay_update_dsi_cmd(struct msm_fb_data_type *mfd)
 
 		dsi_pipe = pipe; /* keep it */
 
-		writeback_offset = mdp4_writeback_offset();
+		mdp4_init_writeback_buf(mfd, MDP4_MIXER0);
+		pipe->blt_addr = 0;
 
-		if (writeback_offset > 0) {
-			pipe->blt_base = (ulong)fbi->fix.smem_start;
-			pipe->blt_base += writeback_offset;
-		} else {
-			pipe->blt_base  = 0;
-		}
 	} else {
 		pipe = dsi_pipe;
 	}
+
+	if (pipe->pipe_used == 0 ||
+			pipe->mixer_stage != MDP4_MIXER_STAGE_BASE) {
+		pr_err("%s: NOT baselayer\n", __func__);
+		mutex_unlock(&mfd->dma->ov_mutex);
+		return;
+	}
+
 	/*
 	 * configure dsi stream id
 	 * dma_p = 0, dma_s = 1
@@ -216,6 +220,8 @@ void mdp4_overlay_update_dsi_cmd(struct msm_fb_data_type *mfd)
 
 	mdp4_overlay_rgb_setup(pipe);
 
+	mdp4_overlay_reg_flush(pipe, 1);
+
 	mdp4_mixer_stage_up(pipe);
 
 	mdp4_overlayproc_cfg(pipe);
@@ -249,6 +255,12 @@ void mdp4_dsi_cmd_3d_sbys(struct msm_fb_data_type *mfd,
 	dsi_pipe->src_width_3d = r3d->width;
 
 	pipe = dsi_pipe;
+	if (pipe->pipe_used == 0 ||
+			pipe->mixer_stage != MDP4_MIXER_STAGE_BASE) {
+		pr_err("%s: NOT baselayer\n", __func__);
+		mutex_unlock(&mfd->dma->ov_mutex);
+		return;
+	}
 
 	if (pipe->is_3d)
 		mdp4_overlay_panel_3d(pipe->mixer_num, MDP4_3D_SIDE_BY_SIDE);
@@ -291,6 +303,8 @@ void mdp4_dsi_cmd_3d_sbys(struct msm_fb_data_type *mfd,
 
 	mdp4_overlay_rgb_setup(pipe);
 
+	mdp4_overlay_reg_flush(pipe, 1);
+
 	mdp4_mixer_stage_up(pipe);
 
 	mdp4_overlayproc_cfg(pipe);
@@ -303,8 +317,6 @@ void mdp4_dsi_cmd_3d_sbys(struct msm_fb_data_type *mfd,
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
-
-#ifdef CONFIG_FB_MSM_OVERLAY_WRITEBACK
 int mdp4_dsi_overlay_blt_start(struct msm_fb_data_type *mfd)
 {
 	unsigned long flag;
@@ -312,7 +324,9 @@ int mdp4_dsi_overlay_blt_start(struct msm_fb_data_type *mfd)
 	pr_debug("%s: blt_end=%d blt_addr=%x pid=%d\n",
 	__func__, dsi_pipe->blt_end, (int)dsi_pipe->blt_addr, current->pid);
 
-	if (dsi_pipe->blt_base == 0) {
+	mdp4_allocate_writeback_buf(mfd, MDP4_MIXER0);
+
+	if (mfd->ov0_wb_buf->phys_addr == 0) {
 		pr_info("%s: no blt_base assigned\n", __func__);
 		return -EBUSY;
 	}
@@ -324,8 +338,8 @@ int mdp4_dsi_overlay_blt_start(struct msm_fb_data_type *mfd)
 		dsi_pipe->blt_cnt = 0;
 		dsi_pipe->ov_cnt = 0;
 		dsi_pipe->dmap_cnt = 0;
-		dsi_pipe->blt_addr = dsi_pipe->blt_base;
-		mdp4_stat.writeback++;
+		dsi_pipe->blt_addr = mfd->ov0_wb_buf->phys_addr;
+		mdp4_stat.blt_dsi_cmd++;
 		spin_unlock_irqrestore(&mdp_spin_lock, flag);
 		return 0;
 	}
@@ -354,7 +368,7 @@ int mdp4_dsi_overlay_blt_stop(struct msm_fb_data_type *mfd)
 int mdp4_dsi_overlay_blt_offset(struct msm_fb_data_type *mfd,
 					struct msmfb_overlay_blt *req)
 {
-	req->offset = writeback_offset;
+	req->offset = 0;
 	req->width = dsi_pipe->src_width;
 	req->height = dsi_pipe->src_height;
 	req->bpp = dsi_pipe->bpp;
@@ -371,21 +385,6 @@ void mdp4_dsi_overlay_blt(struct msm_fb_data_type *mfd,
 		mdp4_dsi_overlay_blt_stop(mfd);
 
 }
-#else
-int mdp4_dsi_overlay_blt_offset(struct msm_fb_data_type *mfd,
-					struct msmfb_overlay_blt *req)
-{
-	return 0;
-}
-int mdp4_dsi_overlay_blt_start(struct msm_fb_data_type *mfd)
-{
-	return -EBUSY;
-}
-int mdp4_dsi_overlay_blt_stop(struct msm_fb_data_type *mfd)
-{
-	return -EBUSY;
-}
-#endif
 
 void mdp4_blt_xy_update(struct mdp4_overlay_pipe *pipe)
 {
@@ -465,6 +464,7 @@ void mdp4_dma_p_done_dsi(struct mdp_dma_data *dma)
 	mdp4_blt_xy_update(dsi_pipe);
 	/* kick off dmap */
 	outpdw(MDP_BASE + 0x000c, 0x0);
+	mdp4_stat.kickoff_dmap++;
 	/* trigger dsi cmd engine */
 	mipi_dsi_cmd_mdp_start();
 
@@ -525,6 +525,7 @@ void mdp4_overlay0_done_dsi_cmd(struct mdp_dma_data *dma)
 	mdp_enable_irq(MDP_DMA2_TERM);	/* enable intr */
 	/* kick off dmap */
 	outpdw(MDP_BASE + 0x000c, 0x0);
+	mdp4_stat.kickoff_dmap++;
 	/* trigger dsi cmd engine */
 	mipi_dsi_cmd_mdp_start();
 	mdp_disable_irq_nosync(MDP_OVERLAY0_TERM);
@@ -670,6 +671,26 @@ void mdp4_dsi_cmd_overlay_kickoff(struct msm_fb_data_type *mfd,
 	/* start OVERLAY pipe */
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
 	mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
+	mdp4_stat.kickoff_ov0++;
+}
+
+void mdp_dsi_cmd_overlay_suspend(struct msm_fb_data_type *mfd)
+{
+	/* dis-engage rgb0 from mixer0 */
+	if (dsi_pipe) {
+		if (mfd->ref_cnt == 0) {
+			/* adb stop */
+			if (dsi_pipe->pipe_type == OVERLAY_TYPE_BF)
+				mdp4_overlay_borderfill_stage_down(dsi_pipe);
+
+			/* dsi_pipe == rgb1 */
+			mdp4_overlay_unset_mixer(dsi_pipe->mixer_num);
+			dsi_pipe = NULL;
+		} else {
+			mdp4_mixer_stage_down(dsi_pipe);
+			mdp4_iommu_unmap(dsi_pipe);
+		}
+	}
 }
 
 void mdp4_dsi_cmd_overlay(struct msm_fb_data_type *mfd)
@@ -684,11 +705,9 @@ void mdp4_dsi_cmd_overlay(struct msm_fb_data_type *mfd)
 
 		mdp4_overlay_update_dsi_cmd(mfd);
 
+		mdp4_iommu_attach();
 		mdp4_dsi_cmd_kickoff_ui(mfd, dsi_pipe);
-
-
-		mdp4_stat.kickoff_dsi++;
-
+		mdp4_iommu_unmap(dsi_pipe);
 	/* signal if pan function is waiting for the update completion */
 		if (mfd->pan_waiting) {
 			mfd->pan_waiting = FALSE;

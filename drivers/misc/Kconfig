@@ -492,7 +492,7 @@ config BMP085
 	  module will be called bmp085.
 
 config PCH_PHUB
-	tristate "Intel EG20T PCH / OKI SEMICONDUCTOR IOH(ML7213/ML7223) PHUB"
+	tristate "Intel EG20T PCH/LAPIS Semicon IOH(ML7213/ML7223/ML7831) PHUB"
 	depends on PCI
 	help
 	  This driver is for PCH(Platform controller Hub) PHUB(Packet Hub) of
@@ -500,12 +500,13 @@ config PCH_PHUB
 	  processor. The Topcliff has MAC address and Option ROM data in SROM.
 	  This driver can access MAC address and Option ROM data in SROM.
 
-	  This driver also can be used for OKI SEMICONDUCTOR IOH(Input/
-	  Output Hub), ML7213 and ML7223.
-	  ML7213 IOH is for IVI(In-Vehicle Infotainment) use and ML7223 IOH is
-	  for MP(Media Phone) use.
-	  ML7213/ML7223 is companion chip for Intel Atom E6xx series.
-	  ML7213/ML7223 is completely compatible for Intel EG20T PCH.
+	  This driver also can be used for LAPIS Semiconductor's IOH,
+	  ML7213/ML7223/ML7831.
+	  ML7213 which is for IVI(In-Vehicle Infotainment) use.
+	  ML7223 IOH is for MP(Media Phone) use.
+	  ML7831 IOH is for general purpose use.
+	  ML7213/ML7223/ML7831 is companion chip for Intel Atom E6xx series.
+	  ML7213/ML7223/ML7831 is completely compatible for Intel EG20T PCH.
 
 	  To compile this driver as a module, choose M here: the module will
 	  be called pch_phub.
@@ -566,6 +567,14 @@ config TSIF_DEBUG
 	---help---
 	  This turns on debugging information for the tsif driver
 
+config TSPP
+	depends on ARCH_MSM
+	tristate "TSPP (Transport Stream Packet Processor) Support"
+	---help---
+	Transport Stream Packet Processor is used to offload the
+	processing of MPEG transport streams from the main processor.
+	This can also be compiled as a loadable module.
+
 config HAPTIC_ISA1200
 	tristate "ISA1200 haptic support"
 	depends on I2C
@@ -582,14 +591,6 @@ config PMIC8058_PWM
 	  on Qualcomm PM8058 chip. Pulse Width Modulation is used for
 	  purposes including software controlled brightness of backlight,
 	  motor control, and waveform generation.
-
-config PMIC8058_VIBRATOR
-	tristate "Qualcomm PM8058 vibrator support"
-	depends on PMIC8058 && ANDROID_TIMED_OUTPUT
-	default n
-	help
-	  This option enables device driver support for the vibrator
-	  on Qualcomm PM8058 chip.
 
 config PMIC8XXX_VIBRATOR
 	tristate "Qualcomm Vibrator support for PMIC8XXX"
@@ -624,29 +625,19 @@ config PMIC8058_XOADC
 	  PMIC8058. Driver interface to program registers of the ADC over
 	  AMUX channels, devices on programmable MPP's and xotherm.
 
-config PMIC8058_MISC
-	tristate "Qualcomm PM8058 Misc Device driver"
-	depends on PMIC8058
-	default n
-	help
-	  Provides functionality for various small drivers utilizing the
-	  Qualcomm PM8058 chip.  Examples include: signalling when the 32kHz
-	  oscillator malfunctions.
-
-config PMIC8058_BATTALARM
-	tristate "Qualcomm PM8058 Battery Alarm Device driver"
-	depends on PMIC8058
-	help
-	  This option enables support for the battery alarm module on the
-	  Qualcomm PM8058 PMIC chip.  This support allows for configuration of
-	  the alarm module as well as interrupt handling.
-
 config TZCOM
 	tristate "Trustzone Communicator driver"
 	default n
 	help
 	  Provides a communication interface between userspace and
 	  TrustZone Operating Environment (TZBSP) using Secure Channel
+	  Manager (SCM) interface.
+
+config QSEECOM
+	tristate "Qualcomm Secure Execution Communicator driver"
+	help
+	  Provides a communication interface between userspace and
+	  Qualcomm Secure Execution Environment (QSEE) using Secure Channel
 	  Manager (SCM) interface.
 
 config QFP_FUSE
@@ -656,6 +647,16 @@ config QFP_FUSE
 	  fuses. The ioctls provides the necessary interface
 	  to the fuse block. Currently this is supported only
 	  on FSM targets.
+
+config USB_HSIC_SMSC_HUB
+	tristate "Support for HSIC based MSM on-chip SMSC3503 HUB"
+	depends on USB_EHCI_MSM_HSIC
+	help
+	  Enables support for the HSIC (High Speed Inter-Chip) based
+	  SMSC3503 hub controller present on the Qualcomm chipsets.
+
+	  This adds support for connecting devices like mouse in HSIC
+	  Host mode.
 
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,6 +14,7 @@
 #define __PM8XXX_CHARGER_H
 
 #include <linux/errno.h>
+#include <linux/power_supply.h>
 
 #define PM8921_CHARGER_DEV_NAME	"pm8921-charger"
 
@@ -33,6 +34,28 @@ enum pm8921_chg_hot_thr	{
 	PM_SMBC_BATT_TEMP_HOT_THR__HIGH
 };
 
+enum pm8921_usb_ov_threshold {
+	PM_USB_OV_5P5V,
+	PM_USB_OV_6V,
+	PM_USB_OV_6P5V,
+	PM_USB_OV_7V,
+};
+
+enum pm8921_usb_debounce_time {
+	PM_USB_BYPASS_DEBOUNCER,
+	PM_USB_DEBOUNCE_20P5MS,
+	PM_USB_DEBOUNCE_40P5MS,
+	PM_USB_DEBOUNCE_80P5MS,
+};
+
+enum pm8921_chg_led_src_config {
+	LED_SRC_GND,
+	LED_SRC_VPH_PWR,
+	LED_SRC_5V,
+	LED_SRC_MIN_VPH_5V,
+	LED_SRC_BYPASS,
+};
+
 /**
  * struct pm8921_charger_platform_data -
  * @safety_time:	max charging time in minutes incl. fast and trkl
@@ -48,9 +71,11 @@ enum pm8921_chg_hot_thr	{
  *				after the battery has been fully charged
  * @term_current:	the charger current (mA) at which EOC happens
  * @cool_temp:		the temperature (degC) at which the battery is
- *			considered cool charging current and voltage is reduced
+ *			considered cool charging current and voltage is reduced.
+ *			Use INT_MIN to indicate not valid.
  * @warm_temp:		the temperature (degC) at which the battery is
  *			considered warm charging current and voltage is reduced
+ *			Use INT_MIN to indicate not valid.
  * @temp_check_period:	The polling interval in seconds to check battery
  *			temeperature if it has gone to cool or warm temperature
  *			area
@@ -83,6 +108,11 @@ enum pm8921_chg_hot_thr	{
  *			VBAT_THERM goes below 35% of VREF_THERM, if low the
  *			battery will be considered hot when VBAT_THERM goes
  *			below 25% of VREF_THERM. Hardware defaults to low.
+ * @rconn_mohm:		resistance in milliOhm from the vbat sense to ground
+ *			with the battery terminals shorted. This indicates
+ *			resistance of the pads, connectors, battery terminals
+ *			and rsense.
+ * @led_src_config:	Power source for anode of charger indicator LED.
  */
 struct pm8921_charger_platform_data {
 	struct pm8xxx_charger_core_data	charger_cdata;
@@ -93,8 +123,8 @@ struct pm8921_charger_platform_data {
 	unsigned int			min_voltage;
 	unsigned int			resume_voltage_delta;
 	unsigned int			term_current;
-	unsigned int			cool_temp;
-	unsigned int			warm_temp;
+	int				cool_temp;
+	int				warm_temp;
 	unsigned int			temp_check_period;
 	unsigned int			max_bat_chg_current;
 	unsigned int			cool_bat_chg_current;
@@ -104,6 +134,7 @@ struct pm8921_charger_platform_data {
 	unsigned int			(*get_batt_capacity_percent) (void);
 	int64_t				batt_id_min;
 	int64_t				batt_id_max;
+	bool				keep_btm_on_suspend;
 	int				trkl_voltage;
 	int				weak_voltage;
 	int				trkl_current;
@@ -114,32 +145,14 @@ struct pm8921_charger_platform_data {
 	enum pm8921_chg_cold_thr	cold_thr;
 	enum pm8921_chg_hot_thr		hot_thr;
 	int				factory_mode;
+	int				rconn_mohm;
+	enum pm8921_chg_led_src_config	led_src_config;
 };
 
 enum pm8921_charger_source {
 	PM8921_CHG_SRC_NONE,
 	PM8921_CHG_SRC_USB,
 	PM8921_CHG_SRC_DC,
-};
-
-/**
- * struct ext_chg_pm8921 -
- * @name:		name of the external charger
- * @ctx:		client context.
- * @start_charging:	callback to start charging. Can be called from an
- *			interrupt context
- * @stop_charging:	callback to stop charging. Can be called from an
- *			interrupt context
- * @is_trickle:		callback to check if trickle charging.
- *			Can be called from an interrupt context
- *
- */
-struct ext_chg_pm8921 {
-	const char	*name;
-	void		*ctx;
-	int		(*start_charging) (void *ctx);
-	int		(*stop_charging) (void *ctx);
-	bool		(*is_trickle) (void *ctx);
 };
 
 #if defined(CONFIG_PM8921_CHARGER) || defined(CONFIG_PM8921_CHARGER_MODULE)
@@ -185,6 +198,30 @@ int pm8921_is_battery_present(void);
 int pm8921_set_max_battery_charge_current(int ma);
 
 /**
+ * pm8921_disable_input_current_limt - disable input current limit
+ *
+ * @disable: disable input curren_limit limit
+ *
+ * Disabling the charge current limit causes current
+ * current limits to have no monitoring. An adequate charger
+ * capable of supplying high current while sustaining VIN_MIN
+ * is required if input current limiting is disabled.
+ */
+int pm8921_disable_input_current_limit(bool disable);
+
+/**
+ * pm8921_set_usb_power_supply_type - set USB supply type
+ *
+ * @type: power_supply_type enum
+ *
+ * This api lets one set a specific usb power_supply_type.
+ * USB drivers can distinguish between types of USB connections
+ * and set the appropriate type for the USB supply.
+ */
+
+int pm8921_set_usb_power_supply_type(enum power_supply_type type);
+
+/**
  * pm8921_disable_source_current - disable drawing current from source
  * @disable: true to disable current drawing from source false otherwise
  *
@@ -214,27 +251,30 @@ bool pm8921_is_battery_charging(int *source);
  */
 int pm8921_batt_temperature(void);
 /**
- * register_external_dc_charger -
- * @ext:	The structure representing an external charger
- *
- * RETURNS:	Negative error code is there was a problem. Zero for sucess
- *
- * The charger callbacks might be called even before this function
- * completes. The external charger driver should be ready to handle
- * it.
+ * pm8921_usb_ovp_set_threshold -
+ * Set the usb threshold as defined in by
+ * enum usb_ov_threshold
  */
-int register_external_dc_charger(struct ext_chg_pm8921 *ext);
+int pm8921_usb_ovp_set_threshold(enum pm8921_usb_ov_threshold ov);
 
 /**
- * unregister_external_dc_charger -
- * @ext:	The structure representing an external charger
+ * pm8921_usb_ovp_set_hystersis -
+ * @ms: the debounce time enum
  *
- * The charger callbacks might be called even before this function
- * completes. The external charger driver should be ready to handle
- * it.
+ * Sets the debounce time for usb insertion/removal detection
+ *
  */
-void unregister_external_dc_charger(struct ext_chg_pm8921 *ext);
+int pm8921_usb_ovp_set_hystersis(enum pm8921_usb_debounce_time ms);
 
+/**
+ * pm8921_usb_ovp_disable -
+ *
+ * when disabled there is no over voltage protection. The usb voltage is
+ * fed to the pmic as is. This should be disabled only when there is
+ * over voltage protection circuitry present outside the pmic chip.
+ *
+ */
+int pm8921_usb_ovp_disable(int disable);
 #else
 static inline void pm8921_charger_vbus_draw(unsigned int mA)
 {
@@ -262,6 +302,14 @@ static inline int pm8921_is_battery_present(void)
 {
 	return -ENXIO;
 }
+static inline int pm8921_disable_input_current_limit(bool disable)
+{
+	return -ENXIO;
+}
+static inline int pm8921_set_usb_power_supply_type(enum power_supply_type type)
+{
+	return -ENXIO;
+}
 static inline int pm8921_set_max_battery_charge_current(int ma)
 {
 	return -ENXIO;
@@ -283,14 +331,17 @@ static inline int pm8921_batt_temperature(void)
 {
 	return -ENXIO;
 }
-static inline int register_external_dc_charger(struct ext_chg_pm8921 *ext)
+static inline int pm8921_usb_ovp_set_threshold(enum pm8921_usb_ov_threshold ov)
 {
-	pr_err("%s.not implemented.\n", __func__);
-	return -ENODEV;
+	return -ENXIO;
 }
-static inline void unregister_external_dc_charger(struct ext_chg_pm8921 *ext)
+static inline int pm8921_usb_ovp_set_hystersis(enum pm8921_usb_debounce_time ms)
 {
-	pr_err("%s.not implemented.\n", __func__);
+	return -ENXIO;
+}
+static inline int pm8921_usb_ovp_disable(int disable)
+{
+	return -ENXIO;
 }
 #endif
 

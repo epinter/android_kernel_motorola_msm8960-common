@@ -1,6 +1,6 @@
 /* Qualcomm CE device driver.
  *
- * Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -31,6 +31,7 @@
 #include <crypto/hash.h>
 #include <linux/platform_data/qcom_crypto_device.h>
 #include <mach/scm.h>
+#include <mach/msm_bus.h>
 #include <linux/qcedev.h>
 #include "qce.h"
 
@@ -97,7 +98,7 @@ struct qcedev_async_req {
 };
 
 static DEFINE_MUTEX(send_cmd_lock);
-
+static DEFINE_MUTEX(sent_bw_req);
 /**********************************************************************
  * Register ourselves as a misc device to be able to access the dev driver
  * from userspace. */
@@ -111,8 +112,12 @@ struct qcedev_control{
 	struct msm_ce_hw_support platform_support;
 
 	uint32_t ce_lock_count;
+	uint32_t high_bw_req_count;
+
 	/* CE features/algorithms supported by HW engine*/
 	struct ce_hw_support ce_support;
+
+	uint32_t  bus_scale_handle;
 
 	/* misc device */
 	struct miscdevice miscdevice;
@@ -166,6 +171,33 @@ static int qcedev_scm_cmd(int resource, int cmd, int *response)
 	return 0;
 #endif
 }
+
+static void qcedev_ce_high_bw_req(struct qcedev_control *podev,
+							bool high_bw_req)
+{
+	int ret = 0;
+
+	mutex_lock(&sent_bw_req);
+	if (high_bw_req) {
+		if (podev->high_bw_req_count == 0)
+			ret = msm_bus_scale_client_update_request(
+					podev->bus_scale_handle, 1);
+		if (ret)
+			pr_err("%s Unable to set to high bandwidth\n",
+							__func__);
+		podev->high_bw_req_count++;
+	} else {
+		if (podev->high_bw_req_count == 1)
+			ret = msm_bus_scale_client_update_request(
+					podev->bus_scale_handle, 0);
+		if (ret)
+			pr_err("%s Unable to set to low bandwidth\n",
+							__func__);
+		podev->high_bw_req_count--;
+	}
+	mutex_unlock(&sent_bw_req);
+}
+
 
 static int qcedev_unlock_ce(struct qcedev_control *podev)
 {
@@ -302,7 +334,8 @@ static int qcedev_open(struct inode *inode, struct file *file)
 
 	handle->cntl = podev;
 	file->private_data = handle;
-
+	if (podev->platform_support.bus_scale_table != NULL)
+		qcedev_ce_high_bw_req(podev, true);
 	return 0;
 }
 
@@ -319,7 +352,8 @@ static int qcedev_release(struct inode *inode, struct file *file)
 	}
 	kzfree(handle);
 	file->private_data = NULL;
-
+	if (podev != NULL && podev->platform_support.bus_scale_table != NULL)
+		qcedev_ce_high_bw_req(podev, false);
 	return 0;
 }
 
@@ -1992,7 +2026,10 @@ static int qcedev_probe(struct platform_device *pdev)
 				platform_support->shared_ce_resource;
 	podev->platform_support.hw_key_support =
 				platform_support->hw_key_support;
+	podev->platform_support.bus_scale_table =
+				platform_support->bus_scale_table;
 	podev->ce_lock_count = 0;
+	podev->high_bw_req_count = 0;
 	INIT_LIST_HEAD(&podev->ready_commands);
 	podev->active_command = NULL;
 
@@ -2011,10 +2048,28 @@ static int qcedev_probe(struct platform_device *pdev)
 	podev->pdev = pdev;
 	platform_set_drvdata(pdev, podev);
 	qce_hw_support(podev->qce, &podev->ce_support);
+
+	if (podev->platform_support.bus_scale_table != NULL) {
+		podev->bus_scale_handle =
+			msm_bus_scale_register_client(
+				(struct msm_bus_scale_pdata *)
+				podev->platform_support.bus_scale_table);
+		if (!podev->bus_scale_handle) {
+			printk(KERN_ERR "%s not able to get bus scale\n",
+								__func__);
+			rc =  -ENOMEM;
+			goto err;
+		}
+	}
 	rc = misc_register(&podev->miscdevice);
 
 	if (rc >= 0)
 		return 0;
+	else
+		if (podev->platform_support.bus_scale_table != NULL)
+			msm_bus_scale_unregister_client(
+						podev->bus_scale_handle);
+err:
 
 	if (handle)
 		qce_close(handle);
@@ -2033,6 +2088,9 @@ static int qcedev_remove(struct platform_device *pdev)
 		return 0;
 	if (podev->qce)
 		qce_close(podev->qce);
+
+	if (podev->platform_support.bus_scale_table != NULL)
+		msm_bus_scale_unregister_client(podev->bus_scale_handle);
 
 	if (podev->miscdevice.minor != MISC_DYNAMIC_MINOR)
 		misc_deregister(&podev->miscdevice);
@@ -2164,7 +2222,7 @@ static void qcedev_exit(void)
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Mona Hossain <mhossain@codeaurora.org>");
 MODULE_DESCRIPTION("Qualcomm DEV Crypto driver");
-MODULE_VERSION("1.24");
+MODULE_VERSION("1.26");
 
 module_init(qcedev_init);
 module_exit(qcedev_exit);

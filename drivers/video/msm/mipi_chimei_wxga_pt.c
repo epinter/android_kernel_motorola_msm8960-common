@@ -121,7 +121,7 @@ static int __init mipi_chimei_wxga_init(void)
 	pinfo->lcdc.hsync_skew = 0;
 
 	/* Backlight levels - controled via PMIC pwm gpio */
-	pinfo->bl_max = 15;
+	pinfo->bl_max = PWM_LEVEL;
 	pinfo->bl_min = 1;
 
 	/* mipi - general */
@@ -130,6 +130,7 @@ static int __init mipi_chimei_wxga_init(void)
 	pinfo->mipi.tx_eot_append = true;
 	pinfo->mipi.t_clk_post = 34;		/* Calculated */
 	pinfo->mipi.t_clk_pre = 64;		/* Calculated */
+	pinfo->mipi.esc_byte_ratio = 4;
 
 	pinfo->mipi.dsi_phy_db = &dsi_video_mode_phy_db;
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -76,6 +76,7 @@ struct pm8xxx_ccadc_chip {
 
 static struct pm8xxx_ccadc_chip *the_chip;
 
+#ifdef DEBUG
 static s64 microvolt_to_ccadc_reading_v1(s64 uv)
 {
 	return div_s64(uv * CCADC_READING_RESOLUTION_D_V1,
@@ -98,6 +99,7 @@ static s64 microvolt_to_ccadc_reading(struct pm8xxx_ccadc_chip *chip, s64 cc)
 				microvolt_to_ccadc_reading_v1((s64)cc) :
 				microvolt_to_ccadc_reading_v2((s64)cc);
 }
+#endif
 
 static int cc_adjust_for_offset(u16 raw)
 {
@@ -207,13 +209,13 @@ static int calib_start_conv(struct pm8xxx_ccadc_chip *chip,
 			return rc;
 		}
 		if ((reg & (START_CONV_BIT | EOC_CONV_BIT)) != EOC_CONV_BIT)
-			msleep(60);
+			msleep(20);
 		else
 			break;
 	}
 	if (i == ADC_WAIT_COUNT) {
-		pr_err("waited too long for offset eoc\n");
-		return rc;
+		pr_err("waited too long for offset eoc returning -EBUSY\n");
+		return -EBUSY;
 	}
 
 	rc = pm8xxx_readb(chip->dev->parent, ADC_ARB_SECP_DATA0, &data_lsb);
@@ -256,7 +258,7 @@ static int calib_ccadc_read_trim(struct pm8xxx_ccadc_chip *chip,
 static void calib_ccadc_read_offset_and_gain(struct pm8xxx_ccadc_chip *chip,
 						int *gain, u16 *offset)
 {
-	s8 data_msb;
+	u8 data_msb;
 	u8 data_lsb;
 	int rc;
 
@@ -328,7 +330,7 @@ static int calib_ccadc_program_trim(struct pm8xxx_ccadc_chip *chip,
 void pm8xxx_calib_ccadc(void)
 {
 	u8 data_msb, data_lsb, sec_cntrl;
-	int result_offset, voltage_offset, result_gain;
+	int result_offset, result_gain;
 	u16 result;
 	int i, rc;
 
@@ -385,26 +387,11 @@ void pm8xxx_calib_ccadc(void)
 
 	result_offset = result_offset / SAMPLE_COUNT;
 
-	voltage_offset = pm8xxx_ccadc_reading_to_microvolt(the_chip->revision,
-			((s64)result_offset - CCADC_INTRINSIC_OFFSET));
 
-	pr_debug("offset result_offset = 0x%x, voltage = %d microVolts\n",
-				result_offset, voltage_offset);
-
-	/* Sanity Check */
-	if (voltage_offset > CCADC_MAX_0UV) {
-		pr_err("offset voltage = %d is huge limiting to %d\n",
-					voltage_offset, CCADC_MAX_0UV);
-		result_offset = CCADC_INTRINSIC_OFFSET
-			+ microvolt_to_ccadc_reading(the_chip,
-							(s64)CCADC_MAX_0UV);
-	} else if (voltage_offset < CCADC_MIN_0UV) {
-		pr_err("offset voltage = %d is too low limiting to %d\n",
-					voltage_offset, CCADC_MIN_0UV);
-		result_offset = CCADC_INTRINSIC_OFFSET
-			+ microvolt_to_ccadc_reading(the_chip,
-							(s64)CCADC_MIN_0UV);
-	}
+	pr_debug("offset result_offset = 0x%x, voltage = %llduV\n",
+			result_offset,
+			pm8xxx_ccadc_reading_to_microvolt(the_chip->revision,
+			((s64)result_offset - CCADC_INTRINSIC_OFFSET)));
 
 	the_chip->ccadc_offset = result_offset;
 	data_msb = the_chip->ccadc_offset >> 8;
@@ -474,22 +461,6 @@ void pm8xxx_calib_ccadc(void)
 
 	pr_debug("gain result_gain = 0x%x, voltage = %d microVolts\n",
 					result_gain, the_chip->ccadc_gain_uv);
-	/* Sanity Check */
-	if (the_chip->ccadc_gain_uv > CCADC_MAX_25MV) {
-		pr_err("gain voltage = %d is huge limiting to %d\n",
-					the_chip->ccadc_gain_uv,
-					CCADC_MAX_25MV);
-		the_chip->ccadc_gain_uv = CCADC_MAX_25MV;
-		result_gain = result_offset +
-			microvolt_to_ccadc_reading(the_chip, CCADC_MAX_25MV);
-	} else if (the_chip->ccadc_gain_uv < CCADC_MIN_25MV) {
-		pr_err("gain voltage = %d is too low limiting to %d\n",
-					the_chip->ccadc_gain_uv,
-					CCADC_MIN_25MV);
-		the_chip->ccadc_gain_uv = CCADC_MIN_25MV;
-		result_gain = result_offset +
-			microvolt_to_ccadc_reading(the_chip, CCADC_MIN_25MV);
-	}
 
 	data_msb = result_gain >> 8;
 	data_lsb = result_gain;
@@ -568,16 +539,17 @@ static int ccadc_get_rsense_voltage(int *voltage_uv)
 					the_chip->ccadc_offset);
 	*voltage_uv = pm8xxx_ccadc_reading_to_microvolt(the_chip->revision,
 			((s64)result));
-	pr_debug("Vsense before gain = %d uV\n", *voltage_uv);
+	pr_debug("Vsense before gain of %d = %d uV\n", the_chip->ccadc_gain_uv,
+					*voltage_uv);
 	*voltage_uv = pm8xxx_cc_adjust_for_gain(*voltage_uv);
 
 	pr_debug("Vsense = %d uV\n", *voltage_uv);
 	return 0;
 }
 
-int pm8xxx_ccadc_get_battery_current(int *bat_current)
+int pm8xxx_ccadc_get_battery_current(int *bat_current_ua)
 {
-	int voltage_uv, rc;
+	int voltage_uv = 0, rc;
 
 	rc = ccadc_get_rsense_voltage(&voltage_uv);
 	if (rc) {
@@ -585,13 +557,13 @@ int pm8xxx_ccadc_get_battery_current(int *bat_current)
 		return rc;
 	}
 
-	*bat_current = voltage_uv/the_chip->r_sense;
+	*bat_current_ua = voltage_uv * 1000/the_chip->r_sense;
 	/*
 	 * ccadc reads +ve current when the battery is charging
 	 * We need to return -ve if the battery is charging
 	 */
-	*bat_current = -1 * (*bat_current);
-	pr_debug("bat current = %d ma\n", *bat_current);
+	*bat_current_ua = -1 * (*bat_current_ua);
+	pr_debug("bat current = %d ma\n", *bat_current_ua);
 	return 0;
 }
 EXPORT_SYMBOL(pm8xxx_ccadc_get_battery_current);
@@ -700,6 +672,9 @@ static int __devinit pm8xxx_ccadc_probe(struct platform_device *pdev)
 	chip->eoc_irq = res->start;
 	chip->r_sense = pdata->r_sense;
 
+	calib_ccadc_read_offset_and_gain(chip,
+					&chip->ccadc_gain_uv,
+					&chip->ccadc_offset);
 	rc = request_irq(chip->eoc_irq,
 			pm8921_bms_ccadc_eoc_handler, IRQF_TRIGGER_RISING,
 			"bms_eoc_ccadc", chip);
@@ -707,15 +682,13 @@ static int __devinit pm8xxx_ccadc_probe(struct platform_device *pdev)
 		pr_err("failed to request %d irq rc= %d\n", chip->eoc_irq, rc);
 		goto free_chip;
 	}
+	disable_irq_nosync(chip->eoc_irq);
 
 	platform_set_drvdata(pdev, chip);
 	the_chip = chip;
 
 	create_debugfs_entries(chip);
 
-	calib_ccadc_read_offset_and_gain(chip,
-					&chip->ccadc_gain_uv,
-					&chip->ccadc_offset);
 	return 0;
 
 free_chip:

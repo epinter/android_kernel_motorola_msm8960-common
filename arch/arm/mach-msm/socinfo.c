@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -31,6 +31,7 @@ enum {
 	HW_PLATFORM_FLUID   = 3,
 	HW_PLATFORM_SVLTE_FFA	= 4,
 	HW_PLATFORM_SVLTE_SURF	= 5,
+	HW_PLATFORM_MTP  = 8,
 	HW_PLATFORM_LIQUID  = 9,
 	/* Dragonboard platform id is assigned as 10 in CDT */
 	HW_PLATFORM_DRAGON	= 10,
@@ -42,9 +43,10 @@ const char *hw_platform[] = {
 	[HW_PLATFORM_SURF] = "Surf",
 	[HW_PLATFORM_FFA] = "FFA",
 	[HW_PLATFORM_FLUID] = "Fluid",
-	[HW_PLATFORM_LIQUID] = "Liquid",
 	[HW_PLATFORM_SVLTE_FFA] = "SVLTE_FFA",
 	[HW_PLATFORM_SVLTE_SURF] = "SLVTE_SURF",
+	[HW_PLATFORM_MTP] = "MTP",
+	[HW_PLATFORM_LIQUID] = "Liquid",
 	[HW_PLATFORM_DRAGON] = "Dragon"
 };
 
@@ -211,12 +213,21 @@ static enum msm_cpu cpu_of_id[] = {
 	/* 9x15 ID */
 	[104] = MSM_CPU_9615,
 	[105] = MSM_CPU_9615,
+	[106] = MSM_CPU_9615,
+	[107] = MSM_CPU_9615,
 
 	/* 8064 IDs */
 	[109] = MSM_CPU_8064,
 
 	/* 8930 IDs */
 	[116] = MSM_CPU_8930,
+	[117] = MSM_CPU_8930,
+	[118] = MSM_CPU_8930,
+	[119] = MSM_CPU_8930,
+
+	/* 8627 IDs */
+	[120] = MSM_CPU_8627,
+	[121] = MSM_CPU_8627,
 
 	/* 8660A ID */
 	[122] = MSM_CPU_8960,
@@ -230,6 +241,22 @@ static enum msm_cpu cpu_of_id[] = {
 	/* Copper IDs */
 	[126] = MSM_CPU_COPPER,
 
+	/* 8625 IDs */
+	[127] = MSM_CPU_8625,
+	[128] = MSM_CPU_8625,
+	[129] = MSM_CPU_8625,
+
+	/* 8064 MPQ ID */
+	[130] = MSM_CPU_8064,
+
+	/* 7x25AB IDs */
+	[131] = MSM_CPU_7X25AB,
+	[132] = MSM_CPU_7X25AB,
+	[133] = MSM_CPU_7X25AB,
+
+	/* 9625 IDs */
+	[134] = MSM_CPU_9625,
+
 	/* Uninitialized IDs are not known to run Linux.
 	   MSM_CPU_UNKNOWN is set to 0 to ensure these IDs are
 	   considered as unknown CPU. */
@@ -240,7 +267,6 @@ static enum msm_cpu cur_cpu;
 static struct socinfo_v1 dummy_socinfo = {
 	.format = 1,
 	.version = 1,
-	.build_id = "Dummy socinfo placeholder"
 };
 
 uint32_t socinfo_get_id(void)
@@ -587,7 +613,7 @@ static int __init socinfo_init_sysdev(void)
 
 arch_initcall(socinfo_init_sysdev);
 
-void *setup_dummy_socinfo(void)
+static void * __init setup_dummy_socinfo(void)
 {
 	if (machine_is_msm8960_rumi3() || machine_is_msm8960_sim() ||
 	    machine_is_msm8960_cdp())
@@ -596,8 +622,18 @@ void *setup_dummy_socinfo(void)
 		dummy_socinfo.id = 109;
 	else if (machine_is_msm9615_mtp() || machine_is_msm9615_cdp())
 		dummy_socinfo.id = 104;
-	else if (early_machine_is_copper())
+	else if (early_machine_is_copper()) {
 		dummy_socinfo.id = 126;
+		strlcpy(dummy_socinfo.build_id, "copper - ",
+			sizeof(dummy_socinfo.build_id));
+	} else if (early_machine_is_msm9625()) {
+		dummy_socinfo.id = 134;
+		strlcpy(dummy_socinfo.build_id, "msm9625 - ",
+			sizeof(dummy_socinfo.build_id));
+	} else if (machine_is_msm8625_rumi3())
+		dummy_socinfo.id = 127;
+	strlcat(dummy_socinfo.build_id, "Dummy socinfo",
+		sizeof(dummy_socinfo.build_id));
 	return (void *) &dummy_socinfo;
 }
 

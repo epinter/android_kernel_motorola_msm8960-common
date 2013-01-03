@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -50,7 +50,8 @@ static struct snd_soc_dai_driver msm_fe_dais[] = {
 	{
 		.playback = {
 			.stream_name = "Multimedia1 Playback",
-			.rates = SNDRV_PCM_RATE_8000_48000,
+			.rates = (SNDRV_PCM_RATE_8000_48000|
+					SNDRV_PCM_RATE_KNOT),
 			.formats = SNDRV_PCM_FMTBIT_S16_LE,
 			.channels_min = 1,
 			.channels_max = 2,
@@ -59,36 +60,39 @@ static struct snd_soc_dai_driver msm_fe_dais[] = {
 		},
 		.capture = {
 			.stream_name = "Multimedia1 Capture",
-			.rates = SNDRV_PCM_RATE_8000_48000,
+			.rates = (SNDRV_PCM_RATE_8000_48000|
+					SNDRV_PCM_RATE_KNOT),
 			.formats = SNDRV_PCM_FMTBIT_S16_LE,
 			.channels_min = 1,
-			.channels_max = 2,
+			.channels_max = 4,
 			.rate_min =     8000,
 			.rate_max =	48000,
 		},
-		.ops = &msm_fe_dai_ops,
+		.ops = &msm_fe_Multimedia_dai_ops,
 		.name = "MultiMedia1",
 	},
 	{
 		.playback = {
 			.stream_name = "Multimedia2 Playback",
-			.rates = SNDRV_PCM_RATE_8000_48000,
+			.rates = (SNDRV_PCM_RATE_8000_48000|
+					SNDRV_PCM_RATE_KNOT),
 			.formats = SNDRV_PCM_FMTBIT_S16_LE,
 			.channels_min = 1,
-			.channels_max = 2,
+			.channels_max = 6,
 			.rate_min =     8000,
 			.rate_max =	48000,
 		},
 		.capture = {
 			.stream_name = "Multimedia2 Capture",
-			.rates = SNDRV_PCM_RATE_8000_48000,
+			.rates = (SNDRV_PCM_RATE_8000_48000|
+					SNDRV_PCM_RATE_KNOT),
 			.formats = SNDRV_PCM_FMTBIT_S16_LE,
 			.channels_min = 1,
 			.channels_max = 2,
 			.rate_min =     8000,
 			.rate_max =	48000,
 		},
-		.ops = &msm_fe_dai_ops,
+		.ops = &msm_fe_Multimedia_dai_ops,
 		.name = "MultiMedia2",
 	},
 	{
@@ -150,6 +154,20 @@ static struct snd_soc_dai_driver msm_fe_dais[] = {
 		},
 		.ops = &msm_fe_Multimedia_dai_ops,
 		.name = "MultiMedia3",
+	},
+	{
+		.playback = {
+			.stream_name = "MultiMedia4 Playback",
+			.rates = (SNDRV_PCM_RATE_8000_48000 |
+					SNDRV_PCM_RATE_KNOT),
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min =	8000,
+			.rate_max = 48000,
+		},
+		.ops = &msm_fe_Multimedia_dai_ops,
+		.name = "MultiMedia4",
 	},
 	/* FE DAIs created for hostless operation purpose */
 	{
@@ -221,6 +239,111 @@ static struct snd_soc_dai_driver msm_fe_dais[] = {
 		},
 		.ops = &msm_fe_dai_ops,
 		.name = "AFE-PROXY",
+	},
+	{
+		.playback = {
+			.stream_name = "HDMI_Rx Hostless Playback",
+			.rates = SNDRV_PCM_RATE_8000_48000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min = 8000,
+			.rate_max = 48000,
+		},
+		.ops = &msm_fe_dai_ops,
+		.name = "HDMI_HOSTLESS"
+	},
+	{
+		.playback = {
+			.stream_name = "AUXPCM Hostless Playback",
+			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 1,
+			.rate_min =     8000,
+			.rate_max =     16000,
+		},
+		.capture = {
+			.stream_name = "AUXPCM Hostless Capture",
+			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 1,
+			.rate_min =     8000,
+			.rate_max =    16000,
+		},
+		.ops = &msm_fe_dai_ops,
+		.name = "AUXPCM_HOSTLESS",
+	},
+	{
+		.playback = {
+			.stream_name = "Voice Stub Playback",
+			.rates = SNDRV_PCM_RATE_8000_48000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min = 8000,
+			.rate_max = 48000,
+		},
+		.capture = {
+			.stream_name = "Voice Stub Capture",
+			.rates = SNDRV_PCM_RATE_8000_48000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min = 8000,
+			.rate_max = 48000,
+		},
+		.ops = &msm_fe_dai_ops,
+		.name = "VOICE_STUB",
+	},
+	{
+		.playback = {
+			.stream_name = "VoLTE Playback",
+			.rates = SNDRV_PCM_RATE_8000_48000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min =     8000,
+			.rate_max =     48000,
+		},
+		.capture = {
+			.stream_name = "VoLTE Capture",
+			.rates = SNDRV_PCM_RATE_8000_48000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min =     8000,
+			.rate_max =     48000,
+		},
+		.ops = &msm_fe_dai_ops,
+		.name = "VoLTE",
+	},
+	{
+		.capture = {
+			.stream_name = "MI2S_TX Hostless Capture",
+			.rates = SNDRV_PCM_RATE_8000_48000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 8,
+			.rate_min =     8000,
+			.rate_max =    48000,
+		},
+		.ops = &msm_fe_dai_ops,
+		.name = "MI2S_TX_HOSTLESS",
+	},
+	{
+		.playback = {
+			.stream_name = "SEC_I2S_RX Hostless Playback",
+			.rates = SNDRV_PCM_RATE_8000_48000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min =     8000,
+			.rate_max =    48000,
+		},
+		.ops = &msm_fe_dai_ops,
+		.name = "SEC_I2S_RX_HOSTLESS",
 	},
 };
 

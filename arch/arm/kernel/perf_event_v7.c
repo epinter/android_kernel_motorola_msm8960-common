@@ -203,7 +203,7 @@ static const unsigned armv7_a8_perf_map[PERF_COUNT_HW_MAX] = {
 	[PERF_COUNT_HW_BUS_CYCLES]	    = ARMV7_PERFCTR_CLOCK_CYCLES,
 };
 
-static const unsigned armv7_a8_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
+static unsigned armv7_a8_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
 					  [PERF_COUNT_HW_CACHE_OP_MAX]
 					  [PERF_COUNT_HW_CACHE_RESULT_MAX] = {
 	[C(L1D)] = {
@@ -314,7 +314,7 @@ static const unsigned armv7_a9_perf_map[PERF_COUNT_HW_MAX] = {
 	[PERF_COUNT_HW_BUS_CYCLES]	    = ARMV7_PERFCTR_CLOCK_CYCLES,
 };
 
-static const unsigned armv7_a9_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
+static  unsigned armv7_a9_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
 					  [PERF_COUNT_HW_CACHE_OP_MAX]
 					  [PERF_COUNT_HW_CACHE_RESULT_MAX] = {
 	[C(L1D)] = {
@@ -424,7 +424,7 @@ static const unsigned armv7_a5_perf_map[PERF_COUNT_HW_MAX] = {
 	[PERF_COUNT_HW_BUS_CYCLES]	    = HW_OP_UNSUPPORTED,
 };
 
-static const unsigned armv7_a5_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
+static unsigned armv7_a5_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
 					[PERF_COUNT_HW_CACHE_OP_MAX]
 					[PERF_COUNT_HW_CACHE_RESULT_MAX] = {
 	[C(L1D)] = {
@@ -540,7 +540,7 @@ static const unsigned armv7_a15_perf_map[PERF_COUNT_HW_MAX] = {
 	[PERF_COUNT_HW_BUS_CYCLES]	    = ARMV7_PERFCTR_BUS_CYCLES,
 };
 
-static const unsigned armv7_a15_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
+static unsigned armv7_a15_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
 					[PERF_COUNT_HW_CACHE_OP_MAX]
 					[PERF_COUNT_HW_CACHE_RESULT_MAX] = {
 	[C(L1D)] = {
@@ -715,7 +715,8 @@ enum armv7_counters {
 /*
  * EVTSEL: Event selection reg
  */
-#define	ARMV7_EVTSEL_MASK	0xff		/* Mask for writable bits */
+#define	ARMV7_EVTYPE_EVENT	0xff		/* Mask for writable bits */
+#define ARMV7_EVTYPE_MASK	0xc00000ff
 
 /*
  * SELECT: Counter selection reg
@@ -729,6 +730,43 @@ enum armv7_counters {
 #define ARMV7_FLAG_C		(1 << ARMV7_CCNT)
 #define	ARMV7_FLAG_MASK		0xffffffff	/* Mask for writable bits */
 #define	ARMV7_OVERFLOWED_MASK	ARMV7_FLAG_MASK
+
+/*
+ * Event filters for PMUv2
+ */
+#define        ARMV7_EXCLUDE_PL1       (1 << 31)
+#define        ARMV7_EXCLUDE_USER      (1 << 30)
+#define        ARMV7_INCLUDE_HYP       (1 << 27)
+
+
+/* Mask for restoring h/w counter val */
+#define	COUNT_MASK	0xffffffff
+
+/*
+ * Add an event filter to a given event. This will only work for PMUv2 PMUs.
+ */
+int armv7pmu_set_event_filter(struct hw_perf_event *event,
+		struct perf_event_attr *attr)
+{
+	unsigned long config_base = 0;
+
+	if (attr->exclude_idle)
+		return -EPERM;
+	if (attr->exclude_user)
+		config_base |= ARMV7_EXCLUDE_USER;
+	if (attr->exclude_kernel)
+		config_base |= ARMV7_EXCLUDE_PL1;
+	if (!attr->exclude_hv)
+		config_base |= ARMV7_INCLUDE_HYP;
+
+	/*
+	 * Install the filter into config_base as this is used to
+	 * construct the event type.
+	 */
+	event->config_base = config_base;
+
+	return 0;
+}
 
 static inline unsigned long armv7_pmnc_read(void)
 {
@@ -815,7 +853,8 @@ static inline void armv7pmu_write_counter(int idx, u32 value)
 static inline void armv7_pmnc_write_evtsel(unsigned int idx, u32 val)
 {
 	if (armv7_pmnc_select_counter(idx) == idx) {
-		val &= ARMV7_EVTSEL_MASK;
+		val &= ARMV7_EVTYPE_MASK;
+
 		asm volatile("mcr p15, 0, %0, c9, c13, 1" : : "r" (val));
 	}
 }
@@ -976,7 +1015,7 @@ static void armv7pmu_enable_event(struct hw_perf_event *hwc, int idx)
 	 * Set event (if destined for PMNx counters)
 	 * We don't need to set the event if it's a cycle count
 	 */
-	if (idx != ARMV7_CYCLE_COUNTER)
+	if (armpmu->set_event_filter || idx != ARMV7_CYCLE_COUNTER)
 		armv7_pmnc_write_evtsel(idx, hwc->config_base);
 
 	/*
@@ -1101,9 +1140,11 @@ static int armv7pmu_get_event_idx(struct cpu_hw_events *cpuc,
 				  struct hw_perf_event *event)
 {
 	int idx;
+	unsigned long evtype = event->config_base & ARMV7_EVTYPE_EVENT;
+
 
 	/* Always place a cycle counter into the cycle counter. */
-	if (event->config_base == ARMV7_PERFCTR_CPU_CYCLES) {
+	if (evtype == ARMV7_PERFCTR_CPU_CYCLES) {
 		if (test_and_set_bit(ARMV7_CYCLE_COUNTER, cpuc->used_mask))
 			return -EAGAIN;
 
@@ -1137,6 +1178,8 @@ static void armv7pmu_reset(void *info)
 
 static struct arm_pmu armv7pmu = {
 	.handle_irq		= armv7pmu_handle_irq,
+	.request_pmu_irq	= armpmu_generic_request_irq,
+	.free_pmu_irq		= armpmu_generic_free_irq,
 	.enable			= armv7pmu_enable_event,
 	.disable		= armv7pmu_disable_event,
 	.read_counter		= armv7pmu_read_counter,

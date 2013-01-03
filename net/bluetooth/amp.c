@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2010-2011 Code Aurora Forum.  All rights reserved.
+   Copyright (c) 2010-2012 Code Aurora Forum.  All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License version 2 and
@@ -87,15 +87,15 @@ static struct amp_mgr *get_amp_mgr_sk(struct sock *sk)
 	return found;
 }
 
-static struct amp_mgr *get_create_amp_mgr(struct l2cap_conn *conn,
+static struct amp_mgr *get_create_amp_mgr(struct hci_conn *hcon,
 						struct sk_buff *skb)
 {
 	struct amp_mgr *mgr;
 
 	write_lock(&amp_mgr_list_lock);
 	list_for_each_entry(mgr, &amp_mgr_list, list) {
-		if (mgr->l2cap_conn == conn) {
-			BT_DBG("conn %p found %p", conn, mgr);
+		if (mgr->l2cap_conn == hcon->l2cap_data) {
+			BT_DBG("found %p", mgr);
 			write_unlock(&amp_mgr_list_lock);
 			goto gc_finished;
 		}
@@ -106,13 +106,13 @@ static struct amp_mgr *get_create_amp_mgr(struct l2cap_conn *conn,
 	if (!mgr)
 		return NULL;
 
-	mgr->l2cap_conn = conn;
+	mgr->l2cap_conn = hcon->l2cap_data;
 	mgr->next_ident = 1;
 	INIT_LIST_HEAD(&mgr->ctx_list);
 	rwlock_init(&mgr->ctx_list_lock);
 	mgr->skb = skb;
-	BT_DBG("conn %p mgr %p", conn, mgr);
-	mgr->a2mp_sock = open_fixed_channel(conn->src, conn->dst);
+	BT_DBG("hcon %p mgr %p", hcon, mgr);
+	mgr->a2mp_sock = open_fixed_channel(&hcon->hdev->bdaddr, &hcon->dst);
 	if (!mgr->a2mp_sock) {
 		kfree(mgr);
 		return NULL;
@@ -255,7 +255,7 @@ static struct amp_ctx *get_ctx_hdev(struct hci_dev *hdev, u8 evt_type,
 		read_lock(&mgr->ctx_list_lock);
 		list_for_each_entry(ctx, &mgr->ctx_list, list) {
 			struct hci_dev *ctx_hdev;
-			ctx_hdev = hci_dev_get(A2MP_HCI_ID(ctx->id));
+			ctx_hdev = hci_dev_get(ctx->id);
 			if ((ctx_hdev == hdev) && (ctx->evt_type & evt_type)) {
 				switch (evt_type) {
 				case AMP_HCI_CMD_STATUS:
@@ -356,7 +356,7 @@ static int send_a2mp_cl(struct amp_mgr *mgr, u8 ident, u8 code, u16 len,
 		if (hdev) {
 			if ((hdev->amp_type != HCI_BREDR) &&
 			test_bit(HCI_UP, &hdev->flags)) {
-				(cl + num_ctrls)->id  = HCI_A2MP_ID(hdev->id);
+				(cl + num_ctrls)->id  = hdev->id;
 				(cl + num_ctrls)->type = hdev->amp_type;
 				(cl + num_ctrls)->status = hdev->amp_status;
 				++num_ctrls;
@@ -374,13 +374,11 @@ static void send_a2mp_change_notify(void)
 {
 	struct amp_mgr *mgr;
 
-	read_lock(&amp_mgr_list_lock);
 	list_for_each_entry(mgr, &amp_mgr_list, list) {
 		if (mgr->discovered)
 			send_a2mp_cl(mgr, next_ident(mgr),
 					A2MP_CHANGE_NOTIFY, 0, NULL);
 	}
-	read_unlock(&amp_mgr_list_lock);
 }
 
 static inline int discover_req(struct amp_mgr *mgr, struct sk_buff *skb)
@@ -459,7 +457,7 @@ static inline int getinfo_req(struct amp_mgr *mgr, struct sk_buff *skb)
 	rsp.status = 1;
 
 	BT_DBG("id %d", id);
-	hdev = hci_dev_get(A2MP_HCI_ID(id));
+	hdev = hci_dev_get(id);
 
 	if (hdev && hdev->amp_type != HCI_BREDR) {
 		rsp.status = 0;
@@ -484,7 +482,7 @@ static void create_physical(struct l2cap_conn *conn, struct sock *sk)
 	struct amp_ctx *ctx = NULL;
 
 	BT_DBG("conn %p", conn);
-	mgr = get_create_amp_mgr(conn, NULL);
+	mgr = get_create_amp_mgr(conn->hcon, NULL);
 	if (!mgr)
 		goto cp_finished;
 	BT_DBG("mgr %p", mgr);
@@ -510,14 +508,14 @@ static void accept_physical(struct l2cap_conn *lcon, u8 id, struct sock *sk)
 	int result = -EINVAL;
 
 	BT_DBG("lcon %p", lcon);
-	mgr = get_create_amp_mgr(lcon, NULL);
-	if (!mgr)
-		goto ap_finished;
-	BT_DBG("mgr %p", mgr);
-	hdev = hci_dev_get(A2MP_HCI_ID(id));
+	hdev = hci_dev_get(id);
 	if (!hdev)
 		goto ap_finished;
 	BT_DBG("hdev %p", hdev);
+	mgr = get_create_amp_mgr(lcon->hcon, NULL);
+	if (!mgr)
+		goto ap_finished;
+	BT_DBG("mgr %p", mgr);
 	conn = hci_conn_hash_lookup_ba(hdev, ACL_LINK,
 					&mgr->l2cap_conn->hcon->dst);
 	if (conn) {
@@ -534,6 +532,8 @@ static void accept_physical(struct l2cap_conn *lcon, u8 id, struct sock *sk)
 	return;
 
 ap_finished:
+	if (hdev)
+		hci_dev_put(hdev);
 	l2cap_amp_physical_complete(result, id, remote_id, sk);
 }
 
@@ -553,7 +553,7 @@ static int getampassoc_req(struct amp_mgr *mgr, struct sk_buff *skb)
 		return -ENOMEM;
 	ctx->id = req->id;
 	ctx->d.gaa.req_ident = hdr->ident;
-	ctx->hdev = hci_dev_get(A2MP_HCI_ID(ctx->id));
+	ctx->hdev = hci_dev_get(ctx->id);
 	if (ctx->hdev)
 		ctx->d.gaa.assoc = kmalloc(ctx->hdev->amp_assoc_size,
 						GFP_ATOMIC);
@@ -826,7 +826,7 @@ static int createphyslink_req(struct amp_mgr *mgr, struct sk_buff *skb)
 	ctx->d.apl.len_so_far = 0;
 	ctx->d.apl.rem_len = skb->len;
 	skb_pull(skb, skb->len);
-	ctx->hdev = hci_dev_get(A2MP_HCI_ID(ctx->id));
+	ctx->hdev = hci_dev_get(ctx->id);
 	start_ctx(mgr, ctx);
 	return 0;
 }
@@ -1122,7 +1122,7 @@ static u8 createphyslink_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 				if (hdev) {
 					struct hci_conn *conn;
 					ctx->hdev = hdev;
-					ctx->id = HCI_A2MP_ID(hdev->id);
+					ctx->id = hdev->id;
 					ctx->d.cpl.remote_id = cl->id;
 					conn = hci_conn_hash_lookup_ba(hdev,
 					    ACL_LINK,
@@ -1156,6 +1156,7 @@ static u8 createphyslink_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 		if (skb->len < sizeof(*grsp))
 			goto cpl_finished;
 		grsp = (struct a2mp_getinfo_rsp *) skb_pull(skb, sizeof(*hdr));
+		skb_pull(skb, sizeof(*grsp));
 		if (grsp->status)
 			goto cpl_finished;
 		if (grsp->id != ctx->d.cpl.remote_id)
@@ -1169,7 +1170,6 @@ static u8 createphyslink_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 		ctrl->min_latency = le32_to_cpu(grsp->min_latency);
 		ctrl->pal_cap = le16_to_cpu(grsp->pal_cap);
 		ctrl->max_assoc_size = le16_to_cpu(grsp->assoc_size);
-		skb_pull(skb, sizeof(*grsp));
 
 		ctx->d.cpl.max_len = ctrl->max_assoc_size;
 
@@ -1189,8 +1189,6 @@ static u8 createphyslink_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 			goto cpl_finished;
 		hdr = (void *) skb->data;
 		arsp = (void *) skb_pull(skb, sizeof(*hdr));
-		if (arsp->id != ctx->d.cpl.remote_id)
-			goto cpl_finished;
 		if (arsp->status != 0)
 			goto cpl_finished;
 
@@ -1198,12 +1196,12 @@ static u8 createphyslink_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 		assoc = (u8 *) skb_pull(skb, sizeof(*arsp));
 		ctx->d.cpl.len_so_far = 0;
 		ctx->d.cpl.rem_len = hdr->len - sizeof(*arsp);
+		skb_pull(skb, ctx->d.cpl.rem_len);
 		rassoc = kmalloc(ctx->d.cpl.rem_len, GFP_ATOMIC);
 		if (!rassoc)
 			goto cpl_finished;
 		memcpy(rassoc, assoc, ctx->d.cpl.rem_len);
 		ctx->d.cpl.remote_assoc = rassoc;
-		skb_pull(skb, ctx->d.cpl.rem_len);
 
 		/* set up CPL command */
 		ctx->d.cpl.phy_handle = physlink_handle(ctx->hdev);
@@ -1425,7 +1423,7 @@ static int disconnphyslink_req(struct amp_mgr *mgr, struct sk_buff *skb)
 	rsp.status = 0;
 	BT_DBG("local_id %d remote_id %d",
 		(int) rsp.local_id, (int) rsp.remote_id);
-	hdev = hci_dev_get(A2MP_HCI_ID(rsp.local_id));
+	hdev = hci_dev_get(rsp.local_id);
 	if (!hdev) {
 		rsp.status = 1; /* Invalid Controller ID */
 		goto dpl_finished;
@@ -1773,12 +1771,13 @@ static struct socket *open_fixed_channel(bdaddr_t *src, bdaddr_t *dst)
 static void conn_ind_worker(struct work_struct *w)
 {
 	struct amp_work_conn_ind *work = (struct amp_work_conn_ind *) w;
-	struct l2cap_conn *conn = work->conn;
+	struct hci_conn *hcon = work->hcon;
 	struct sk_buff *skb = work->skb;
 	struct amp_mgr *mgr;
 
-	mgr = get_create_amp_mgr(conn, skb);
+	mgr = get_create_amp_mgr(hcon, skb);
 	BT_DBG("mgr %p", mgr);
+	hci_conn_put(hcon);
 	kfree(work);
 }
 
@@ -1804,17 +1803,20 @@ static void accept_physical_worker(struct work_struct *w)
 
 /* L2CAP Fixed Channel interface */
 
-void amp_conn_ind(struct l2cap_conn *conn, struct sk_buff *skb)
+void amp_conn_ind(struct hci_conn *hcon, struct sk_buff *skb)
 {
 	struct amp_work_conn_ind *work;
-	BT_DBG("conn %p, skb %p", conn, skb);
+	BT_DBG("hcon %p, skb %p", hcon, skb);
 	work = kmalloc(sizeof(*work), GFP_ATOMIC);
 	if (work) {
 		INIT_WORK((struct work_struct *) work, conn_ind_worker);
-		work->conn = conn;
+		hci_conn_hold(hcon);
+		work->hcon = hcon;
 		work->skb = skb;
-		if (queue_work(amp_workqueue, (struct work_struct *) work) == 0)
+		if (!queue_work(amp_workqueue, (struct work_struct *) work)) {
+			hci_conn_put(hcon);
 			kfree(work);
+		}
 	}
 }
 

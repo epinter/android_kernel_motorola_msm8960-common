@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -73,7 +73,7 @@ static void idlestats_get_sample(struct msm_idle_stats_device *idledev,
 	/* If the GPU is asleep, don't wake it up - assume that we
 	   are idle */
 
-	if (!(device->state & (KGSL_STATE_SLEEP | KGSL_STATE_NAP))) {
+	if (device->state == KGSL_STATE_ACTIVE) {
 		device->ftbl->power_stats(device, &stats);
 		pulse->busy_start_time = pwr->time - stats.busy_time;
 		pulse->busy_interval = stats.busy_time;
@@ -149,7 +149,16 @@ static void idlestats_sleep(struct kgsl_device *device,
 			struct kgsl_pwrscale *pwrscale)
 {
 	struct idlestats_priv *priv = pwrscale->priv;
-	priv->idledev.stats->event |= MSM_IDLE_STATS_EVENT_IDLE_TIMER_EXPIRED;
+	msm_idle_stats_update_event(&priv->idledev,
+		MSM_IDLE_STATS_EVENT_IDLE_TIMER_EXPIRED);
+}
+
+static void idlestats_wake(struct kgsl_device *device,
+			struct kgsl_pwrscale *pwrscale)
+{
+	/* Use highest perf level on wake-up from
+	   sleep for better performance */
+	kgsl_pwrctrl_pwrlevel_change(device, KGSL_PWRLEVEL_TURBO);
 }
 
 static int idlestats_init(struct kgsl_device *device,
@@ -217,5 +226,6 @@ struct kgsl_pwrscale_policy kgsl_pwrscale_policy_idlestats = {
 	.idle = idlestats_idle,
 	.busy = idlestats_busy,
 	.sleep = idlestats_sleep,
+	.wake = idlestats_wake,
 	.close = idlestats_close
 };

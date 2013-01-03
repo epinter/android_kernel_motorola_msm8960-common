@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,10 +16,22 @@
 #include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <linux/of_fdt.h>
+#include <linux/of_irq.h>
+#include <asm/hardware/gic.h>
+#include <asm/arch_timer.h>
 #include <asm/mach/arch.h>
+#include <asm/mach/time.h>
 #include <mach/socinfo.h>
 #include <mach/board.h>
-#include "timer.h"
+
+static void __init msm_dt_timer_init(void)
+{
+	arch_timer_of_register();
+}
+
+static struct sys_timer msm_dt_timer = {
+	.init = msm_dt_timer_init
+};
 
 static void __init msm_dt_init_irq(void)
 {
@@ -43,19 +55,37 @@ static void __init msm_dt_init(void)
 		msm_copper_init(&adata);
 
 	of_platform_populate(NULL, of_default_bus_match_table, adata, NULL);
-	if (machine_is_copper())
+	if (machine_is_copper()) {
 		msm_copper_add_devices();
+		msm_copper_add_drivers();
+	}
 }
 
-static const char *msm_dt_match[] __initdata = {
+static const char *msm_dt_match[] __initconst = {
 	"qcom,msmcopper",
 	NULL
 };
+
+static void __init msm_dt_reserve(void)
+{
+	if (early_machine_is_copper())
+		msm_copper_reserve();
+}
+
+static void __init msm_dt_init_very_early(void)
+{
+	if (early_machine_is_copper())
+		msm_copper_very_early();
+}
 
 DT_MACHINE_START(MSM_DT, "Qualcomm MSM (Flattened Device Tree)")
 	.map_io = msm_dt_map_io,
 	.init_irq = msm_dt_init_irq,
 	.init_machine = msm_dt_init,
-	.timer = &msm_timer,
+	.handle_irq = gic_handle_irq,
+	.timer = &msm_dt_timer,
 	.dt_compat = msm_dt_match,
+	.nr_irqs = -1,
+	.reserve = msm_dt_reserve,
+	.init_very_early = msm_dt_init_very_early,
 MACHINE_END

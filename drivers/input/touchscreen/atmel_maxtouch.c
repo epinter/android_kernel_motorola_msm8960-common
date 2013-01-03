@@ -1832,15 +1832,13 @@ static int mxt_resume(struct device *dev)
 	if (error < 0)
 		goto err_write_block;
 
-	enable_irq(mxt->irq);
+	/* Make sure we just didn't miss a interrupt. */
+	if (mxt->read_chg() == 0)
+		schedule_delayed_work(&mxt->dwork, 0);
+	else
+		enable_irq(mxt->irq);
 
 	mxt->is_suspended = false;
-
-	/* Make sure we just didn't miss a interrupt. */
-	if (mxt->read_chg() == 0) {
-		disable_irq(mxt->irq);
-		schedule_delayed_work(&mxt->dwork, 0);
-	}
 
 	return 0;
 
@@ -1878,7 +1876,7 @@ static int __devinit mxt_probe(struct i2c_client *client,
 			       const struct i2c_device_id *id)
 {
 	struct mxt_data          *mxt;
-	struct mxt_platform_data *pdata;
+	struct maxtouch_platform_data *pdata;
 	struct input_dev         *input;
 	u8 *id_data;
 	u8 *t38_data;

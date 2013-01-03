@@ -24,7 +24,7 @@
 #define MVS_MODE_G729A 0xE
 #define MVS_MODE_G711A 0xF
 #define MVS_MODE_G722 0x10
-#define MVS_MODE_PCM_WB 0x80000000
+#define MVS_MODE_PCM_WB 0x12
 
 enum msm_audio_amr_mode {
 	MVS_AMR_MODE_0475, /* AMR 4.75 kbps */
@@ -108,10 +108,18 @@ struct msm_audio_mvs_config {
 
 #define MVS_MAX_VOC_PKT_SIZE 640
 
+struct gsm_header {
+	uint8_t bfi;
+	uint8_t sid;
+	uint8_t taf;
+	uint8_t ufi;
+};
+
 struct q6_msm_audio_mvs_frame {
 	union {
 	uint32_t frame_type;
 	uint32_t packet_rate;
+	struct gsm_header gsm_frame_type;
 	} header;
 	uint32_t len;
 	uint8_t voc_pkt[MVS_MAX_VOC_PKT_SIZE];
@@ -125,4 +133,12 @@ struct msm_audio_mvs_frame {
 
 };
 
+#define Q5V2_MVS_MAX_VOC_PKT_SIZE 320
+
+struct q5v2_msm_audio_mvs_frame {
+	uint32_t frame_type;
+	uint32_t len;
+	uint8_t voc_pkt[Q5V2_MVS_MAX_VOC_PKT_SIZE];
+
+};
 #endif /* __MSM_AUDIO_MVS_H */

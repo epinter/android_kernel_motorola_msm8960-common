@@ -218,6 +218,7 @@ static int audpcm_in_disable(struct audio_in *audio)
 
 		audpcm_in_dsp_enable(audio, 0);
 
+		audio->stopped = 1;
 		wake_up(&audio->wait);
 
 		msm_adsp_disable(audio->audrec);
@@ -584,7 +585,7 @@ static void audpcm_in_flush(struct audio_in *audio)
 	audio->in_head = 0;
 	audio->in_tail = 0;
 	audio->in_count = 0;
-	for (i = FRAME_NUM-1; i <= 0; i--) {
+	for (i = FRAME_NUM-1; i >= 0; i--) {
 		audio->in[i].size = 0;
 		audio->in[i].read = 0;
 	}
@@ -613,7 +614,6 @@ static long audpcm_in_ioctl(struct file *file,
 	}
 	case AUDIO_STOP:
 		rc = audpcm_in_disable(audio);
-		audio->stopped = 1;
 		break;
 	case AUDIO_FLUSH:
 		if (audio->stopped) {

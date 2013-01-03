@@ -1,7 +1,7 @@
 /* linux/arch/arm/mach-msm/dma.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2010, 2012 Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -269,15 +269,6 @@ static void msm_dmov_clock_timer(unsigned long adm)
 	spin_unlock_irqrestore(&dmov_conf[adm].lock, irq_flags);
 }
 
-void msm_dmov_stop_cmd(unsigned id, struct msm_dmov_cmd *cmd, int graceful)
-{
-	int adm = DMOV_ID_TO_ADM(id);
-	int ch = DMOV_ID_TO_CHAN(id);
-	writel_relaxed((graceful << 31), DMOV_REG(DMOV_FLUSH0(ch), adm));
-	wmb();
-}
-EXPORT_SYMBOL(msm_dmov_stop_cmd);
-
 void msm_dmov_enqueue_cmd_ext(unsigned id, struct msm_dmov_cmd *cmd)
 {
 	unsigned long irq_flags;
@@ -286,9 +277,11 @@ void msm_dmov_enqueue_cmd_ext(unsigned id, struct msm_dmov_cmd *cmd)
 	int ch = DMOV_ID_TO_CHAN(id);
 
 	spin_lock_irqsave(&dmov_conf[adm].lock, irq_flags);
-	if (dmov_conf[adm].clk_ctl == CLK_DIS)
-		msm_dmov_clk_toggle(adm, 1);
-	else if (dmov_conf[adm].clk_ctl == CLK_TO_BE_DIS)
+	if (dmov_conf[adm].clk_ctl == CLK_DIS) {
+		status = msm_dmov_clk_toggle(adm, 1);
+		if (status != 0)
+			goto error;
+	} else if (dmov_conf[adm].clk_ctl == CLK_TO_BE_DIS)
 		del_timer(&dmov_conf[adm].timer);
 	dmov_conf[adm].clk_ctl = CLK_EN;
 
@@ -316,6 +309,7 @@ void msm_dmov_enqueue_cmd_ext(unsigned id, struct msm_dmov_cmd *cmd)
 		    "%x\n", id, status);
 		list_add_tail(&cmd->list, &dmov_conf[adm].ready_commands[ch]);
 	}
+error:
 	spin_unlock_irqrestore(&dmov_conf[adm].lock, irq_flags);
 }
 EXPORT_SYMBOL(msm_dmov_enqueue_cmd_ext);
@@ -329,16 +323,17 @@ void msm_dmov_enqueue_cmd(unsigned id, struct msm_dmov_cmd *cmd)
 }
 EXPORT_SYMBOL(msm_dmov_enqueue_cmd);
 
-void msm_dmov_flush(unsigned int id)
+void msm_dmov_flush(unsigned int id, int graceful)
 {
 	unsigned long irq_flags;
 	int ch = DMOV_ID_TO_CHAN(id);
 	int adm = DMOV_ID_TO_ADM(id);
+	int flush = graceful ? DMOV_FLUSH_TYPE : 0;
 	spin_lock_irqsave(&dmov_conf[adm].lock, irq_flags);
 	/* XXX not checking if flush cmd sent already */
 	if (!list_empty(&dmov_conf[adm].active_commands[ch])) {
 		PRINT_IO("msm_dmov_flush(%d), send flush cmd\n", id);
-		writel_relaxed(DMOV_FLUSH_TYPE, DMOV_REG(DMOV_FLUSH0(ch), adm));
+		writel_relaxed(flush, DMOV_REG(DMOV_FLUSH0(ch), adm));
 	}
 	/* spin_unlock_irqrestore has the necessary barrier */
 	spin_unlock_irqrestore(&dmov_conf[adm].lock, irq_flags);
@@ -397,7 +392,7 @@ static void fill_errdata(struct msm_dmov_errdata *errdata, int ch, int adm)
 {
 	errdata->flush[0] = readl_relaxed(DMOV_REG(DMOV_FLUSH0(ch), adm));
 	errdata->flush[1] = readl_relaxed(DMOV_REG(DMOV_FLUSH1(ch), adm));
-	errdata->flush[2] = readl_relaxed(DMOV_REG(DMOV_FLUSH2(ch), adm));
+	errdata->flush[2] = 0;
 	errdata->flush[3] = readl_relaxed(DMOV_REG(DMOV_FLUSH3(ch), adm));
 	errdata->flush[4] = readl_relaxed(DMOV_REG(DMOV_FLUSH4(ch), adm));
 	errdata->flush[5] = readl_relaxed(DMOV_REG(DMOV_FLUSH5(ch), adm));
@@ -498,7 +493,8 @@ static irqreturn_t msm_datamover_irq_handler(int irq, void *dev_id)
 					cmd->exec_func(cmd);
 				list_add_tail(&cmd->list,
 					&dmov_conf[adm].active_commands[ch]);
-				PRINT_FLOW("msm_datamover_irq_handler id %d, start command\n", id);
+				PRINT_FLOW("msm_datamover_irq_handler id %d,"
+						 "start command\n", id);
 				writel_relaxed(cmd->cmdptr,
 					       DMOV_REG(DMOV_CMD_PTR(ch), adm));
 			}

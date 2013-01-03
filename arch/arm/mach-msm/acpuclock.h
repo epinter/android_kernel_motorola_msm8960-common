@@ -2,7 +2,7 @@
  * MSM architecture CPU clock driver header
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2007-2012, Code Aurora Forum. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -102,12 +102,14 @@ int acpuclk_init(struct acpuclk_soc_data *);
 extern struct acpuclk_soc_data acpuclk_7x27_soc_data;
 extern struct acpuclk_soc_data acpuclk_7x27a_soc_data;
 extern struct acpuclk_soc_data acpuclk_7x27aa_soc_data;
-extern struct acpuclk_soc_data acpuclk_7201_soc_data;
 extern struct acpuclk_soc_data acpuclk_7x30_soc_data;
 extern struct acpuclk_soc_data acpuclk_8x50_soc_data;
 extern struct acpuclk_soc_data acpuclk_8x60_soc_data;
 extern struct acpuclk_soc_data acpuclk_8960_soc_data;
 extern struct acpuclk_soc_data acpuclk_9xxx_soc_data;
 extern struct acpuclk_soc_data acpuclk_9615_soc_data;
+extern struct acpuclk_soc_data acpuclk_8930_soc_data;
+extern struct acpuclk_soc_data acpuclk_8064_soc_data;
+extern struct acpuclk_soc_data acpuclk_8625_soc_data;
 
 #endif

@@ -710,25 +710,26 @@ static void cyttspfw_flash_start(struct cyttsp *ts, const u8 *data,
 	else if (!(g_bl_data.bl_status & BL_CHECKSUM_MASK) &&
 			(appid_lo == ts->platform_data->correct_fw_ver))
 		fw_upgrade = 1;
-	else
-		if ((appid_hi == g_bl_data.appid_hi) &&
-			(appid_lo == g_bl_data.appid_lo)) {
-			if (appver_hi > g_bl_data.appver_hi) {
+	else if ((appid_hi == g_bl_data.appid_hi) &&
+			(appid_lo == g_bl_data.appid_lo))
+			if (appver_hi > g_bl_data.appver_hi)
 				fw_upgrade = 1;
-			} else if ((appver_hi == g_bl_data.appver_hi) &&
-					 (appver_lo > g_bl_data.appver_lo)) {
-					fw_upgrade = 1;
-				} else {
-					fw_upgrade = 0;
-					pr_info("%s: Firmware version "
-					"lesser/equal to existing firmware, "
-					"upgrade not needed\n", __func__);
-				}
-		} else {
-			fw_upgrade = 0;
-			pr_info("%s: Firware versions do not match, "
-						"cannot upgrade\n", __func__);
-		}
+			else if ((appver_hi == g_bl_data.appver_hi) &&
+					 (appver_lo > g_bl_data.appver_lo))
+				fw_upgrade = 1;
+			else {
+				fw_upgrade = 0;
+				pr_info("%s: Firmware version "
+				"lesser/equal to existing firmware, "
+				"upgrade not needed\n", __func__);
+			}
+	else if (appid_lo == ts->platform_data->correct_fw_ver)
+		fw_upgrade = 1;
+	else {
+		fw_upgrade = 0;
+		pr_info("%s: Firmware versions do not match, "
+					"cannot upgrade\n", __func__);
+	}
 
 	if (fw_upgrade) {
 		pr_info("%s: Starting firmware upgrade\n", __func__);
@@ -1006,7 +1007,7 @@ static void cyttsp_xy_handler(struct cyttsp *ts)
 		/* wait for TTSP Device to complete reset back to bootloader */
 		tries = 0;
 		do {
-			mdelay(1);
+			usleep_range(1000, 1000);
 			cyttsp_putbl(ts, 1, false, false, false);
 		} while (g_bl_data.bl_status != 0x10 &&
 			g_bl_data.bl_status != 0x11 &&
@@ -1024,7 +1025,7 @@ static void cyttsp_xy_handler(struct cyttsp *ts)
 			 * switch to Operational mode */
 			tries = 0;
 			do {
-				mdelay(100);
+				msleep(100);
 				cyttsp_putbl(ts, 2, false, false, false);
 			} while (GET_BOOTLOADERMODE(g_bl_data.bl_status) &&
 				tries++ < 100);
@@ -2001,7 +2002,7 @@ static int cyttsp_bootload_app(struct cyttsp *ts)
 	/* wait for TTSP Device to complete reset back to bootloader */
 	tries = 0;
 	do {
-		mdelay(1);
+		usleep_range(1000, 1000);
 		cyttsp_putbl(ts, 3, false, false, false);
 	} while (g_bl_data.bl_status != 0x10 &&
 		g_bl_data.bl_status != 0x11 &&
@@ -2026,7 +2027,7 @@ static int cyttsp_bootload_app(struct cyttsp *ts)
 			i++;
 			tries = 0;
 			do {
-				mdelay(100);
+				msleep(100);
 				cyttsp_putbl(ts, 4, false, false, false);
 			} while (g_bl_data.bl_status != 0x10 &&
 				g_bl_data.bl_status != 0x11 &&
@@ -2059,7 +2060,7 @@ static int cyttsp_bootload_app(struct cyttsp *ts)
 							!((g_bl_data.bl_status == 0x11) &&
 							(g_bl_data.bl_error == 0x20)) &&
 							(tries++ < 100)) {
-							mdelay(1);
+							usleep_range(1000, 1000);
 							cyttsp_putbl(ts, 5, false, false, false);
 						}
 					}
@@ -2073,7 +2074,7 @@ static int cyttsp_bootload_app(struct cyttsp *ts)
 						i++;
 						tries = 0;
 						do {
-							mdelay(100);
+							msleep(100);
 							cyttsp_putbl(ts, 6, true, false, false);
 						} while (g_bl_data.bl_status != 0x10 &&
 							g_bl_data.bl_status != 0x11 &&
@@ -2098,7 +2099,7 @@ static int cyttsp_bootload_app(struct cyttsp *ts)
 	/* wait for TTSP Device to complete reset back to bootloader */
 	tries = 0;
 	do {
-		mdelay(1);
+		usleep_range(1000, 1000);
 		cyttsp_putbl(ts, 3, false, false, false);
 	} while (g_bl_data.bl_status != 0x10 &&
 		g_bl_data.bl_status != 0x11 &&
@@ -2132,7 +2133,7 @@ static int cyttsp_power_on(struct cyttsp *ts)
 		sizeof(host_reg), &host_reg);
 	tries = 0;
 	do {
-		mdelay(1);
+		usleep_range(1000, 1000);
 
 		/* set arg2 to non-0 to activate */
 		retval = cyttsp_putbl(ts, 1, true, true, true);
@@ -2170,7 +2171,7 @@ static int cyttsp_power_on(struct cyttsp *ts)
 					sizeof(host_reg), &host_reg);
 				/* wait for TTSP Device to complete switch to
 				 * Operational mode */
-				mdelay(1000);
+				msleep(1000);
 				goto bypass;
 			}
 		}
@@ -2249,7 +2250,7 @@ static int cyttsp_power_on(struct cyttsp *ts)
 				 * switch to Operational mode */
 				tries = 0;
 				do {
-					mdelay(100);
+					msleep(100);
 					cyttsp_putbl(ts, 9, false, false, false);
 				} while (GET_BOOTLOADERMODE(g_bl_data.bl_status) &&
 					tries++ < 100);
@@ -2267,7 +2268,7 @@ bypass:
 		retval = i2c_smbus_write_i2c_block_data(ts->client,
 			CY_REG_BASE, sizeof(host_reg), &host_reg);
 		/* wait for TTSP Device to complete switch to SysInfo mode */
-		mdelay(100);
+		msleep(100);
 		if (!(retval < CY_OK)) {
 			retval = i2c_smbus_read_i2c_block_data(ts->client,
 				CY_REG_BASE,
@@ -2326,7 +2327,7 @@ bypass:
 						ts->client,
 						CY_REG_ACT_INTRVL,
 						sizeof(intrvl_ray), intrvl_ray);
-					mdelay(CY_DLY_SYSINFO);
+					msleep(CY_DLY_SYSINFO);
 				}
 			}
 		}
@@ -2339,7 +2340,7 @@ bypass:
 				sizeof(host_reg), &host_reg);
 			/* wait for TTSP Device to complete
 			 * switch to Operational mode */
-			mdelay(100);
+			msleep(100);
 		}
 	}
 	/* init gesture setup;
@@ -2352,7 +2353,7 @@ bypass:
 		retval = i2c_smbus_write_i2c_block_data(ts->client,
 			CY_REG_GEST_SET,
 			sizeof(gesture_setup), &gesture_setup);
-		mdelay(CY_DLY_DFLT);
+		msleep(CY_DLY_DFLT);
 	}
 
 	if (!(retval < CY_OK))
@@ -2407,27 +2408,29 @@ static int cyttsp_power_device(struct cyttsp *ts, bool on)
 				regulator_put(ts->vdd[i]);
 				goto error_vdd;
 			}
-		}
 
-		rc = regulator_set_optimum_mode(ts->vdd[i],
+			rc = regulator_set_optimum_mode(ts->vdd[i],
 						reg_info[i].hpm_load_uA);
-		if (rc < 0) {
-			pr_err("%s: regulator_set_optimum_mode failed rc=%d\n",
-								__func__, rc);
+			if (rc < 0) {
+				pr_err("%s: regulator_set_optimum_mode failed "
+				       "rc=%d\n", __func__, rc);
 
-			regulator_set_voltage(ts->vdd[i], 0,
-						reg_info[i].max_uV);
-			regulator_put(ts->vdd[i]);
-			goto error_vdd;
+				regulator_set_voltage(ts->vdd[i], 0,
+							reg_info[i].max_uV);
+				regulator_put(ts->vdd[i]);
+				goto error_vdd;
+			}
 		}
 
 		rc = regulator_enable(ts->vdd[i]);
 		if (rc) {
 			pr_err("%s: regulator_enable failed rc =%d\n",
 								__func__, rc);
-			regulator_set_optimum_mode(ts->vdd[i], 0);
-			regulator_set_voltage(ts->vdd[i], 0,
-						reg_info[i].max_uV);
+			if (regulator_count_voltages(ts->vdd[i]) > 0) {
+				regulator_set_optimum_mode(ts->vdd[i], 0);
+				regulator_set_voltage(ts->vdd[i], 0,
+						      reg_info[i].max_uV);
+			}
 			regulator_put(ts->vdd[i]);
 			goto error_vdd;
 		}
@@ -2439,10 +2442,11 @@ ts_reg_disable:
 	i = ts->platform_data->num_regulators;
 error_vdd:
 	while (--i >= 0) {
-		if (regulator_count_voltages(ts->vdd[i]) > 0)
+		if (regulator_count_voltages(ts->vdd[i]) > 0) {
 			regulator_set_voltage(ts->vdd[i], 0,
 						reg_info[i].max_uV);
-		regulator_set_optimum_mode(ts->vdd[i], 0);
+			regulator_set_optimum_mode(ts->vdd[i], 0);
+		}
 		regulator_disable(ts->vdd[i]);
 		regulator_put(ts->vdd[i]);
 	}
@@ -2834,6 +2838,8 @@ static int cyttsp_regulator_lpm(struct cyttsp *ts, bool on)
 		goto regulator_hpm;
 
 	for (i = 0; i < num_reg; i++) {
+		if (regulator_count_voltages(ts->vdd[i]) < 0)
+			continue;
 		rc = regulator_set_optimum_mode(ts->vdd[i],
 					reg_info[i].lpm_load_uA);
 		if (rc < 0) {
@@ -2848,6 +2854,8 @@ static int cyttsp_regulator_lpm(struct cyttsp *ts, bool on)
 
 regulator_hpm:
 	for (i = 0; i < num_reg; i++) {
+		if (regulator_count_voltages(ts->vdd[i]) < 0)
+			continue;
 		rc = regulator_set_optimum_mode(ts->vdd[i],
 					reg_info[i].hpm_load_uA);
 		if (rc < 0) {
@@ -2860,16 +2868,22 @@ regulator_hpm:
 	return 0;
 
 fail_regulator_lpm:
-	while (i--)
+	while (i--) {
+		if (regulator_count_voltages(ts->vdd[i]) < 0)
+			continue;
 		regulator_set_optimum_mode(ts->vdd[i],
 					reg_info[i].hpm_load_uA);
+	}
 
 	return rc;
 
 fail_regulator_hpm:
-	while (i--)
+	while (i--) {
+		if (regulator_count_voltages(ts->vdd[i]) < 0)
+			continue;
 		regulator_set_optimum_mode(ts->vdd[i],
 					reg_info[i].lpm_load_uA);
+	}
 
 	return rc;
 }

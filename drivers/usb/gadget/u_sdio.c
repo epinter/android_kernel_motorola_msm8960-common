@@ -231,7 +231,7 @@ start_rx_end:
 int gsdio_write(struct gsdio_port *port, struct usb_request *req)
 {
 	unsigned	avail;
-	char		*packet = req->buf;
+	char		*packet;
 	unsigned	size = req->actual;
 	unsigned	n;
 	int		ret = 0;
@@ -639,10 +639,11 @@ void gsdio_ctrl_wq(struct work_struct *w)
 			port->cbits_to_modem, ~(port->cbits_to_modem));
 }
 
-void gsdio_ctrl_notify_modem(struct gserial *gser, u8 portno, int ctrl_bits)
+void gsdio_ctrl_notify_modem(void *gptr, u8 portno, int ctrl_bits)
 {
 	struct gsdio_port *port;
 	int temp;
+	struct gserial *gser = gptr;
 
 	if (portno >= n_sdio_ports) {
 		pr_err("%s: invalid portno#%d\n", __func__, portno);
@@ -930,7 +931,7 @@ int gsdio_connect(struct gserial *gser, u8 portno)
 	gser->notify_modem = gsdio_ctrl_notify_modem;
 	spin_unlock_irqrestore(&port->port_lock, flags);
 
-	ret = usb_ep_enable(gser->in, gser->in_desc);
+	ret = usb_ep_enable(gser->in);
 	if (ret) {
 		pr_err("%s: failed to enable in ep w/ err:%d\n",
 					__func__, ret);
@@ -939,7 +940,7 @@ int gsdio_connect(struct gserial *gser, u8 portno)
 	}
 	gser->in->driver_data = port;
 
-	ret = usb_ep_enable(gser->out, gser->out_desc);
+	ret = usb_ep_enable(gser->out);
 	if (ret) {
 		pr_err("%s: failed to enable in ep w/ err:%d\n",
 					__func__, ret);

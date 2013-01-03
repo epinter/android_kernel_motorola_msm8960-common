@@ -1,3 +1,15 @@
+/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ */
 #ifndef __LINUX_MSM_CAMERA_H
 #define __LINUX_MSM_CAMERA_H
 
@@ -6,16 +18,17 @@
 #endif
 #include <linux/types.h>
 #include <linux/ioctl.h>
+#ifdef __KERNEL__
 #include <linux/cdev.h>
+#endif
 #ifdef MSM_CAMERA_GCC
 #include <time.h>
 #else
 #include <linux/time.h>
 #endif
 
-#ifdef __KERNEL__
 #include <linux/ion.h>
-#endif
+
 #define MSM_CAM_IOCTL_MAGIC 'm'
 
 #define MSM_CAM_IOCTL_GET_SENSOR_INFO \
@@ -135,26 +148,47 @@
 #define MSM_CAM_IOCTL_PUT_ST_FRAME \
 	_IOW(MSM_CAM_IOCTL_MAGIC, 39, struct msm_camera_st_frame *)
 
-#define MSM_CAM_IOCTL_GET_CONFIG_INFO \
-	_IOR(MSM_CAM_IOCTL_MAGIC, 40, struct msm_cam_config_dev_info *)
-
 #define MSM_CAM_IOCTL_V4L2_EVT_NOTIFY \
-	_IOR(MSM_CAM_IOCTL_MAGIC, 41, struct v4l2_event *)
+	_IOR(MSM_CAM_IOCTL_MAGIC, 40, struct v4l2_event *)
 
 #define MSM_CAM_IOCTL_SET_MEM_MAP_INFO \
-	_IOR(MSM_CAM_IOCTL_MAGIC, 42, struct msm_mem_map_info *)
+	_IOR(MSM_CAM_IOCTL_MAGIC, 41, struct msm_mem_map_info *)
 
 #define MSM_CAM_IOCTL_ACTUATOR_IO_CFG \
-	_IOW(MSM_CAM_IOCTL_MAGIC, 43, struct msm_actuator_cfg_data *)
+	_IOW(MSM_CAM_IOCTL_MAGIC, 42, struct msm_actuator_cfg_data *)
 
 #define MSM_CAM_IOCTL_MCTL_POST_PROC \
-	_IOW(MSM_CAM_IOCTL_MAGIC, 44, struct msm_mctl_post_proc_cmd *)
+	_IOW(MSM_CAM_IOCTL_MAGIC, 43, struct msm_mctl_post_proc_cmd *)
 
 #define MSM_CAM_IOCTL_RESERVE_FREE_FRAME \
-	_IOW(MSM_CAM_IOCTL_MAGIC, 45, struct msm_cam_evt_divert_frame *)
+	_IOW(MSM_CAM_IOCTL_MAGIC, 44, struct msm_cam_evt_divert_frame *)
 
 #define MSM_CAM_IOCTL_RELEASE_FREE_FRAME \
-	_IOR(MSM_CAM_IOCTL_MAGIC, 46, struct msm_cam_evt_divert_frame *)
+	_IOR(MSM_CAM_IOCTL_MAGIC, 45, struct msm_cam_evt_divert_frame *)
+
+#define MSM_CAM_IOCTL_PICT_PP_DIVERT_DONE \
+	_IOR(MSM_CAM_IOCTL_MAGIC, 46, struct msm_pp_frame *)
+
+#define MSM_CAM_IOCTL_SENSOR_V4l2_S_CTRL \
+	_IOR(MSM_CAM_IOCTL_MAGIC, 47, struct v4l2_control)
+
+#define MSM_CAM_IOCTL_SENSOR_V4l2_QUERY_CTRL \
+	_IOR(MSM_CAM_IOCTL_MAGIC, 48, struct v4l2_queryctrl)
+
+#define MSM_CAM_IOCTL_GET_KERNEL_SYSTEM_TIME \
+	_IOW(MSM_CAM_IOCTL_MAGIC, 49, struct timeval *)
+
+#define MSM_CAM_IOCTL_SET_VFE_OUTPUT_TYPE \
+	_IOW(MSM_CAM_IOCTL_MAGIC, 50, uint32_t *)
+
+#define MSM_CAM_IOCTL_MCTL_DIVERT_DONE \
+	_IOR(MSM_CAM_IOCTL_MAGIC, 51, struct msm_cam_evt_divert_frame *)
+
+#define MSM_CAM_IOCTL_GET_ACTUATOR_INFO \
+	_IOW(MSM_CAM_IOCTL_MAGIC, 52, struct msm_actuator_cfg_data *)
+
+#define MSM_CAM_IOCTL_EEPROM_IO_CFG \
+	_IOW(MSM_CAM_IOCTL_MAGIC, 53, struct msm_eeprom_cfg_data *)
 
 struct msm_mctl_pp_cmd {
 	int32_t  id;
@@ -178,13 +212,24 @@ struct msm_mctl_post_proc_cmd {
 
 #define MSM_MAX_CAMERA_SENSORS  5
 #define MAX_SENSOR_NAME 32
+#define MAX_CAM_NAME_SIZE 32
+#define MAX_ACT_MOD_NAME_SIZE 32
+#define MAX_ACT_NAME_SIZE 32
+#define NUM_ACTUATOR_DIR 2
+#define MAX_ACTUATOR_SCENARIO 8
+#define MAX_ACTUATOR_REGION 5
+#define MAX_ACTUATOR_INIT_SET 12
+#define MAX_ACTUATOR_TYPE_SIZE 32
+#define MAX_ACTUATOR_REG_TBL_SIZE 8
+
 
 #define MSM_MAX_CAMERA_CONFIGS 2
 
 #define PP_SNAP  0x01
 #define PP_RAW_SNAP ((0x01)<<1)
 #define PP_PREV  ((0x01)<<2)
-#define PP_MASK		(PP_SNAP|PP_RAW_SNAP|PP_PREV)
+#define PP_THUMB ((0x01)<<3)
+#define PP_MASK		(PP_SNAP|PP_RAW_SNAP|PP_PREV|PP_THUMB)
 
 #define MSM_CAM_CTRL_CMD_DONE  0
 #define MSM_CAM_SENSOR_VFE_CMD 1
@@ -212,6 +257,8 @@ struct msm_ctrl_cmd {
 	uint32_t timeout_ms;
 	int resp_fd; /* FIXME: to be used by the kernel, pass-through for now */
 	int vnode_id;  /* video dev id. Can we overload resp_fd? */
+	int queue_idx;
+	uint32_t evt_id;
 	uint32_t stream_type; /* used to pass value to qcamera server */
 	int config_ident; /*used as identifier for config node*/
 };
@@ -222,6 +269,7 @@ struct msm_cam_evt_msg {
 	unsigned int len;	/* size in, number of bytes out */
 	uint32_t frame_id;
 	void *data;
+	struct timespec timestamp;
 };
 
 struct msm_pp_frame_sp {
@@ -253,6 +301,7 @@ struct msm_pp_frame_mp {
 struct msm_pp_frame {
 	uint32_t       handle; /* stores vb cookie */
 	uint32_t       frame_id;
+	unsigned short buf_idx;
 	int            path;
 	unsigned short image_type;
 	unsigned short num_planes; /* 1 for sp */
@@ -261,6 +310,7 @@ struct msm_pp_frame {
 		struct msm_pp_frame_sp sp;
 		struct msm_pp_frame_mp mp[MAX_PLANES];
 	};
+	int node_type;
 };
 
 struct msm_cam_evt_divert_frame {
@@ -306,6 +356,7 @@ struct msm_isp_event_ctrl {
 #define MSM_CAM_RESP_MAX               8
 
 #define MSM_CAM_APP_NOTIFY_EVENT  0
+#define MSM_CAM_APP_NOTIFY_ERROR_EVENT  1
 
 /* this one is used to send ctrl/status up to config thread */
 
@@ -384,11 +435,21 @@ struct msm_camera_cfg_cmd {
 #define CMD_AXI_CFG_ZSL 43
 #define CMD_AXI_CFG_SNAP_VPE 44
 #define CMD_AXI_CFG_SNAP_THUMB_VPE 45
-#define CMD_AXI_CFG_VIDEO_ALL_CHNLS  46
-#define CMD_AXI_CFG_ZSL_ALL_CHNLS  47
-#define CMD_CONFIG_PING_ADDR 48
-#define CMD_CONFIG_PONG_ADDR 49
-#define CMD_CONFIG_FREE_BUF_ADDR 50
+#define CMD_CONFIG_PING_ADDR 46
+#define CMD_CONFIG_PONG_ADDR 47
+#define CMD_CONFIG_FREE_BUF_ADDR 48
+#define CMD_AXI_CFG_ZSL_ALL_CHNLS 49
+#define CMD_AXI_CFG_VIDEO_ALL_CHNLS 50
+#define CMD_VFE_BUFFER_RELEASE 51
+#define CMD_VFE_PROCESS_IRQ 52
+
+#define CMD_AXI_CFG_PRIM		0xF1
+#define CMD_AXI_CFG_PRIM_ALL_CHNLS	0xF2
+#define CMD_AXI_CFG_SEC			0xF4
+#define CMD_AXI_CFG_SEC_ALL_CHNLS	0xF8
+
+#define CMD_AXI_START  0xE1
+#define CMD_AXI_STOP   0xE2
 
 /* vfe config command: config command(from config thread)*/
 struct msm_vfe_cfg_cmd {
@@ -455,6 +516,9 @@ struct msm_pmem_info {
 	uint32_t len;
 	uint32_t y_off;
 	uint32_t cbcr_off;
+	uint32_t planar0_off;
+	uint32_t planar1_off;
+	uint32_t planar2_off;
 	uint8_t active;
 };
 
@@ -466,6 +530,9 @@ struct outputCfg {
 	uint32_t window_height_lastline;
 };
 
+#define VIDEO_NODE 0
+#define MCTL_NODE 1
+
 #define OUTPUT_1	0
 #define OUTPUT_2	1
 #define OUTPUT_1_AND_2            2   /* snapshot only */
@@ -475,8 +542,15 @@ struct outputCfg {
 #define OUTPUT_2_AND_CAMIF_TO_AXI_VIA_OUTPUT_1 6
 #define OUTPUT_1_2_AND_3 7
 #define OUTPUT_ALL_CHNLS 8
-#define OUTPUT_ZSL_ALL_CHNLS 9
-#define LAST_AXI_OUTPUT_MODE_ENUM  OUTPUT_ZSL_ALL_CHNLS
+#define OUTPUT_VIDEO_ALL_CHNLS 9
+#define OUTPUT_ZSL_ALL_CHNLS 10
+#define LAST_AXI_OUTPUT_MODE_ENUM = OUTPUT_ZSL_ALL_CHNLS
+
+#define OUTPUT_PRIM		0xF1
+#define OUTPUT_PRIM_ALL_CHNLS	0xF2
+#define OUTPUT_SEC		0xF4
+#define OUTPUT_SEC_ALL_CHNLS	0xF8
+
 
 #define MSM_FRAME_PREV_1	0
 #define MSM_FRAME_PREV_2	1
@@ -516,6 +590,9 @@ struct msm_frame {
 	uint32_t phy_offset;
 	uint32_t y_off;
 	uint32_t cbcr_off;
+	uint32_t planar0_off;
+	uint32_t planar1_off;
+	uint32_t planar2_off;
 	int fd;
 
 	void *cropinfo;
@@ -545,10 +622,10 @@ struct msm_st_crop {
 };
 
 struct msm_st_half {
-	uint32_t buf_y_off;
-	uint32_t buf_cbcr_off;
-	uint32_t buf_y_stride;
-	uint32_t buf_cbcr_stride;
+	uint32_t buf_p0_off;
+	uint32_t buf_p1_off;
+	uint32_t buf_p0_stride;
+	uint32_t buf_p1_stride;
 	uint32_t pix_x_off;
 	uint32_t pix_y_off;
 	struct msm_st_crop stCropInfo;
@@ -583,6 +660,8 @@ struct msm_stats_buf {
 	uint32_t status_bits;
 	unsigned long buffer;
 	int fd;
+	int length;
+	struct ion_handle *handle;
 	uint32_t frame_id;
 };
 #define MSM_V4L2_EXT_CAPTURE_MODE_DEFAULT 0
@@ -620,7 +699,8 @@ struct msm_stats_buf {
 #define MSM_V4L2_PID_STROBE_FLASH           (V4L2_CID_PRIVATE_BASE+15)
 #define MSM_V4L2_PID_MMAP_ENTRY             (V4L2_CID_PRIVATE_BASE+16)
 #define MSM_V4L2_PID_MMAP_INST              (V4L2_CID_PRIVATE_BASE+17)
-#define MSM_V4L2_PID_MAX                    MSM_V4L2_PID_MMAP_INST
+#define MSM_V4L2_PID_PP_PLANE_INFO          (V4L2_CID_PRIVATE_BASE+18)
+#define MSM_V4L2_PID_MAX                    MSM_V4L2_PID_PP_PLANE_INFO
 
 /* camera operation mode for video recording - two frame output queues */
 #define MSM_V4L2_CAM_OP_DEFAULT         0
@@ -634,6 +714,9 @@ struct msm_stats_buf {
 #define MSM_V4L2_CAM_OP_ZSL             (MSM_V4L2_CAM_OP_DEFAULT+4)
 /* camera operation mode for raw snapshot - one frame output queue */
 #define MSM_V4L2_CAM_OP_RAW             (MSM_V4L2_CAM_OP_DEFAULT+5)
+/* camera operation mode for jpeg snapshot - one frame output queue */
+#define MSM_V4L2_CAM_OP_JPEG_CAPTURE    (MSM_V4L2_CAM_OP_DEFAULT+6)
+
 
 #define MSM_V4L2_VID_CAP_TYPE	0
 #define MSM_V4L2_STREAM_ON		1
@@ -701,10 +784,19 @@ struct msm_snapshot_pp_status {
 #define CFG_GET_3D_CALI_DATA 30
 #define CFG_GET_CALIB_DATA		31
 #define CFG_GET_OUTPUT_INFO		32
-#define CFG_GET_EEPROM_DATA		33
-#define CFG_SET_ACTUATOR_INFO		34
-#define CFG_GET_ACTUATOR_INFO		35
-#define CFG_MAX			36
+#define CFG_GET_EEPROM_INFO		33
+#define CFG_GET_EEPROM_DATA		34
+#define CFG_SET_ACTUATOR_INFO		35
+#define CFG_GET_ACTUATOR_INFO           36
+/* TBD: QRD */
+#define CFG_SET_SATURATION            37
+#define CFG_SET_SHARPNESS             38
+#define CFG_SET_TOUCHAEC              39
+#define CFG_SET_AUTO_FOCUS            40
+#define CFG_SET_AUTOFLASH             41
+#define CFG_SET_EXPOSURE_COMPENSATION 42
+#define CFG_SET_ISO                   43
+#define CFG_MAX			44
 
 
 #define MOVE_NEAR	0
@@ -795,14 +887,6 @@ struct msm_snapshot_pp_status {
 #define CAMERA_SETAE_AVERAGE		0
 #define CAMERA_SETAE_CENWEIGHT	1
 
-#define CFG_SET_SATURATION		30
-#define CFG_SET_SHARPNESS			31
-#define CFG_SET_TOUCHAEC            32
-#define CFG_SET_AUTO_FOCUS          33
-#define CFG_SET_AUTOFLASH 34
-/* QRD */
-#define CFG_SET_EXPOSURE_COMPENSATION 35
-
 #define  CAMERA_WB_AUTO               1 /* This list must match aeecamera.h */
 #define  CAMERA_WB_CUSTOM             2
 #define  CAMERA_WB_INCANDESCENT       3
@@ -818,6 +902,81 @@ struct msm_snapshot_pp_status {
 #define CAMERA_EXPOSURE_COMPENSATION_LV3			-6
 #define CAMERA_EXPOSURE_COMPENSATION_LV4			-12
 
+enum msm_v4l2_saturation_level {
+	MSM_V4L2_SATURATION_L0,
+	MSM_V4L2_SATURATION_L1,
+	MSM_V4L2_SATURATION_L2,
+	MSM_V4L2_SATURATION_L3,
+	MSM_V4L2_SATURATION_L4,
+	MSM_V4L2_SATURATION_L5,
+	MSM_V4L2_SATURATION_L6,
+	MSM_V4L2_SATURATION_L7,
+	MSM_V4L2_SATURATION_L8,
+	MSM_V4L2_SATURATION_L9,
+	MSM_V4L2_SATURATION_L10,
+};
+
+enum msm_v4l2_exposure_level {
+	MSM_V4L2_EXPOSURE_N2,
+	MSM_V4L2_EXPOSURE_N1,
+	MSM_V4L2_EXPOSURE_D,
+	MSM_V4L2_EXPOSURE_P1,
+	MSM_V4L2_EXPOSURE_P2,
+};
+
+enum msm_v4l2_sharpness_level {
+	MSM_V4L2_SHARPNESS_L0,
+	MSM_V4L2_SHARPNESS_L1,
+	MSM_V4L2_SHARPNESS_L2,
+	MSM_V4L2_SHARPNESS_L3,
+	MSM_V4L2_SHARPNESS_L4,
+	MSM_V4L2_SHARPNESS_L5,
+	MSM_V4L2_SHARPNESS_L6,
+};
+
+enum msm_v4l2_expo_metering_mode {
+	MSM_V4L2_EXP_FRAME_AVERAGE,
+	MSM_V4L2_EXP_CENTER_WEIGHTED,
+	MSM_V4L2_EXP_SPOT_METERING,
+};
+
+enum msm_v4l2_iso_mode {
+	MSM_V4L2_ISO_AUTO = 0,
+	MSM_V4L2_ISO_DEBLUR,
+	MSM_V4L2_ISO_100,
+	MSM_V4L2_ISO_200,
+	MSM_V4L2_ISO_400,
+	MSM_V4L2_ISO_800,
+	MSM_V4L2_ISO_1600,
+};
+
+enum msm_v4l2_wb_mode {
+	MSM_V4L2_WB_MIN_MINUS_1,
+	MSM_V4L2_WB_AUTO = 1,
+	MSM_V4L2_WB_CUSTOM,
+	MSM_V4L2_WB_INCANDESCENT,
+	MSM_V4L2_WB_FLUORESCENT,
+	MSM_V4L2_WB_DAYLIGHT,
+	MSM_V4L2_WB_CLOUDY_DAYLIGHT,
+	MSM_V4L2_WB_TWILIGHT,
+	MSM_V4L2_WB_SHADE,
+	MSM_V4L2_WB_OFF,
+};
+
+enum msm_v4l2_power_line_frequency {
+	MSM_V4L2_POWER_LINE_OFF,
+	MSM_V4L2_POWER_LINE_60HZ,
+	MSM_V4L2_POWER_LINE_50HZ,
+	MSM_V4L2_POWER_LINE_AUTO,
+};
+
+#define CAMERA_ISO_TYPE_AUTO           0
+#define CAMEAR_ISO_TYPE_HJR            1
+#define CAMEAR_ISO_TYPE_100            2
+#define CAMERA_ISO_TYPE_200            3
+#define CAMERA_ISO_TYPE_400            4
+#define CAMEAR_ISO_TYPE_800            5
+#define CAMERA_ISO_TYPE_1600           6
 
 struct sensor_pict_fps {
 	uint16_t prevfps;
@@ -924,11 +1083,6 @@ struct sensor_output_info_t {
 	uint16_t num_info;
 };
 
-struct sensor_eeprom_data_t {
-	void *eeprom_data;
-	uint16_t index;
-};
-
 struct mirror_flip {
 	int32_t x_mirror;
 	int32_t y_flip;
@@ -937,6 +1091,11 @@ struct mirror_flip {
 struct cord {
 	uint32_t x;
 	uint32_t y;
+};
+
+struct msm_eeprom_data_t {
+	void *eeprom_data;
+	uint16_t index;
 };
 
 struct sensor_cfg_data {
@@ -954,6 +1113,7 @@ struct sensor_cfg_data {
 		uint16_t pictp_pl;
 		uint32_t pict_max_exp_lc;
 		uint16_t p_fps;
+		uint8_t iso_type;
 		struct sensor_init_cfg init_info;
 		struct sensor_pict_fps gfps;
 		struct exp_gain_cfg exp_gain;
@@ -963,7 +1123,7 @@ struct sensor_cfg_data {
 		struct sensor_3d_exp_cfg sensor_3d_exp;
 		struct sensor_calib_data calib_info;
 		struct sensor_output_info_t output_info;
-		struct sensor_eeprom_data_t eeprom_data;
+		struct msm_eeprom_data_t eeprom_data;
 		/* QRD */
 		uint16_t antibanding;
 		uint8_t contrast;
@@ -979,15 +1139,84 @@ struct sensor_cfg_data {
 	} cfg;
 };
 
+struct damping_params_t {
+	uint32_t damping_step;
+	uint32_t damping_delay;
+	uint32_t hw_params;
+};
+
+enum actuator_type {
+	ACTUATOR_VCM,
+	ACTUATOR_PIEZO,
+};
+
+enum msm_actuator_data_type {
+	MSM_ACTUATOR_BYTE_DATA = 1,
+	MSM_ACTUATOR_WORD_DATA,
+};
+
+enum msm_actuator_addr_type {
+	MSM_ACTUATOR_BYTE_ADDR = 1,
+	MSM_ACTUATOR_WORD_ADDR,
+};
+
+enum msm_actuator_write_type {
+	MSM_ACTUATOR_WRITE_HW_DAMP,
+	MSM_ACTUATOR_WRITE_DAC,
+};
+
+struct msm_actuator_reg_params_t {
+	enum msm_actuator_write_type reg_write_type;
+	uint32_t hw_mask;
+	uint16_t reg_addr;
+	uint16_t hw_shift;
+	uint16_t data_shift;
+};
+
+struct reg_settings_t {
+	uint16_t reg_addr;
+	uint16_t reg_data;
+};
+
+struct region_params_t {
+	/* [0] = ForwardDirection Macro boundary
+	   [1] = ReverseDirection Inf boundary
+	 */
+	uint16_t step_bound[2];
+	uint16_t code_per_step;
+};
+
 struct msm_actuator_move_params_t {
 	int8_t dir;
+	int8_t sign_dir;
+	int16_t dest_step_pos;
 	int32_t num_steps;
+	struct damping_params_t *ringing_params;
+};
+
+struct msm_actuator_tuning_params_t {
+	int16_t initial_code;
+	uint16_t pwd_step;
+	uint16_t region_size;
+	uint32_t total_steps;
+	struct region_params_t *region_params;
+};
+
+struct msm_actuator_params_t {
+	enum actuator_type act_type;
+	uint8_t reg_tbl_size;
+	uint16_t data_size;
+	uint16_t init_setting_size;
+	uint32_t i2c_addr;
+	enum msm_actuator_addr_type i2c_addr_type;
+	enum msm_actuator_data_type i2c_data_type;
+	struct msm_actuator_reg_params_t *reg_tbl_params;
+	struct reg_settings_t *init_settings;
 };
 
 struct msm_actuator_set_info_t {
-	uint32_t total_steps;
-	uint16_t gross_steps;
-	uint16_t fine_steps;
+	struct msm_actuator_params_t actuator_params;
+	struct msm_actuator_tuning_params_t af_tuning_params;
 };
 
 struct msm_actuator_get_info_t {
@@ -999,6 +1228,22 @@ struct msm_actuator_get_info_t {
 	uint32_t f_pix_den;
 	uint32_t total_f_dist_num;
 	uint32_t total_f_dist_den;
+	uint32_t hor_view_angle_num;
+	uint32_t hor_view_angle_den;
+	uint32_t ver_view_angle_num;
+	uint32_t ver_view_angle_den;
+};
+
+enum af_camera_name {
+	ACTUATOR_MAIN_CAM_0,
+	ACTUATOR_MAIN_CAM_1,
+	ACTUATOR_MAIN_CAM_2,
+	ACTUATOR_MAIN_CAM_3,
+	ACTUATOR_MAIN_CAM_4,
+	ACTUATOR_MAIN_CAM_5,
+	ACTUATOR_WEB_CAM_0,
+	ACTUATOR_WEB_CAM_1,
+	ACTUATOR_WEB_CAM_2,
 };
 
 struct msm_actuator_cfg_data {
@@ -1008,6 +1253,61 @@ struct msm_actuator_cfg_data {
 		struct msm_actuator_move_params_t move;
 		struct msm_actuator_set_info_t set_info;
 		struct msm_actuator_get_info_t get_info;
+		enum af_camera_name cam_name;
+	} cfg;
+};
+
+struct msm_eeprom_support {
+	uint16_t is_supported;
+	uint16_t size;
+	uint16_t index;
+	uint16_t qvalue;
+};
+
+struct msm_calib_wb {
+	uint16_t r_over_g;
+	uint16_t b_over_g;
+	uint16_t gr_over_gb;
+};
+
+struct msm_calib_af {
+	uint16_t macro_dac;
+	uint16_t inf_dac;
+	uint16_t start_dac;
+};
+
+struct msm_calib_lsc {
+	uint16_t r_gain[221];
+	uint16_t b_gain[221];
+	uint16_t gr_gain[221];
+	uint16_t gb_gain[221];
+};
+
+struct pixel_t {
+	int x;
+	int y;
+};
+
+struct msm_calib_dpc {
+	uint16_t validcount;
+	struct pixel_t snapshot_coord[128];
+	struct pixel_t preview_coord[128];
+	struct pixel_t video_coord[128];
+};
+
+struct msm_camera_eeprom_info_t {
+	struct msm_eeprom_support af;
+	struct msm_eeprom_support wb;
+	struct msm_eeprom_support lsc;
+	struct msm_eeprom_support dpc;
+};
+
+struct msm_eeprom_cfg_data {
+	int cfgtype;
+	uint8_t is_eeprom_supported;
+	union {
+		struct msm_eeprom_data_t get_data;
+		struct msm_camera_eeprom_info_t get_info;
 	} cfg;
 };
 
@@ -1047,13 +1347,17 @@ struct msm_camera_info {
 	uint32_t s_mount_angle[MSM_MAX_CAMERA_SENSORS];
 	const char *video_dev_name[MSM_MAX_CAMERA_SENSORS];
 	enum sensor_type_t sensor_type[MSM_MAX_CAMERA_SENSORS];
-
 };
 
 struct msm_cam_config_dev_info {
 	int num_config_nodes;
 	const char *config_dev_name[MSM_MAX_CAMERA_CONFIGS];
 	int config_dev_id[MSM_MAX_CAMERA_CONFIGS];
+};
+
+struct msm_mctl_node_info {
+	int num_mctl_nodes;
+	const char *mctl_node_name[MSM_MAX_CAMERA_SENSORS];
 };
 
 struct flash_ctrl_data {
@@ -1075,8 +1379,17 @@ struct flash_ctrl_data {
 struct msm_camsensor_info {
 	char name[MAX_SENSOR_NAME];
 	uint8_t flash_enabled;
+	uint8_t strobe_flash_enabled;
+	uint8_t actuator_enabled;
 	int8_t total_steps;
 	uint8_t support_3d;
+	enum flash_type flashtype;
+	enum sensor_type_t sensor_type;
+	uint32_t pxlcode; /* enum v4l2_mbus_pixelcode */
+	uint32_t camera_type; /* msm_camera_type */
+	int mount_angle;
+	uint32_t max_width;
+	uint32_t max_height;
 };
 
 #define V4L2_SINGLE_PLANE	0
@@ -1102,6 +1415,32 @@ struct img_plane_info {
 	struct plane_data plane[MAX_PLANES];
 	uint32_t sp_y_offset;
 	uint8_t vpe_can_use;
+};
+
+#define QCAMERA_NAME "qcamera"
+#define QCAMERA_DEVICE_GROUP_ID 1
+#define QCAMERA_VNODE_GROUP_ID 2
+
+#define MSM_CAM_V4L2_IOCTL_GET_CAMERA_INFO \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 1, struct msm_camera_v4l2_ioctl_t *)
+
+#define MSM_CAM_V4L2_IOCTL_GET_CONFIG_INFO \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 2, struct msm_camera_v4l2_ioctl_t *)
+
+#define MSM_CAM_V4L2_IOCTL_GET_MCTL_INFO \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 3, struct msm_camera_v4l2_ioctl_t *)
+
+#define MSM_CAM_V4L2_IOCTL_CTRL_CMD_DONE \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 4, struct msm_camera_v4l2_ioctl_t *)
+
+#define MSM_CAM_V4L2_IOCTL_GET_EVENT_PAYLOAD \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 5, struct msm_camera_v4l2_ioctl_t *)
+
+#define MSM_CAM_IOCTL_SEND_EVENT \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 6, struct v4l2_event)
+
+struct msm_camera_v4l2_ioctl_t {
+	void __user *ioctl_ptr;
 };
 
 #endif /* __LINUX_MSM_CAMERA_H */

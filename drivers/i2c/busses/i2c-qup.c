@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -29,9 +29,12 @@
 #include <linux/timer.h>
 #include <linux/slab.h>
 #include <mach/board.h>
+#include <mach/gpiomux.h>
 #include <linux/slab.h>
 #include <linux/pm_runtime.h>
 #include <linux/gpio.h>
+#include <linux/of.h>
+#include <linux/of_i2c.h>
 
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION("0.2");
@@ -110,6 +113,7 @@ enum {
 enum {
 	I2C_STATUS_WR_BUFFER_FULL  = 1U << 0,
 	I2C_STATUS_BUS_ACTIVE      = 1U << 8,
+	I2C_STATUS_BUS_MASTER	   = 1U << 9,
 	I2C_STATUS_ERROR_MASK      = 0x38000FC,
 	QUP_I2C_NACK_FLAG          = 1U << 3,
 	QUP_IN_NOT_EMPTY           = 1U << 5,
@@ -125,6 +129,12 @@ enum {
 #define QUP_MAX_CLK_STATE_RETRIES	300
 
 static char const * const i2c_rsrcs[] = {"i2c_clk", "i2c_sda"};
+
+static struct gpiomux_setting recovery_config = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
 
 struct qup_i2c_dev {
 	struct device                *dev;
@@ -295,6 +305,22 @@ qup_update_state(struct qup_i2c_dev *dev, uint32_t state)
 	return 0;
 }
 
+/*
+ * Before calling qup_config_core_on_en(), please make
+ * sure that QuPE core is in RESET state.
+ */
+static void
+qup_config_core_on_en(struct qup_i2c_dev *dev)
+{
+	uint32_t status;
+
+	status = readl_relaxed(dev->base + QUP_CONFIG);
+	status |= BIT(13);
+	writel_relaxed(status, dev->base + QUP_CONFIG);
+	/* making sure that write has really gone through */
+	mb();
+}
+
 static void
 qup_i2c_pwr_mgmt(struct qup_i2c_dev *dev, unsigned int state)
 {
@@ -305,6 +331,7 @@ qup_i2c_pwr_mgmt(struct qup_i2c_dev *dev, unsigned int state)
 	} else {
 		qup_update_state(dev, QUP_RESET_STATE);
 		clk_disable(dev->clk);
+		qup_config_core_on_en(dev);
 		clk_disable(dev->pclk);
 	}
 }
@@ -639,6 +666,83 @@ qup_set_wr_mode(struct qup_i2c_dev *dev, int rem)
 	return ret;
 }
 
+
+static void qup_i2c_recover_bus_busy(struct qup_i2c_dev *dev)
+{
+	int i;
+	int gpio_clk;
+	int gpio_dat;
+	bool gpio_clk_status = false;
+	uint32_t status = readl_relaxed(dev->base + QUP_I2C_STATUS);
+	struct gpiomux_setting old_gpio_setting;
+
+	if (dev->pdata->msm_i2c_config_gpio)
+		return;
+
+	if (!(status & (I2C_STATUS_BUS_ACTIVE)) ||
+		(status & (I2C_STATUS_BUS_MASTER)))
+		return;
+
+	gpio_clk = dev->i2c_gpios[0];
+	gpio_dat = dev->i2c_gpios[1];
+
+	if ((gpio_clk == -1) && (gpio_dat == -1)) {
+		dev_err(dev->dev, "Recovery failed due to undefined GPIO's\n");
+		return;
+	}
+
+	disable_irq(dev->err_irq);
+	for (i = 0; i < ARRAY_SIZE(i2c_rsrcs); ++i) {
+		if (msm_gpiomux_write(dev->i2c_gpios[i], GPIOMUX_ACTIVE,
+				&recovery_config, &old_gpio_setting)) {
+			dev_err(dev->dev, "GPIO pins have no active setting\n");
+			goto recovery_end;
+		}
+	}
+
+	dev_warn(dev->dev, "i2c_scl: %d, i2c_sda: %d\n",
+		 gpio_get_value(gpio_clk), gpio_get_value(gpio_dat));
+
+	for (i = 0; i < 9; i++) {
+		if (gpio_get_value(gpio_dat) && gpio_clk_status)
+			break;
+		gpio_direction_output(gpio_clk, 0);
+		udelay(5);
+		gpio_direction_output(gpio_dat, 0);
+		udelay(5);
+		gpio_direction_input(gpio_clk);
+		udelay(5);
+		if (!gpio_get_value(gpio_clk))
+			udelay(20);
+		if (!gpio_get_value(gpio_clk))
+			usleep_range(10000, 10000);
+		gpio_clk_status = gpio_get_value(gpio_clk);
+		gpio_direction_input(gpio_dat);
+		udelay(5);
+	}
+
+	/* Configure ALT funciton to QUP I2C*/
+	for (i = 0; i < ARRAY_SIZE(i2c_rsrcs); ++i) {
+		msm_gpiomux_write(dev->i2c_gpios[i], GPIOMUX_ACTIVE,
+				&old_gpio_setting, NULL);
+	}
+
+	udelay(10);
+
+	status = readl_relaxed(dev->base + QUP_I2C_STATUS);
+	if (!(status & I2C_STATUS_BUS_ACTIVE)) {
+		dev_info(dev->dev, "Bus busy cleared after %d clock cycles, "
+			 "status %x\n",
+			 i, status);
+		goto recovery_end;
+	}
+
+	dev_warn(dev->dev, "Bus still busy, status %x\n", status);
+
+recovery_end:
+	enable_irq(dev->err_irq);
+}
+
 static int
 qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 {
@@ -657,16 +761,9 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		return -EIO;
 	}
 
-	if (dev->clk_state == 0) {
-		if (dev->clk_ctl == 0) {
-			if (dev->pdata->src_clk_rate > 0)
-				clk_set_rate(dev->clk,
-						dev->pdata->src_clk_rate);
-			else
-				dev->pdata->src_clk_rate = 19200000;
-		}
+	if (dev->clk_state == 0)
 		qup_i2c_pwr_mgmt(dev, 1);
-	}
+
 	/* Initialize QUP registers during first transfer */
 	if (dev->clk_ctl == 0) {
 		int fs_div;
@@ -837,7 +934,8 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 				idx, rem, num, dev->mode);
 
 			qup_print_status(dev);
-			timeout = wait_for_completion_timeout(&complete, HZ);
+			timeout = wait_for_completion_timeout(&complete,
+					msecs_to_jiffies(dev->out_fifo_sz));
 			if (!timeout) {
 				uint32_t istatus = readl_relaxed(dev->base +
 							QUP_I2C_STATUS);
@@ -846,7 +944,24 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 				uint32_t op_flgs = readl_relaxed(dev->base +
 							QUP_OPERATIONAL);
 
-				dev_err(dev->dev, "Transaction timed out\n");
+				/*
+				 * Dont wait for 1 sec if i2c sees the bus
+				 * active and controller is not master.
+				 * A slave has pulled line low. Try to recover
+				 */
+				if (!(istatus & I2C_STATUS_BUS_ACTIVE) ||
+					(istatus & I2C_STATUS_BUS_MASTER)) {
+					timeout =
+					wait_for_completion_timeout(&complete,
+									HZ);
+					if (timeout)
+						goto timeout_err;
+				}
+				qup_i2c_recover_bus_busy(dev);
+				dev_err(dev->dev,
+					"Transaction timed out, SL-AD = 0x%x\n",
+					dev->msg->addr);
+
 				dev_err(dev->dev, "I2C Status: %x\n", istatus);
 				dev_err(dev->dev, "QUP Status: %x\n", qstatus);
 				dev_err(dev->dev, "OP Flags: %x\n", op_flgs);
@@ -858,17 +973,27 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 				ret = -ETIMEDOUT;
 				goto out_err;
 			}
+timeout_err:
 			if (dev->err) {
 				if (dev->err > 0 &&
-					dev->err & QUP_I2C_NACK_FLAG)
+					dev->err & QUP_I2C_NACK_FLAG) {
 					dev_err(dev->dev,
 					"I2C slave addr:0x%x not connected\n",
 					dev->msg->addr);
-				else if (dev->err < 0) {
+					dev->err = ENOTCONN;
+				} else if (dev->err < 0) {
 					dev_err(dev->dev,
 					"QUP data xfer error %d\n", dev->err);
 					ret = dev->err;
 					goto out_err;
+				} else if (dev->err > 0) {
+					/*
+					 * ISR returns +ve error if error code
+					 * is I2C related, e.g. unexpected start
+					 * So you may call recover-bus-busy when
+					 * this error happens
+					 */
+					qup_i2c_recover_bus_busy(dev);
 				}
 				ret = -dev->err;
 				goto out_err;
@@ -971,7 +1096,24 @@ qup_i2c_probe(struct platform_device *pdev)
 	gsbi_mem = NULL;
 	dev_dbg(&pdev->dev, "qup_i2c_probe\n");
 
-	pdata = pdev->dev.platform_data;
+	if (pdev->dev.of_node) {
+		struct device_node *node = pdev->dev.of_node;
+		pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
+		if (!pdata)
+			return -ENOMEM;
+		ret = of_property_read_u32(node, "qcom,i2c-bus-freq",
+					&pdata->clk_freq);
+		if (ret)
+			goto get_res_failed;
+		ret = of_property_read_u32(node, "cell-index", &pdev->id);
+		if (ret)
+			goto get_res_failed;
+		/* Optional property */
+		of_property_read_u32(node, "qcom,i2c-src-freq",
+					&pdata->src_clk_rate);
+	} else
+		pdata = pdev->dev.platform_data;
+
 	if (!pdata) {
 		dev_err(&pdev->dev, "platform data not initialized\n");
 		return -ENOSYS;
@@ -980,7 +1122,8 @@ qup_i2c_probe(struct platform_device *pdev)
 						"qup_phys_addr");
 	if (!qup_mem) {
 		dev_err(&pdev->dev, "no qup mem resource?\n");
-		return -ENODEV;
+		ret = -ENODEV;
+		goto get_res_failed;
 	}
 
 	/*
@@ -997,22 +1140,27 @@ qup_i2c_probe(struct platform_device *pdev)
 						"qup_err_intr");
 	if (!err_irq) {
 		dev_err(&pdev->dev, "no error irq resource?\n");
-		return -ENODEV;
+		ret = -ENODEV;
+		goto get_res_failed;
 	}
 
 	qup_io = request_mem_region(qup_mem->start, resource_size(qup_mem),
 					pdev->name);
 	if (!qup_io) {
 		dev_err(&pdev->dev, "QUP region already claimed\n");
-		return -EBUSY;
+		ret = -EBUSY;
+		goto get_res_failed;
 	}
 	if (!pdata->use_gsbi_shared_mode) {
 		gsbi_mem = platform_get_resource_byname(pdev, IORESOURCE_MEM,
 							"gsbi_qup_i2c_addr");
 		if (!gsbi_mem) {
-			dev_err(&pdev->dev, "no gsbi mem resource?\n");
-			ret = -ENODEV;
-			goto err_res_failed;
+			dev_dbg(&pdev->dev, "Assume BLSP\n");
+			/*
+			 * BLSP core does not need protocol programming so this
+			 * resource is not expected
+			 */
+			goto blsp_core_init;
 		}
 		gsbi_io = request_mem_region(gsbi_mem->start,
 						resource_size(gsbi_mem),
@@ -1024,6 +1172,7 @@ qup_i2c_probe(struct platform_device *pdev)
 		}
 	}
 
+blsp_core_init:
 	clk = clk_get(&pdev->dev, "core_clk");
 	if (IS_ERR(clk)) {
 		dev_err(&pdev->dev, "Could not get core_clk\n");
@@ -1098,6 +1247,24 @@ qup_i2c_probe(struct platform_device *pdev)
 	dev->pos = 0;
 
 	/*
+	 * If bootloaders leave a pending interrupt on certain GSBI's,
+	 * then we reset the core before registering for interrupts.
+	 */
+
+	if (dev->pdata->src_clk_rate > 0)
+		clk_set_rate(dev->clk, dev->pdata->src_clk_rate);
+	else
+		dev->pdata->src_clk_rate = 19200000;
+
+	clk_prepare_enable(dev->clk);
+	clk_prepare_enable(dev->pclk);
+	writel_relaxed(1, dev->base + QUP_SW_RESET);
+	if (qup_i2c_poll_state(dev, 0, true) != 0)
+		goto err_reset_failed;
+	clk_disable_unprepare(dev->clk);
+	clk_disable_unprepare(dev->pclk);
+
+	/*
 	 * We use num_irqs to also indicate if we got 3 interrupts or just 1.
 	 * If we have just 1, we use err_irq as the general purpose irq
 	 * and handle the changes in ISR accordingly
@@ -1155,6 +1322,8 @@ qup_i2c_probe(struct platform_device *pdev)
 	dev->suspended = 0;
 	mutex_init(&dev->mlock);
 	dev->clk_state = 0;
+	clk_prepare(dev->clk);
+	clk_prepare(dev->pclk);
 	setup_timer(&dev->pwr_timer, qup_i2c_pwr_timer, (unsigned long) dev);
 
 	pm_runtime_set_active(&pdev->dev);
@@ -1168,14 +1337,20 @@ qup_i2c_probe(struct platform_device *pdev)
 			free_irq(dev->in_irq, dev);
 		}
 		free_irq(dev->err_irq, dev);
-	} else
+	} else {
+		if (dev->dev->of_node)
+			of_i2c_register_devices(&dev->adapter);
 		return 0;
+	}
 
 
 err_request_irq_failed:
 	qup_i2c_free_gpios(dev);
 	if (dev->gsbi)
 		iounmap(dev->gsbi);
+err_reset_failed:
+	clk_disable_unprepare(dev->clk);
+	clk_disable_unprepare(dev->pclk);
 err_request_gpio_failed:
 err_gsbi_failed:
 	iounmap(dev->base);
@@ -1190,6 +1365,9 @@ err_clk_get_failed:
 		release_mem_region(gsbi_mem->start, resource_size(gsbi_mem));
 err_res_failed:
 	release_mem_region(qup_mem->start, resource_size(qup_mem));
+get_res_failed:
+	if (pdev->dev.of_node)
+		kfree(pdata);
 	return ret;
 }
 
@@ -1214,6 +1392,8 @@ qup_i2c_remove(struct platform_device *pdev)
 	}
 	free_irq(dev->err_irq, dev);
 	i2c_del_adapter(&dev->adapter);
+	clk_unprepare(dev->clk);
+	clk_unprepare(dev->pclk);
 	clk_put(dev->clk);
 	clk_put(dev->pclk);
 	qup_i2c_free_gpios(dev);
@@ -1231,6 +1411,8 @@ qup_i2c_remove(struct platform_device *pdev)
 	qup_mem = platform_get_resource_byname(pdev, IORESOURCE_MEM,
 						"qup_phys_addr");
 	release_mem_region(qup_mem->start, resource_size(qup_mem));
+	if (dev->dev->of_node)
+		kfree(dev->pdata);
 	kfree(dev);
 	return 0;
 }
@@ -1248,6 +1430,8 @@ static int qup_i2c_suspend(struct device *device)
 	del_timer_sync(&dev->pwr_timer);
 	if (dev->clk_state != 0)
 		qup_i2c_pwr_mgmt(dev, 0);
+	clk_unprepare(dev->clk);
+	clk_unprepare(dev->pclk);
 	qup_i2c_free_gpios(dev);
 	return 0;
 }
@@ -1257,6 +1441,8 @@ static int qup_i2c_resume(struct device *device)
 	struct platform_device *pdev = to_platform_device(device);
 	struct qup_i2c_dev *dev = platform_get_drvdata(pdev);
 	BUG_ON(qup_i2c_request_gpios(dev) != 0);
+	clk_prepare(dev->clk);
+	clk_prepare(dev->pclk);
 	dev->suspended = 0;
 	return 0;
 }
@@ -1294,6 +1480,13 @@ static const struct dev_pm_ops i2c_qup_dev_pm_ops = {
 	)
 };
 
+static struct of_device_id i2c_qup_dt_match[] = {
+	{
+		.compatible = "qcom,i2c-qup",
+	},
+	{}
+};
+
 static struct platform_driver qup_i2c_driver = {
 	.probe		= qup_i2c_probe,
 	.remove		= __devexit_p(qup_i2c_remove),
@@ -1301,6 +1494,7 @@ static struct platform_driver qup_i2c_driver = {
 		.name	= "qup_i2c",
 		.owner	= THIS_MODULE,
 		.pm = &i2c_qup_dev_pm_ops,
+		.of_match_table = i2c_qup_dt_match,
 	},
 };
 

@@ -281,6 +281,16 @@ config SMB137B_CHARGER
 	  To compile this driver as a module, choose M here: the module will
 	  be called smb137b.
 
+config SMB349_CHARGER
+	tristate "smb349 charger"
+	depends on I2C
+	help
+	  Say Y to enable support for the SMB349 switching mode based charger
+	  and sysfs. The driver supports controlling charger-enable and
+	  current limiting capabilities. The driver also lets the
+	  SMB349 be operated as a slave device via the power supply
+	  framework.
+
 config BATTERY_MSM_FAKE
 	tristate "Fake MSM battery"
 	depends on ARCH_MSM && BATTERY_MSM
@@ -337,6 +347,13 @@ config PM8XXX_CCADC
 	depends on MFD_PM8921_CORE
 	help
 	  Say Y here to enable support for pm8921 chip bms subdevice
+
+config LTC4088_CHARGER
+	tristate "LTC4088 Charger driver"
+	depends on GPIOLIB
+	help
+	  Say Y here to enable support for ltc4088 chip charger. It controls the
+	  operations through GPIO pins.
 
 config PM8921_BMS
 	select PM8XXX_CCADC

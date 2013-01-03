@@ -8,6 +8,7 @@
 #include <linux/mmc/card.h>
 #include <linux/mmc/sdio_func.h>
 #include <mach/gpio.h>
+#include <mach/msm_bus.h>
 
 #define SDC_DAT1_DISABLE 0
 #define SDC_DAT1_ENABLE  1
@@ -112,6 +113,12 @@ struct msm_mmc_pin_data {
 	struct msm_mmc_pad_data *pad_data;
 };
 
+struct msm_mmc_bus_voting_data {
+	struct msm_bus_scale_pdata *use_cases;
+	unsigned int *bw_vecs;
+	unsigned int bw_vecs_size;
+};
+
 struct mmc_platform_data {
 	unsigned int ocr_mask;			/* available voltages */
 	int built_in;				/* built-in device flag */
@@ -130,6 +137,8 @@ struct mmc_platform_data {
 	void (*sdio_lpm_gpio_setup)(struct device *, unsigned int);
         unsigned int status_irq;
 	unsigned int status_gpio;
+	/* Indicates the polarity of the GPIO line when card is inserted */
+	bool is_status_gpio_active_low;
         unsigned int sdiowakeup_irq;
         unsigned long irq_flags;
         unsigned long mmc_bus_width;
@@ -139,7 +148,7 @@ struct mmc_platform_data {
 	unsigned int msmsdcc_fmax;
 	bool nonremovable;
 	bool pclk_src_dfab;
-	int (*cfg_mpm_sdiowakeup)(struct device *, unsigned);
+	unsigned int mpm_sdiowakeup_int;
 	unsigned int wpswitch_gpio;
 	unsigned char wpswitch_polarity;
 	struct msm_mmc_slot_reg_data *vreg_data;
@@ -150,6 +159,8 @@ struct mmc_platform_data {
 	bool disable_bam;
 	bool disable_runtime_pm;
 	bool disable_cmd23;
+	u32 cpu_dma_latency;
+	struct msm_mmc_bus_voting_data *msm_bus_voting_data;
 };
 
 #endif

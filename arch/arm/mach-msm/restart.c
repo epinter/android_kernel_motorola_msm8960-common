@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -122,9 +122,6 @@ static void __msm_power_off(int lower_pshold)
 #endif
 	pm8xxx_reset_pwr_off(0);
 
-	if (cpu_is_msm8x60())
-		pm8901_reset_pwr_off(0);
-
 	if (lower_pshold) {
 		__raw_writel(0, PSHOLD_CTL_SU);
 		mdelay(10000);
@@ -237,20 +234,9 @@ void arch_reset(char mode, const char *cmd)
 	printk(KERN_ERR "Restarting has failed\n");
 }
 
-static int __init msm_restart_init(void)
+static int __init msm_pmic_restart_init(void)
 {
 	int rc;
-
-#ifdef CONFIG_MSM_DLOAD_MODE
-	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
-	dload_mode_addr = MSM_IMEM_BASE + DLOAD_MODE_ADDR;
-
-	/* Reset detection is switched on below.*/
-	set_dload_mode(1);
-#endif
-	msm_tmr0_base = msm_timer_get_timer0_base();
-	restart_reason = MSM_IMEM_BASE + RESTART_REASON_ADDR;
-	pm_power_off = msm_power_off;
 
 	if (pmic_reset_irq != 0) {
 		rc = request_any_context_irq(pmic_reset_irq,
@@ -265,4 +251,19 @@ static int __init msm_restart_init(void)
 	return 0;
 }
 
-late_initcall(msm_restart_init);
+late_initcall(msm_pmic_restart_init);
+
+static int __init msm_restart_init(void)
+{
+#ifdef CONFIG_MSM_DLOAD_MODE
+	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
+	dload_mode_addr = MSM_IMEM_BASE + DLOAD_MODE_ADDR;
+	set_dload_mode(download_mode);
+#endif
+	msm_tmr0_base = msm_timer_get_timer0_base();
+	restart_reason = MSM_IMEM_BASE + RESTART_REASON_ADDR;
+	pm_power_off = msm_power_off;
+
+	return 0;
+}
+early_initcall(msm_restart_init);

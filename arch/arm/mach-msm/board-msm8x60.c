@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -22,6 +22,7 @@
 #include <linux/leds.h>
 #include <linux/pmic8058-othc.h>
 #include <linux/mfd/pmic8901.h>
+#include <linux/regulator/gpio-regulator.h>
 #include <linux/regulator/pmic8901-regulator.h>
 #include <linux/bootmem.h>
 #include <linux/msm_adc.h>
@@ -52,9 +53,9 @@
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/setup.h>
+#include <asm/hardware/gic.h>
 
 #include <mach/dma.h>
-#include <mach/mpp.h>
 #include <mach/board.h>
 #include <mach/irqs.h>
 #include <mach/msm_spi.h>
@@ -83,12 +84,14 @@
 #include <mach/rpm.h>
 #include <mach/rpm-regulator.h>
 #include <mach/restart.h>
+#include <mach/board-msm8660.h>
+#include <mach/iommu_domains.h>
 
 #include "devices.h"
 #include "devices-msm8x60.h"
-#include "cpuidle.h"
+#include <mach/cpuidle.h>
 #include "pm.h"
-#include "mpm.h"
+#include <mach/mpm.h>
 #include "spm.h"
 #include "rpm_log.h"
 #include "timer.h"
@@ -99,28 +102,13 @@
 #include "rpm_resources.h"
 #include "acpuclock.h"
 #include "pm-boot.h"
+#include "board-storage-common-a.h"
 
 #include <linux/ion.h>
 #include <mach/ion.h>
+#include <mach/msm_rtb.h>
 
 #define MSM_SHARED_RAM_PHYS 0x40000000
-
-/* Macros assume PMIC GPIOs start at 0 */
-#define PM8058_GPIO_BASE			NR_MSM_GPIOS
-#define PM8058_GPIO_PM_TO_SYS(pm_gpio)		(pm_gpio + PM8058_GPIO_BASE)
-#define PM8058_GPIO_SYS_TO_PM(sys_gpio)		(sys_gpio - PM8058_GPIO_BASE)
-#define PM8058_MPP_BASE			(PM8058_GPIO_BASE + PM8058_GPIOS)
-#define PM8058_MPP_PM_TO_SYS(pm_gpio)		(pm_gpio + PM8058_MPP_BASE)
-#define PM8058_MPP_SYS_TO_PM(sys_gpio)		(sys_gpio - PM8058_MPP_BASE)
-#define PM8058_IRQ_BASE				(NR_MSM_IRQS + NR_GPIO_IRQS)
-
-#define PM8901_GPIO_BASE			(PM8058_GPIO_BASE + \
-						PM8058_GPIOS + PM8058_MPPS)
-#define PM8901_GPIO_PM_TO_SYS(pm_gpio)		(pm_gpio + PM8901_GPIO_BASE)
-#define PM8901_GPIO_SYS_TO_PM(sys_gpio)		(sys_gpio - PM901_GPIO_BASE)
-#define PM8901_IRQ_BASE				(PM8058_IRQ_BASE + \
-						NR_PMIC8058_IRQS)
-
 #define MDM2AP_SYNC 129
 
 #define GPIO_ETHERNET_RESET_N_DRAGON	30
@@ -134,7 +122,6 @@
 #define LCDC_AUO_SPI_DEVICE_NAME		"lcdc_auo_nt35582"
 #define LCDC_NT35582_PANEL_NAME			"lcdc_nt35582_wvga"
 
-#define PANEL_NAME_MAX_LEN	30
 #define MIPI_CMD_NOVATEK_QHD_PANEL_NAME	"mipi_cmd_novatek_qhd"
 #define MIPI_VIDEO_NOVATEK_QHD_PANEL_NAME	"mipi_video_novatek_qhd"
 #define MIPI_VIDEO_TOSHIBA_WVGA_PANEL_NAME	"mipi_video_toshiba_wvga"
@@ -144,9 +131,13 @@
 #define DSPS_PIL_GENERIC_NAME		"dsps"
 #define DSPS_PIL_FLUID_NAME		"dsps_fluid"
 
+#ifdef CONFIG_ION_MSM
+static struct platform_device ion_dev;
+#endif
+
 enum {
 	GPIO_EXPANDER_IRQ_BASE  = PM8901_IRQ_BASE + NR_PMIC8901_IRQS,
-	GPIO_EXPANDER_GPIO_BASE = PM8901_GPIO_BASE + PM8901_MPPS,
+	GPIO_EXPANDER_GPIO_BASE = PM8901_MPP_BASE + PM8901_MPPS,
 	/* CORE expander */
 	GPIO_CORE_EXPANDER_BASE = GPIO_EXPANDER_GPIO_BASE,
 	GPIO_CLASS_D1_EN        = GPIO_CORE_EXPANDER_BASE,
@@ -269,9 +260,19 @@ struct pm8xxx_mpp_init_info {
 	struct pm8xxx_mpp_config_data	config;
 };
 
-#define PM8XXX_MPP_INIT(_mpp, _type, _level, _control) \
+#define PM8058_MPP_INIT(_mpp, _type, _level, _control) \
 { \
 	.mpp	= PM8058_MPP_PM_TO_SYS(_mpp), \
+	.config	= { \
+		.type		= PM8XXX_MPP_TYPE_##_type, \
+		.level		= _level, \
+		.control	= PM8XXX_MPP_##_control, \
+	} \
+}
+
+#define PM8901_MPP_INIT(_mpp, _type, _level, _control) \
+{ \
+	.mpp	= PM8901_MPP_PM_TO_SYS(_mpp), \
 	.config	= { \
 		.type		= PM8XXX_MPP_TYPE_##_type, \
 		.level		= _level, \
@@ -435,7 +436,7 @@ static struct regulator_init_data saw_s0_init_data = {
 			.name = "8901_s0",
 			.valid_ops_mask = REGULATOR_CHANGE_VOLTAGE,
 			.min_uV = 800000,
-			.max_uV = 1250000,
+			.max_uV = 1325000,
 		},
 		.consumer_supplies = vreg_consumers_8901_S0,
 		.num_consumer_supplies = ARRAY_SIZE(vreg_consumers_8901_S0),
@@ -446,7 +447,7 @@ static struct regulator_init_data saw_s1_init_data = {
 			.name = "8901_s1",
 			.valid_ops_mask = REGULATOR_CHANGE_VOLTAGE,
 			.min_uV = 800000,
-			.max_uV = 1250000,
+			.max_uV = 1325000,
 		},
 		.consumer_supplies = vreg_consumers_8901_S1,
 		.num_consumer_supplies = ARRAY_SIZE(vreg_consumers_8901_S1),
@@ -604,6 +605,7 @@ static struct msm_ce_hw_support qcrypto_ce_hw_suppport = {
 	.shared_ce_resource = QCE_SHARE_CE_RESOURCE,
 	.hw_key_support = QCE_HW_KEY_SUPPORT,
 	.sha_hmac = QCE_SHA_HMAC_SUPPORT,
+	.bus_scale_table = NULL,
 };
 
 static struct platform_device qcrypto_device = {
@@ -626,6 +628,7 @@ static struct msm_ce_hw_support qcedev_ce_hw_suppport = {
 	.shared_ce_resource = QCE_SHARE_CE_RESOURCE,
 	.hw_key_support = QCE_HW_KEY_SUPPORT,
 	.sha_hmac = QCE_SHA_HMAC_SUPPORT,
+	.bus_scale_table = NULL,
 };
 
 static struct platform_device qcedev_device = {
@@ -799,67 +802,6 @@ static struct i2c_board_info msm_bq27520_board_info[] = {
 };
 #endif
 
-static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR * 2] = {
-	[MSM_PM_MODE(0, MSM_PM_SLEEP_MODE_POWER_COLLAPSE)] = {
-		.idle_supported = 1,
-		.suspend_supported = 1,
-		.idle_enabled = 0,
-		.suspend_enabled = 0,
-	},
-
-	[MSM_PM_MODE(0, MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE)] = {
-		.idle_supported = 1,
-		.suspend_supported = 1,
-		.idle_enabled = 0,
-		.suspend_enabled = 0,
-	},
-
-	[MSM_PM_MODE(0, MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT)] = {
-		.idle_supported = 1,
-		.suspend_supported = 1,
-		.idle_enabled = 1,
-		.suspend_enabled = 1,
-	},
-
-	[MSM_PM_MODE(1, MSM_PM_SLEEP_MODE_POWER_COLLAPSE)] = {
-		.idle_supported = 1,
-		.suspend_supported = 1,
-		.idle_enabled = 0,
-		.suspend_enabled = 0,
-	},
-
-	[MSM_PM_MODE(1, MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE)] = {
-		.idle_supported = 1,
-		.suspend_supported = 1,
-		.idle_enabled = 0,
-		.suspend_enabled = 0,
-	},
-
-	[MSM_PM_MODE(1, MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT)] = {
-		.idle_supported = 1,
-		.suspend_supported = 1,
-		.idle_enabled = 1,
-		.suspend_enabled = 1,
-	},
-};
-
-static struct msm_cpuidle_state msm_cstates[] __initdata = {
-	{0, 0, "C0", "WFI",
-		MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT},
-
-	{0, 1, "C1", "STANDALONE_POWER_COLLAPSE",
-		MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE},
-
-	{0, 2, "C2", "POWER_COLLAPSE",
-		MSM_PM_SLEEP_MODE_POWER_COLLAPSE},
-
-	{1, 0, "C0", "WFI",
-		MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT},
-
-	{1, 1, "C1", "STANDALONE_POWER_COLLAPSE",
-		MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE},
-};
-
 static struct msm_rpmrs_level msm_rpmrs_levels[] __initdata = {
 	{
 		MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT,
@@ -915,6 +857,37 @@ static struct msm_rpmrs_level msm_rpmrs_levels[] __initdata = {
 		false,
 		7800, 0, 76350000, 9800,
 	},
+};
+
+static struct msm_rpmrs_platform_data msm_rpmrs_data __initdata = {
+	.levels = &msm_rpmrs_levels[0],
+	.num_levels = ARRAY_SIZE(msm_rpmrs_levels),
+	.vdd_mem_levels  = {
+		[MSM_RPMRS_VDD_MEM_RET_LOW]     = 500,
+		[MSM_RPMRS_VDD_MEM_RET_HIGH]    = 750,
+		[MSM_RPMRS_VDD_MEM_ACTIVE]      = 1000,
+		[MSM_RPMRS_VDD_MEM_MAX]         = 1325,
+	},
+	.vdd_dig_levels = {
+		[MSM_RPMRS_VDD_DIG_RET_LOW]     = 500,
+		[MSM_RPMRS_VDD_DIG_RET_HIGH]    = 750,
+		[MSM_RPMRS_VDD_DIG_ACTIVE]      = 1000,
+		[MSM_RPMRS_VDD_DIG_MAX]         = 1250,
+	},
+	.vdd_mask = 0xFFF,
+	.rpmrs_target_id = {
+		[MSM_RPMRS_ID_PXO_CLK]          = MSM_RPM_ID_PXO_CLK,
+		[MSM_RPMRS_ID_L2_CACHE_CTL]     = MSM_RPM_ID_APPS_L2_CACHE_CTL,
+		[MSM_RPMRS_ID_VDD_DIG_0]        = MSM_RPM_ID_SMPS1_0,
+		[MSM_RPMRS_ID_VDD_DIG_1]        = MSM_RPM_ID_SMPS1_1,
+		[MSM_RPMRS_ID_VDD_MEM_0]        = MSM_RPM_ID_SMPS0_0,
+		[MSM_RPMRS_ID_VDD_MEM_1]        = MSM_RPM_ID_SMPS0_1,
+		[MSM_RPMRS_ID_RPM_CTL]          = MSM_RPM_ID_TRIGGER_SET_FROM,
+	},
+};
+
+static struct msm_pm_boot_platform_data msm_pm_boot_pdata __initdata = {
+	.mode = MSM_PM_BOOT_CONFIG_TZ,
 };
 
 #if defined(CONFIG_USB_PEHCI_HCD) || defined(CONFIG_USB_PEHCI_HCD_MODULE)
@@ -992,7 +965,7 @@ static struct platform_device isp1763_device = {
 };
 #endif
 
-#if defined(CONFIG_USB_GADGET_MSM_72K) || defined(CONFIG_USB_EHCI_MSM_72K)
+#if defined(CONFIG_USB_MSM_72K) || defined(CONFIG_USB_EHCI_MSM_72K)
 static struct msm_otg_platform_data msm_otg_pdata;
 static struct regulator *ldo6_3p3;
 static struct regulator *ldo7_1p8;
@@ -1041,14 +1014,21 @@ static int msm_hsusb_phy_id_setup_init(int init)
 {
 	unsigned ret;
 
+	struct pm8xxx_mpp_config_data hsusb_phy_mpp = {
+		.type	= PM8XXX_MPP_TYPE_D_OUTPUT,
+		.level	= PM8901_MPP_DIG_LEVEL_L5,
+	};
+
 	if (init) {
-		ret = pm8901_mpp_config_digital_out(1,
-			PM8901_MPP_DIG_LEVEL_L5, 1);
+		hsusb_phy_mpp.control = PM8XXX_MPP_DOUT_CTRL_HIGH;
+		ret = pm8xxx_mpp_config(PM8901_MPP_PM_TO_SYS(1),
+							&hsusb_phy_mpp);
 		if (ret < 0)
 			pr_err("%s:MPP2 configuration failed\n", __func__);
 	} else {
-		ret = pm8901_mpp_config_digital_out(1,
-			PM8901_MPP_DIG_LEVEL_L5, 0);
+		hsusb_phy_mpp.control = PM8XXX_MPP_DOUT_CTRL_LOW;
+		ret = pm8xxx_mpp_config(PM8901_MPP_PM_TO_SYS(1),
+							&hsusb_phy_mpp);
 		if (ret < 0)
 			pr_err("%s:MPP2 un config failed\n", __func__);
 	}
@@ -1085,8 +1065,8 @@ static int msm_hsusb_pmic_id_notif_init(void (*callback)(int online), int init)
 		return -ENOTSUPP;
 	}
 
-	if ((machine_is_msm8x60_fusion() || machine_is_msm8x60_fusn_ffa()) &&
-			!pmic_id_notif_supported) {
+	if ((machine_is_msm8x60_fusion() || machine_is_msm8x60_fusn_ffa() ||
+			machine_is_msm8x60_ffa()) && !pmic_id_notif_supported) {
 		pr_debug("%s: USB_ID is not routed to PMIC"
 			"on V2 ffa\n", __func__);
 		return -ENOTSUPP;
@@ -1417,13 +1397,12 @@ static int msm_hsusb_pmic_vbus_notif_init(void (*callback)(int online),
 }
 #endif
 
-#if defined(CONFIG_USB_GADGET_MSM_72K) || defined(CONFIG_USB_EHCI_MSM_72K)
+#if defined(CONFIG_USB_MSM_72K) || defined(CONFIG_USB_EHCI_MSM_72K)
 static struct msm_otg_platform_data msm_otg_pdata = {
 	/* if usb link is in sps there is no need for
 	 * usb pclk as dayatona fabric clock will be
 	 * used instead
 	 */
-	.pclk_src_name		 = "dfab_usb_hs_clk",
 	.pemp_level		 = PRE_EMPHASIS_WITH_20_PERCENT,
 	.cdr_autoreset		 = CDR_AUTO_RESET_DISABLE,
 	.se1_gating		 = SE1_GATING_DISABLE,
@@ -1448,7 +1427,7 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 };
 #endif
 
-#ifdef CONFIG_USB_GADGET_MSM_72K
+#ifdef CONFIG_USB_MSM_72K
 static struct msm_hsusb_gadget_platform_data msm_gadget_pdata = {
 	.is_phy_status_timer_on = 1,
 };
@@ -1523,8 +1502,9 @@ static struct platform_device android_usb_device = {
 
 
 #endif
-	
+
 #ifdef CONFIG_MSM_VPE
+#ifndef CONFIG_MSM_CAMERA_V4L2
 static struct resource msm_vpe_resources[] = {
 	{
 		.start	= 0x05300000,
@@ -1545,8 +1525,10 @@ static struct platform_device msm_vpe_device = {
 	.resource = msm_vpe_resources,
 };
 #endif
+#endif
 
 #ifdef CONFIG_MSM_CAMERA
+#ifndef CONFIG_MSM_CAMERA_V4L2
 #ifdef CONFIG_MSM_CAMERA_FLASH
 #define VFE_CAMIF_TIMER1_GPIO 29
 #define VFE_CAMIF_TIMER2_GPIO 30
@@ -2449,6 +2431,7 @@ static struct i2c_board_info msm_camera_dragon_boardinfo[] __initdata = {
 	#endif
 };
 #endif
+#endif
 
 #ifdef CONFIG_MSM_GEMINI
 static struct resource msm_gemini_resources[] = {
@@ -2592,10 +2575,12 @@ static void __init msm8x60_init_dsps(void)
 	if (machine_is_msm8x60_fluid()) {
 		/* fluid has different firmware, gpios */
 		pdata->pil_name = DSPS_PIL_FLUID_NAME;
+		msm_pil_dsps.dev.platform_data = DSPS_PIL_FLUID_NAME;
 		pdata->gpios = dsps_fluid_gpios;
 		pdata->gpios_num = ARRAY_SIZE(dsps_fluid_gpios);
 	} else {
 		pdata->pil_name = DSPS_PIL_GENERIC_NAME;
+		msm_pil_dsps.dev.platform_data = DSPS_PIL_GENERIC_NAME;
 		pdata->gpios = dsps_surf_gpios;
 		pdata->gpios_num = ARRAY_SIZE(dsps_surf_gpios);
 	}
@@ -2605,72 +2590,94 @@ static void __init msm8x60_init_dsps(void)
 #endif /* CONFIG_MSM_DSPS */
 
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
-#define MSM_FB_PRIM_BUF_SIZE (1024 * 600 * 4 * 3) /* 4 bpp x 3 pages */
+#define MSM_FB_PRIM_BUF_SIZE \
+		(roundup((1024 * 600 * 4), 4096) * 3) /* 4 bpp x 3 pages */
 #else
-#define MSM_FB_PRIM_BUF_SIZE (1024 * 600 * 4 * 2) /* 4 bpp x 2 pages */
+#define MSM_FB_PRIM_BUF_SIZE \
+		(roundup((1024 * 600 * 4), 4096) * 2) /* 4 bpp x 2 pages */
 #endif
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
-#define MSM_FB_EXT_BUF_SIZE  (1920 * 1080 * 2 * 1) /* 2 bpp x 1 page */
+#define MSM_FB_EXT_BUF_SIZE  \
+		(roundup((1920 * 1080 * 2), 4096) * 1) /* 2 bpp x 1 page */
 #elif defined(CONFIG_FB_MSM_TVOUT)
-#define MSM_FB_EXT_BUF_SIZE  (720 * 576 * 2 * 2) /* 2 bpp x 2 pages */
+#define MSM_FB_EXT_BUF_SIZE  \
+		(roundup((720 * 576 * 2), 4096) * 2) /* 2 bpp x 2 pages */
 #else
 #define MSM_FB_EXT_BUFT_SIZE	0
 #endif
 
-#ifdef CONFIG_FB_MSM_OVERLAY_WRITEBACK
-/* width x height x 3 bpp x 2 frame buffer */
-#define MSM_FB_WRITEBACK_SIZE (1024 * 600 * 3 * 2)
-#define MSM_FB_WRITEBACK_OFFSET  \
-		(MSM_FB_PRIM_BUF_SIZE + MSM_FB_EXT_BUF_SIZE)
-#else
-#define MSM_FB_WRITEBACK_SIZE	0
-#define MSM_FB_WRITEBACK_OFFSET 0
-#endif
-
-#ifdef CONFIG_FB_MSM_HDMI_AS_PRIMARY
-/* 4 bpp x 2 page HDMI case */
-#define MSM_FB_SIZE roundup((1920 * 1088 * 4 * 2), 4096)
-#else
 /* Note: must be multiple of 4096 */
 #define MSM_FB_SIZE roundup(MSM_FB_PRIM_BUF_SIZE + MSM_FB_EXT_BUF_SIZE + \
-				MSM_FB_WRITEBACK_SIZE + \
 				MSM_FB_DSUB_PMEM_ADDER, 4096)
-#endif
+
+#define MSM_PMEM_SF_SIZE 0x4000000 /* 64 Mbytes */
+#define MSM_HDMI_PRIM_PMEM_SF_SIZE 0x8000000 /* 128 Mbytes */
 
 #ifdef CONFIG_FB_MSM_HDMI_AS_PRIMARY
-#define MSM_PMEM_SF_SIZE 0x8000000 /* 128 Mbytes */
+unsigned char hdmi_is_primary = 1;
 #else
-#define MSM_PMEM_SF_SIZE 0x4000000 /* 64 Mbytes */
+unsigned char hdmi_is_primary;
 #endif
 
-static int writeback_offset(void)
-{
-	return MSM_FB_WRITEBACK_OFFSET;
-}
+#ifdef CONFIG_FB_MSM_OVERLAY0_WRITEBACK
+#define MSM_FB_OVERLAY0_WRITEBACK_SIZE roundup((1376 * 768 * 3 * 2), 4096)
+#else
+#define MSM_FB_OVERLAY0_WRITEBACK_SIZE (0)
+#endif  /* CONFIG_FB_MSM_OVERLAY0_WRITEBACK */
 
-#define MSM_PMEM_KERNEL_EBI1_SIZE  0x600000
-#define MSM_PMEM_ADSP_SIZE         0x2000000
-#define MSM_PMEM_AUDIO_SIZE        0x28B000
+#ifdef CONFIG_FB_MSM_OVERLAY1_WRITEBACK
+#define MSM_FB_OVERLAY1_WRITEBACK_SIZE roundup((1920 * 1088 * 3 * 2), 4096)
+#else
+#define MSM_FB_OVERLAY1_WRITEBACK_SIZE (0)
+#endif  /* CONFIG_FB_MSM_OVERLAY1_WRITEBACK */
+
+#define MSM_PMEM_KERNEL_EBI1_SIZE  0x3BC000
+#define MSM_PMEM_ADSP_SIZE         0x4200000
+#define MSM_PMEM_AUDIO_SIZE        0x4CF000
 
 #define MSM_SMI_BASE          0x38000000
 #define MSM_SMI_SIZE          0x4000000
 
 #define KERNEL_SMI_BASE       (MSM_SMI_BASE)
-#define KERNEL_SMI_SIZE       0x300000
+#if defined(CONFIG_ION_MSM) && defined(CONFIG_MSM_MULTIMEDIA_USE_ION)
+#define KERNEL_SMI_SIZE       0x000000
+#else
+#define KERNEL_SMI_SIZE       0x600000
+#endif
 
 #define USER_SMI_BASE         (KERNEL_SMI_BASE + KERNEL_SMI_SIZE)
 #define USER_SMI_SIZE         (MSM_SMI_SIZE - KERNEL_SMI_SIZE)
 #define MSM_PMEM_SMIPOOL_SIZE USER_SMI_SIZE
 
-#define MSM_ION_EBI_SIZE        MSM_PMEM_SF_SIZE
-#define MSM_ION_ADSP_SIZE       MSM_PMEM_ADSP_SIZE
-#define MSM_ION_SMI_SIZE	MSM_PMEM_SMIPOOL_SIZE
+#define MSM_ION_HOLE_SIZE	SZ_128K /* (128KB) */
+#define MSM_MM_FW_SIZE		(0x200000 - MSM_ION_HOLE_SIZE) /*(2MB-128KB)*/
+#define MSM_ION_MM_SIZE		0x3800000  /* (56MB) */
+#define MSM_ION_MFC_SIZE	SZ_8K
+
+#define MSM_MM_FW_BASE		MSM_SMI_BASE
+#define MSM_ION_HOLE_BASE	(MSM_MM_FW_BASE + MSM_MM_FW_SIZE)
+#define MSM_ION_MM_BASE		(MSM_ION_HOLE_BASE + MSM_ION_HOLE_SIZE)
+#define MSM_ION_MFC_BASE	(MSM_ION_MM_BASE + MSM_ION_MM_SIZE)
+
+#define MSM_ION_SF_SIZE		0x4000000 /* 64MB */
+#define MSM_ION_CAMERA_SIZE     MSM_PMEM_ADSP_SIZE
+
+#ifdef CONFIG_FB_MSM_OVERLAY1_WRITEBACK
+#define MSM_ION_WB_SIZE		0xC00000 /* 12MB */
+#else
+#define MSM_ION_WB_SIZE		0x600000 /* 6MB */
+#endif
+
+#define MSM_ION_QSECOM_SIZE	0x600000 /* (6MB) */
 
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
-#define MSM_ION_HEAP_NUM	5
+#define MSM_ION_AUDIO_SIZE	MSM_PMEM_AUDIO_SIZE
+#define MSM_ION_HEAP_NUM	9
+#define MSM_HDMI_PRIM_ION_SF_SIZE MSM_HDMI_PRIM_PMEM_SF_SIZE
+static unsigned msm_ion_sf_size = MSM_ION_SF_SIZE;
 #else
-#define MSM_ION_HEAP_NUM	2
+#define MSM_ION_HEAP_NUM	1
 #endif
 
 static unsigned fb_size;
@@ -2722,6 +2729,8 @@ static struct resource msm_fb_resources[] = {
 		.flags  = IORESOURCE_DMA,
 	}
 };
+
+static void set_mdp_clocks_for_wuxga(void);
 
 static int msm_fb_detect_panel(const char *name)
 {
@@ -2777,8 +2786,11 @@ static int msm_fb_detect_panel(const char *name)
 
 	if (!strncmp(name, HDMI_PANEL_NAME,
 			strnlen(HDMI_PANEL_NAME,
-				PANEL_NAME_MAX_LEN)))
+				PANEL_NAME_MAX_LEN))) {
+		if (hdmi_is_primary)
+			set_mdp_clocks_for_wuxga();
 		return 0;
+	}
 
 	if (!strncmp(name, TVOUT_PANEL_NAME,
 			strnlen(TVOUT_PANEL_NAME,
@@ -2828,7 +2840,7 @@ static struct platform_device android_pmem_adsp_device = {
 	.id = 2,
 	.dev = { .platform_data = &android_pmem_adsp_pdata },
 };
-#endif
+
 static struct android_pmem_platform_data android_pmem_audio_pdata = {
 	.name = "pmem_audio",
 	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
@@ -2841,7 +2853,7 @@ static struct platform_device android_pmem_audio_device = {
 	.id = 4,
 	.dev = { .platform_data = &android_pmem_audio_pdata },
 };
-
+#endif /*CONFIG_MSM_MULTIMEDIA_USE_ION*/
 #define PMEM_BUS_WIDTH(_bw) \
 	{ \
 		.vectors = &(struct msm_bus_vectors){ \
@@ -2852,36 +2864,39 @@ static struct platform_device android_pmem_audio_device = {
 		}, \
 	.num_paths = 1, \
 	}
-#ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
-static struct msm_bus_paths pmem_smi_table[] = {
+
+static struct msm_bus_paths mem_smi_table[] = {
 	[0] = PMEM_BUS_WIDTH(0), /* Off */
 	[1] = PMEM_BUS_WIDTH(1), /* On */
 };
 
 static struct msm_bus_scale_pdata smi_client_pdata = {
-	.usecase = pmem_smi_table,
-	.num_usecases = ARRAY_SIZE(pmem_smi_table),
-	.name = "pmem_smi",
+	.usecase = mem_smi_table,
+	.num_usecases = ARRAY_SIZE(mem_smi_table),
+	.name = "mem_smi",
 };
 
-void request_smi_region(void *data)
+int request_smi_region(void *data)
 {
 	int bus_id = (int) data;
 
 	msm_bus_scale_client_update_request(bus_id, 1);
+	return 0;
 }
 
-void release_smi_region(void *data)
+int release_smi_region(void *data)
 {
 	int bus_id = (int) data;
 
 	msm_bus_scale_client_update_request(bus_id, 0);
+	return 0;
 }
 
 void *setup_smi_region(void)
 {
 	return (void *)msm_bus_scale_register_client(&smi_client_pdata);
 }
+#ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
 static struct android_pmem_platform_data android_pmem_smipool_pdata = {
 	.name = "pmem_smipool",
 	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
@@ -2897,8 +2912,8 @@ static struct platform_device android_pmem_smipool_device = {
 	.id = 7,
 	.dev = { .platform_data = &android_pmem_smipool_pdata },
 };
-#endif
-#endif
+#endif /*CONFIG_MSM_MULTIMEDIA_USE_ION*/
+#endif /*CONFIG_ANDROID_PMEM*/
 
 #define GPIO_DONGLE_PWR_EN 258
 static void setup_display_power(void);
@@ -3113,13 +3128,42 @@ static void __init msm8x60_allocate_memory_regions(void)
 	void *addr;
 	unsigned long size;
 
-	size = MSM_FB_SIZE;
+	if (hdmi_is_primary)
+		size = roundup((1920 * 1088 * 4 * 2), 4096);
+	else
+		size = MSM_FB_SIZE;
+
 	addr = alloc_bootmem_align(size, 0x1000);
 	msm_fb_resources[0].start = __pa(addr);
 	msm_fb_resources[0].end = msm_fb_resources[0].start + size - 1;
 	pr_info("allocating %lu bytes at %p (%lx physical) for fb\n",
 		size, addr, __pa(addr));
 
+}
+
+void __init msm8x60_set_display_params(char *prim_panel, char *ext_panel)
+{
+	if (strnlen(prim_panel, PANEL_NAME_MAX_LEN)) {
+		strlcpy(msm_fb_pdata.prim_panel_name, prim_panel,
+			PANEL_NAME_MAX_LEN);
+		pr_debug("msm_fb_pdata.prim_panel_name %s\n",
+			msm_fb_pdata.prim_panel_name);
+
+		if (!strncmp((char *)msm_fb_pdata.prim_panel_name,
+			HDMI_PANEL_NAME, strnlen(HDMI_PANEL_NAME,
+				PANEL_NAME_MAX_LEN))) {
+			pr_debug("HDMI is the primary display by"
+				" boot parameter\n");
+			hdmi_is_primary = 1;
+			set_mdp_clocks_for_wuxga();
+		}
+	}
+	if (strnlen(ext_panel, PANEL_NAME_MAX_LEN)) {
+		strlcpy(msm_fb_pdata.ext_panel_name, ext_panel,
+			PANEL_NAME_MAX_LEN);
+		pr_debug("msm_fb_pdata.ext_panel_name %s\n",
+			msm_fb_pdata.ext_panel_name);
+	}
 }
 
 #if defined(CONFIG_TOUCHSCREEN_CYTTSP_I2C) || \
@@ -3714,28 +3758,6 @@ static struct platform_device fluid_leds_gpio = {
 
 #endif
 
-#if defined(CONFIG_MSM_RPM_LOG) || defined(CONFIG_MSM_RPM_LOG_MODULE)
-
-static struct msm_rpm_log_platform_data msm_rpm_log_pdata = {
-	.phys_addr_base = 0x00106000,
-	.reg_offsets = {
-		[MSM_RPM_LOG_PAGE_INDICES] = 0x00000C80,
-		[MSM_RPM_LOG_PAGE_BUFFER]  = 0x00000CA0,
-	},
-	.phys_size = SZ_8K,
-	.log_len = 4096,		  /* log's buffer length in bytes */
-	.log_len_mask = (4096 >> 2) - 1,  /* length mask in units of u32 */
-};
-
-static struct platform_device msm_rpm_log_device = {
-	.name	= "msm_rpm_log",
-	.id	= -1,
-	.dev	= {
-		.platform_data = &msm_rpm_log_pdata,
-	},
-};
-#endif
-
 #ifdef CONFIG_BATTERY_MSM8X60
 static struct msm_charger_platform_data msm_charger_data = {
 	.safety_time = 180,
@@ -3804,6 +3826,9 @@ static struct regulator_consumer_supply vreg_consumers_PM8058_L14[] = {
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_L15[] = {
 	REGULATOR_SUPPLY("8058_l15",		NULL),
+	REGULATOR_SUPPLY("cam_vana",		"1-001a"),
+	REGULATOR_SUPPLY("cam_vana",		"1-006c"),
+	REGULATOR_SUPPLY("cam_vana",		"1-0078"),
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_L16[] = {
 	REGULATOR_SUPPLY("8058_l16",		NULL),
@@ -3834,6 +3859,9 @@ static struct regulator_consumer_supply vreg_consumers_PM8058_L24[] = {
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_L25[] = {
 	REGULATOR_SUPPLY("8058_l25",		NULL),
+	REGULATOR_SUPPLY("cam_vdig",		"1-001a"),
+	REGULATOR_SUPPLY("cam_vdig",		"1-006c"),
+	REGULATOR_SUPPLY("cam_vdig",		"1-0078"),
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_S0[] = {
 	REGULATOR_SUPPLY("8058_s0",		NULL),
@@ -3852,6 +3880,9 @@ static struct regulator_consumer_supply vreg_consumers_PM8058_S4[] = {
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_LVS0[] = {
 	REGULATOR_SUPPLY("8058_lvs0",		NULL),
+	REGULATOR_SUPPLY("cam_vio",			"1-001a"),
+	REGULATOR_SUPPLY("cam_vio",			"1-006c"),
+	REGULATOR_SUPPLY("cam_vio",			"1-0078"),
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_LVS1[] = {
 	REGULATOR_SUPPLY("8058_lvs1",		NULL),
@@ -3928,8 +3959,8 @@ static struct regulator_consumer_supply vreg_consumers_PM8901_S4_PC[] = {
 
 #define RPM_VREG_INIT(_id, _min_uV, _max_uV, _modes, _ops, _apply_uV, \
 		      _default_uV, _peak_uA, _avg_uA, _pull_down, _pin_ctrl, \
-		      _freq, _pin_fn, _force_mode, _state, _sleep_selectable, \
-		      _always_on) \
+		      _freq, _pin_fn, _force_mode, _sleep_set_force_mode, \
+		      _state, _sleep_selectable, _always_on) \
 	{ \
 		.init_data = { \
 			.constraints = { \
@@ -3954,6 +3985,7 @@ static struct regulator_consumer_supply vreg_consumers_PM8901_S4_PC[] = {
 		.freq			= RPM_VREG_FREQ_##_freq, \
 		.pin_fn			= _pin_fn, \
 		.force_mode		= _force_mode, \
+		.sleep_set_force_mode	= _sleep_set_force_mode, \
 		.state			= _state, \
 		.sleep_selectable	= _sleep_selectable, \
 	}
@@ -3994,6 +4026,7 @@ static struct regulator_consumer_supply vreg_consumers_PM8901_S4_PC[] = {
 		      REGULATOR_CHANGE_DRMS, 0, _min_uV, _init_peak_uA, \
 		      _init_peak_uA, _pd, RPM_VREG_PIN_CTRL_NONE, NONE, \
 		      RPM_VREG_PIN_FN_8660_ENABLE, \
+		      RPM_VREG_FORCE_MODE_8660_NONE, \
 		      RPM_VREG_FORCE_MODE_8660_NONE, RPM_VREG_STATE_OFF, \
 		      _sleep_selectable, _always_on)
 
@@ -4006,6 +4039,7 @@ static struct regulator_consumer_supply vreg_consumers_PM8901_S4_PC[] = {
 		      REGULATOR_CHANGE_DRMS, 0, _min_uV, _init_peak_uA, \
 		      _init_peak_uA, _pd, RPM_VREG_PIN_CTRL_NONE, _freq, \
 		      RPM_VREG_PIN_FN_8660_ENABLE, \
+		      RPM_VREG_FORCE_MODE_8660_NONE, \
 		      RPM_VREG_FORCE_MODE_8660_NONE, RPM_VREG_STATE_OFF, \
 		      _sleep_selectable, _always_on)
 
@@ -4014,6 +4048,7 @@ static struct regulator_consumer_supply vreg_consumers_PM8901_S4_PC[] = {
 		      REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE, 0, 0, \
 		      1000, 1000, _pd, RPM_VREG_PIN_CTRL_NONE, NONE, \
 		      RPM_VREG_PIN_FN_8660_ENABLE, \
+		      RPM_VREG_FORCE_MODE_8660_NONE, \
 		      RPM_VREG_FORCE_MODE_8660_NONE, RPM_VREG_STATE_OFF, \
 		      _sleep_selectable, _always_on)
 
@@ -4022,6 +4057,7 @@ static struct regulator_consumer_supply vreg_consumers_PM8901_S4_PC[] = {
 		      REGULATOR_CHANGE_VOLTAGE | REGULATOR_CHANGE_STATUS, 0, \
 		      _min_uV, 1000, 1000, _pd, RPM_VREG_PIN_CTRL_NONE, NONE, \
 		      RPM_VREG_PIN_FN_8660_ENABLE, \
+		      RPM_VREG_FORCE_MODE_8660_NONE, \
 		      RPM_VREG_FORCE_MODE_8660_NONE, RPM_VREG_STATE_OFF, \
 		      _sleep_selectable, _always_on)
 
@@ -4034,7 +4070,7 @@ static struct regulator_consumer_supply vreg_consumers_PM8901_S4_PC[] = {
 /* RPM early regulator constraints */
 static struct rpm_regulator_init_data rpm_regulator_early_init_data[] = {
 	/*	 ID       a_on pd ss min_uV   max_uV   init_ip    freq */
-	RPM_SMPS(PM8058_S0, 0, 1, 1,  500000, 1250000, SMPS_HMIN, 1p60),
+	RPM_SMPS(PM8058_S0, 0, 1, 1,  500000, 1325000, SMPS_HMIN, 1p60),
 	RPM_SMPS(PM8058_S1, 0, 1, 1,  500000, 1250000, SMPS_HMIN, 1p60),
 };
 
@@ -4195,9 +4231,9 @@ static struct platform_device *rumi_sim_devices[] __initdata = {
 	&android_pmem_device,
 	&android_pmem_adsp_device,
 	&android_pmem_smipool_device,
-#endif
 	&android_pmem_audio_device,
-#endif
+#endif /*CONFIG_MSM_MULTIMEDIA_USE_ION*/
+#endif /*CONFIG_ANDROID_PMEM*/
 #ifdef CONFIG_MSM_ROTATOR
 	&msm_rotator_device,
 #endif
@@ -4210,6 +4246,7 @@ static struct platform_device *rumi_sim_devices[] __initdata = {
 	&hdmi_msm_device,
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
 #ifdef CONFIG_MSM_CAMERA
+#ifndef CONFIG_MSM_CAMERA_V4L2
 #ifdef CONFIG_MT9E013
 	&msm_camera_sensor_mt9e013,
 #endif
@@ -4229,11 +4266,14 @@ static struct platform_device *rumi_sim_devices[] __initdata = {
 	&msm_camera_sensor_qs_s5k4e1,
 #endif
 #endif
+#endif
 #ifdef CONFIG_MSM_GEMINI
 	&msm_gemini_device,
 #endif
 #ifdef CONFIG_MSM_VPE
+#ifndef CONFIG_MSM_CAMERA_V4L2
 	&msm_vpe_device,
+#endif
 #endif
 	&msm_device_vidc,
 };
@@ -4829,26 +4869,46 @@ static struct platform_device msm_adc_device = {
 	},
 };
 
+static struct msm_rtb_platform_data msm_rtb_pdata = {
+	.size = SZ_1M,
+};
+
+static int __init msm_rtb_set_buffer_size(char *p)
+{
+	int s;
+
+	s = memparse(p, NULL);
+	msm_rtb_pdata.size = ALIGN(s, SZ_4K);
+	return 0;
+}
+early_param("msm_rtb_size", msm_rtb_set_buffer_size);
+
+
+static struct platform_device msm_rtb_device = {
+	.name           = "msm_rtb",
+	.id             = -1,
+	.dev            = {
+		.platform_data = &msm_rtb_pdata,
+	},
+};
+
 static void pmic8058_xoadc_mpp_config(void)
 {
 	int rc, i;
 	struct pm8xxx_mpp_init_info xoadc_mpps[] = {
-		PM8XXX_MPP_INIT(XOADC_MPP_3, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH5,
+		PM8058_MPP_INIT(XOADC_MPP_3, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH5,
 							AOUT_CTRL_DISABLE),
-		PM8XXX_MPP_INIT(XOADC_MPP_5, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH9,
+		PM8058_MPP_INIT(XOADC_MPP_5, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH9,
 							AOUT_CTRL_DISABLE),
-		PM8XXX_MPP_INIT(XOADC_MPP_7, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH6,
+		PM8058_MPP_INIT(XOADC_MPP_7, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH6,
 							AOUT_CTRL_DISABLE),
-		PM8XXX_MPP_INIT(XOADC_MPP_8, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH8,
+		PM8058_MPP_INIT(XOADC_MPP_8, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH8,
 							AOUT_CTRL_DISABLE),
-		PM8XXX_MPP_INIT(XOADC_MPP_10, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH7,
+		PM8058_MPP_INIT(XOADC_MPP_10, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH7,
 							AOUT_CTRL_DISABLE),
+		PM8901_MPP_INIT(XOADC_MPP_4, D_OUTPUT, PM8901_MPP_DIG_LEVEL_S4,
+							DOUT_CTRL_LOW),
 	};
-
-	rc = pm8901_mpp_config_digital_out(XOADC_MPP_4,
-			PM8901_MPP_DIG_LEVEL_S4, PM_MPP_DOUT_CTL_LOW);
-	if (rc)
-		pr_err("%s: Config mpp4 on pmic 8901 failed\n", __func__);
 
 	for (i = 0; i < ARRAY_SIZE(xoadc_mpps); i++) {
 		rc = pm8xxx_mpp_config(xoadc_mpps[i].mpp,
@@ -4978,6 +5038,75 @@ struct platform_device msm_device_sdio_al = {
 
 #endif /* CONFIG_MSM_SDIO_AL */
 
+#define GPIO_VREG_ID_EXT_5V		0
+
+static struct regulator_consumer_supply vreg_consumers_EXT_5V[] = {
+	REGULATOR_SUPPLY("ext_5v",	NULL),
+	REGULATOR_SUPPLY("8901_mpp0",	NULL),
+};
+
+#define GPIO_VREG_INIT(_id, _reg_name, _gpio_label, _gpio, _active_low) \
+	[GPIO_VREG_ID_##_id] = { \
+		.init_data = { \
+			.constraints = { \
+				.valid_ops_mask	= REGULATOR_CHANGE_STATUS, \
+			}, \
+			.num_consumer_supplies	= \
+					ARRAY_SIZE(vreg_consumers_##_id), \
+			.consumer_supplies	= vreg_consumers_##_id, \
+		}, \
+		.regulator_name	= _reg_name, \
+		.active_low	= _active_low, \
+		.gpio_label	= _gpio_label, \
+		.gpio		= _gpio, \
+	}
+
+/* GPIO regulator constraints */
+static struct gpio_regulator_platform_data msm_gpio_regulator_pdata[] = {
+	GPIO_VREG_INIT(EXT_5V, "ext_5v", "ext_5v_en",
+					PM8901_MPP_PM_TO_SYS(0), 0),
+};
+
+/* GPIO regulator */
+static struct platform_device msm8x60_8901_mpp_vreg __devinitdata = {
+	.name	= GPIO_REGULATOR_DEV_NAME,
+	.id	= PM8901_MPP_PM_TO_SYS(0),
+	.dev	= {
+		.platform_data =
+			&msm_gpio_regulator_pdata[GPIO_VREG_ID_EXT_5V],
+	},
+};
+
+static void __init pm8901_vreg_mpp0_init(void)
+{
+	int rc;
+
+	struct pm8xxx_mpp_init_info pm8901_vreg_mpp0 = {
+		.mpp	= PM8901_MPP_PM_TO_SYS(0),
+		.config =  {
+			.type	= PM8XXX_MPP_TYPE_D_OUTPUT,
+			.level	= PM8901_MPP_DIG_LEVEL_VPH,
+		},
+	};
+
+	/*
+	 * Set PMIC 8901 MPP0 active_high to 0 for surf and charm_surf. This
+	 * implies that the regulator connected to MPP0 is enabled when
+	 * MPP0 is low.
+	 */
+	if (machine_is_msm8x60_surf() || machine_is_msm8x60_fusion()) {
+		msm_gpio_regulator_pdata[GPIO_VREG_ID_EXT_5V].active_low = 1;
+		pm8901_vreg_mpp0.config.control = PM8XXX_MPP_DOUT_CTRL_HIGH;
+	} else {
+		msm_gpio_regulator_pdata[GPIO_VREG_ID_EXT_5V].active_low = 0;
+		pm8901_vreg_mpp0.config.control = PM8XXX_MPP_DOUT_CTRL_LOW;
+	}
+
+	rc = pm8xxx_mpp_config(pm8901_vreg_mpp0.mpp, &pm8901_vreg_mpp0.config);
+	if (rc)
+		pr_err("%s: pm8xxx_mpp_config: rc=%d\n", __func__, rc);
+}
+
 static struct platform_device *charm_devices[] __initdata = {
 	&msm_charm_modem,
 #ifdef CONFIG_MSM_SDIO_AL
@@ -5011,6 +5140,10 @@ static struct platform_device *asoc_devices[] __initdata = {
 static struct platform_device *surf_devices[] __initdata = {
 	&msm_device_smd,
 	&msm_device_uart_dm12,
+	&msm_pil_q6v3,
+	&msm_pil_modem,
+	&msm_pil_tzapps,
+	&msm_pil_dsps,
 #ifdef CONFIG_I2C_QUP
 	&msm_gsbi3_qup_i2c_device,
 	&msm_gsbi4_qup_i2c_device,
@@ -5039,10 +5172,10 @@ static struct platform_device *surf_devices[] __initdata = {
 	&asoc_mvs_dai1,
 #endif
 
-#if defined(CONFIG_USB_GADGET_MSM_72K) || defined(CONFIG_USB_EHCI_HCD)
+#if defined(CONFIG_USB_MSM_72K) || defined(CONFIG_USB_EHCI_HCD)
 	&msm_device_otg,
 #endif
-#ifdef CONFIG_USB_GADGET_MSM_72K
+#ifdef CONFIG_USB_MSM_72K
 	&msm_device_gadget_peripheral,
 #endif
 #ifdef CONFIG_USB_G_ANDROID
@@ -5056,9 +5189,9 @@ static struct platform_device *surf_devices[] __initdata = {
 	&android_pmem_device,
 	&android_pmem_adsp_device,
 	&android_pmem_smipool_device,
-#endif
 	&android_pmem_audio_device,
-#endif
+#endif /*CONFIG_MSM_MULTIMEDIA_USE_ION*/
+#endif /*CONFIG_ANDROID_PMEM*/
 #ifdef CONFIG_MSM_ROTATOR
 	&msm_rotator_device,
 #endif
@@ -5084,6 +5217,7 @@ static struct platform_device *surf_devices[] __initdata = {
 	&mipi_dsi_novatek_panel_device,
 #endif
 #ifdef CONFIG_MSM_CAMERA
+#ifndef CONFIG_MSM_CAMERA_V4L2
 #ifdef CONFIG_MT9E013
 	&msm_camera_sensor_mt9e013,
 #endif
@@ -5103,18 +5237,21 @@ static struct platform_device *surf_devices[] __initdata = {
 	&msm_camera_sensor_vx6953,
 #endif
 #endif
+#endif
 #ifdef CONFIG_MSM_GEMINI
 	&msm_gemini_device,
 #endif
 #ifdef CONFIG_MSM_VPE
+#ifndef CONFIG_MSM_CAMERA_V4L2
 	&msm_vpe_device,
+#endif
 #endif
 
 #if defined(CONFIG_MSM_RPM_LOG) || defined(CONFIG_MSM_RPM_LOG_MODULE)
-	&msm_rpm_log_device,
+	&msm8660_rpm_log_device,
 #endif
 #if defined(CONFIG_MSM_RPM_STATS_LOG)
-	&msm_rpm_stat_device,
+	&msm8660_rpm_stat_device,
 #endif
 	&msm_device_vidc,
 #if (defined(CONFIG_MARIMBA_CORE)) && \
@@ -5150,54 +5287,144 @@ static struct platform_device *surf_devices[] __initdata = {
 #endif
 
 	&msm_tsens_device,
-	&msm_rpm_device,
+	&msm8660_rpm_device,
 #ifdef CONFIG_ION_MSM
 	&ion_dev,
 #endif
 	&msm8660_device_watchdog,
+	&msm_device_tz_log,
+	&msm_rtb_device,
 };
 
 #ifdef CONFIG_ION_MSM
-struct ion_platform_data ion_pdata = {
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+static struct ion_cp_heap_pdata cp_mm_ion_pdata = {
+	.permission_type = IPT_TYPE_MM_CARVEOUT,
+	.align = SZ_64K,
+	.request_region = request_smi_region,
+	.release_region = release_smi_region,
+	.setup_region = setup_smi_region,
+	.secure_base = MSM_ION_HOLE_BASE,
+	.secure_size = MSM_ION_HOLE_SIZE + MSM_ION_MM_SIZE,
+	.iommu_map_all = 1,
+	.iommu_2x_map_domain = VIDEO_DOMAIN,
+};
+
+static struct ion_cp_heap_pdata cp_mfc_ion_pdata = {
+	.permission_type = IPT_TYPE_MFC_SHAREDMEM,
+	.align = PAGE_SIZE,
+	.request_region = request_smi_region,
+	.release_region = release_smi_region,
+	.setup_region = setup_smi_region,
+};
+
+static struct ion_cp_heap_pdata cp_wb_ion_pdata = {
+	.permission_type = IPT_TYPE_MDP_WRITEBACK,
+	.align = PAGE_SIZE,
+};
+
+static struct ion_co_heap_pdata hole_co_ion_pdata = {
+	.adjacent_mem_id = ION_CP_MM_HEAP_ID,
+};
+
+static struct ion_co_heap_pdata co_ion_pdata = {
+	.adjacent_mem_id = INVALID_HEAP_ID,
+	.align = PAGE_SIZE,
+};
+#endif
+
+/**
+ * These heaps are listed in the order they will be allocated. Due to
+ * video hardware restrictions and content protection the FW heap has to
+ * be allocated adjacent (below) the MM heap and the MFC heap has to be
+ * allocated after the MM heap to ensure MFC heap is not more than 256MB
+ * away from the base address of the FW heap.
+ * However, the order of FW heap and MM heap doesn't matter since these
+ * two heaps are taken care of by separate code to ensure they are adjacent
+ * to each other.
+ * Don't swap the order unless you know what you are doing!
+ */
+static struct ion_platform_data ion_pdata = {
 	.nr = MSM_ION_HEAP_NUM,
 	.heaps = {
 		{
-			.id	= ION_HEAP_SYSTEM_ID,
+			.id	= ION_SYSTEM_HEAP_ID,
 			.type	= ION_HEAP_TYPE_SYSTEM,
 			.name	= ION_VMALLOC_HEAP_NAME,
 		},
-		{
-			.id	= ION_HEAP_SYSTEM_CONTIG_ID,
-			.type	= ION_HEAP_TYPE_SYSTEM_CONTIG,
-			.name	= ION_KMALLOC_HEAP_NAME,
-		},
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
 		{
-			.id	= ION_HEAP_EBI_ID,
-			.type	= ION_HEAP_TYPE_CARVEOUT,
-			.name	= ION_EBI1_HEAP_NAME,
-			.size	= MSM_ION_EBI_SIZE,
-			.memory_type = ION_EBI_TYPE,
-		},
-		{
-			.id	= ION_HEAP_ADSP_ID,
-			.type	= ION_HEAP_TYPE_CARVEOUT,
-			.name	= ION_ADSP_HEAP_NAME,
-			.size	= MSM_ION_ADSP_SIZE,
-			.memory_type = ION_EBI_TYPE,
-		},
-		{
-			.id	= ION_HEAP_SMI_ID,
-			.type	= ION_HEAP_TYPE_CARVEOUT,
-			.name	= ION_SMI_HEAP_NAME,
-			.size	= MSM_ION_SMI_SIZE,
+			.id	= ION_CP_MM_HEAP_ID,
+			.type	= ION_HEAP_TYPE_CP,
+			.name	= ION_MM_HEAP_NAME,
+			.base   = MSM_ION_MM_BASE,
+			.size	= MSM_ION_MM_SIZE,
 			.memory_type = ION_SMI_TYPE,
+			.extra_data = (void *) &cp_mm_ion_pdata,
+		},
+		{
+			.id	= ION_MM_FIRMWARE_HEAP_ID,
+			.type	= ION_HEAP_TYPE_CARVEOUT,
+			.name	= ION_MM_FIRMWARE_HEAP_NAME,
+			.base	= MSM_ION_HOLE_BASE,
+			.size	= MSM_ION_HOLE_SIZE,
+			.memory_type = ION_SMI_TYPE,
+			.extra_data = (void *) &hole_co_ion_pdata,
+		},
+		{
+			.id	= ION_CP_MFC_HEAP_ID,
+			.type	= ION_HEAP_TYPE_CP,
+			.name	= ION_MFC_HEAP_NAME,
+			.base	= MSM_ION_MFC_BASE,
+			.size	= MSM_ION_MFC_SIZE,
+			.memory_type = ION_SMI_TYPE,
+			.extra_data = (void *) &cp_mfc_ion_pdata,
+		},
+		{
+			.id	= ION_SF_HEAP_ID,
+			.type	= ION_HEAP_TYPE_CARVEOUT,
+			.name	= ION_SF_HEAP_NAME,
+			.size	= MSM_ION_SF_SIZE,
+			.memory_type = ION_EBI_TYPE,
+			.extra_data = (void *)&co_ion_pdata,
+		},
+		{
+			.id	= ION_CAMERA_HEAP_ID,
+			.type	= ION_HEAP_TYPE_CARVEOUT,
+			.name	= ION_CAMERA_HEAP_NAME,
+			.size	= MSM_ION_CAMERA_SIZE,
+			.memory_type = ION_EBI_TYPE,
+			.extra_data = &co_ion_pdata,
+		},
+		{
+			.id	= ION_CP_WB_HEAP_ID,
+			.type	= ION_HEAP_TYPE_CP,
+			.name	= ION_WB_HEAP_NAME,
+			.size	= MSM_ION_WB_SIZE,
+			.memory_type = ION_EBI_TYPE,
+			.extra_data = (void *) &cp_wb_ion_pdata,
+		},
+		{
+			.id	= ION_QSECOM_HEAP_ID,
+			.type	= ION_HEAP_TYPE_CARVEOUT,
+			.name	= ION_QSECOM_HEAP_NAME,
+			.size	= MSM_ION_QSECOM_SIZE,
+			.memory_type = ION_EBI_TYPE,
+			.extra_data = (void *) &co_ion_pdata,
+		},
+		{
+			.id	= ION_AUDIO_HEAP_ID,
+			.type	= ION_HEAP_TYPE_CARVEOUT,
+			.name	= ION_AUDIO_HEAP_NAME,
+			.size	= MSM_ION_AUDIO_SIZE,
+			.memory_type = ION_EBI_TYPE,
+			.extra_data = (void *)&co_ion_pdata,
 		},
 #endif
 	}
 };
 
-struct platform_device ion_dev = {
+static struct platform_device ion_dev = {
 	.name = "ion-msm",
 	.id = 1,
 	.dev = { .platform_data = &ion_pdata },
@@ -5217,12 +5444,7 @@ static struct memtype_reserve msm8x60_reserve_table[] __initdata = {
 		.size	=	KERNEL_SMI_SIZE,
 		.flags	=	MEMTYPE_FLAGS_FIXED,
 	},
-	/* User space SMI memory pool for video core */
-	/* used for encoder, decoder input & output buffers  */
 	[MEMTYPE_SMI] = {
-		.start	=	USER_SMI_BASE,
-		.limit	=	USER_SMI_SIZE,
-		.flags	=	MEMTYPE_FLAGS_FIXED,
 	},
 	[MEMTYPE_EBI0] = {
 		.flags	=	MEMTYPE_FLAGS_1M_ALIGN,
@@ -5232,12 +5454,45 @@ static struct memtype_reserve msm8x60_reserve_table[] __initdata = {
 	},
 };
 
-static void reserve_ion_memory(void)
+static void __init reserve_ion_memory(void)
 {
 #if defined(CONFIG_ION_MSM) && defined(CONFIG_MSM_MULTIMEDIA_USE_ION)
-	msm8x60_reserve_table[MEMTYPE_EBI1].size += MSM_ION_EBI_SIZE;
-	msm8x60_reserve_table[MEMTYPE_EBI1].size += MSM_ION_ADSP_SIZE;
-	msm8x60_reserve_table[MEMTYPE_SMI].size += MSM_ION_SMI_SIZE;
+	unsigned int i;
+
+	if (hdmi_is_primary) {
+		msm_ion_sf_size = MSM_HDMI_PRIM_ION_SF_SIZE;
+		for (i = 0; i < ion_pdata.nr; i++) {
+			if (ion_pdata.heaps[i].id == ION_SF_HEAP_ID) {
+				ion_pdata.heaps[i].size = msm_ion_sf_size;
+				pr_debug("msm_ion_sf_size 0x%x\n",
+					msm_ion_sf_size);
+				break;
+			}
+		}
+	}
+
+	/* Verify size of heap is a multiple of 64K */
+	for (i = 0; i < ion_pdata.nr; i++) {
+		struct ion_platform_heap *heap = &(ion_pdata.heaps[i]);
+
+		if (heap->extra_data && heap->type == ION_HEAP_TYPE_CP) {
+			int map_all = ((struct ion_cp_heap_pdata *)
+				heap->extra_data)->iommu_map_all;
+
+			if (map_all && (heap->size & (SZ_64K-1))) {
+				heap->size = ALIGN(heap->size, SZ_64K);
+				pr_err("Heap %s size is not a multiple of 64K. Adjusting size to %x\n",
+					heap->name, heap->size);
+
+			}
+		}
+	}
+
+	msm8x60_reserve_table[MEMTYPE_EBI1].size += msm_ion_sf_size;
+	msm8x60_reserve_table[MEMTYPE_EBI1].size += MSM_ION_CAMERA_SIZE;
+	msm8x60_reserve_table[MEMTYPE_EBI1].size += MSM_ION_WB_SIZE;
+	msm8x60_reserve_table[MEMTYPE_EBI1].size += MSM_ION_AUDIO_SIZE;
+	msm8x60_reserve_table[MEMTYPE_EBI1].size += MSM_ION_QSECOM_SIZE;
 #endif
 }
 
@@ -5247,16 +5502,23 @@ static void __init size_pmem_devices(void)
 #ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
 	android_pmem_adsp_pdata.size = pmem_adsp_size;
 	android_pmem_smipool_pdata.size = MSM_PMEM_SMIPOOL_SIZE;
+
+	if (hdmi_is_primary)
+		pmem_sf_size = MSM_HDMI_PRIM_PMEM_SF_SIZE;
 	android_pmem_pdata.size = pmem_sf_size;
-#endif
 	android_pmem_audio_pdata.size = MSM_PMEM_AUDIO_SIZE;
-#endif
+#endif /*CONFIG_MSM_MULTIMEDIA_USE_ION*/
+#endif /*CONFIG_ANDROID_PMEM*/
 }
 
+#ifdef CONFIG_ANDROID_PMEM
+#ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
 static void __init reserve_memory_for(struct android_pmem_platform_data *p)
 {
 	msm8x60_reserve_table[p->memory_type].size += p->size;
 }
+#endif /*CONFIG_MSM_MULTIMEDIA_USE_ION*/
+#endif /*CONFIG_ANDROID_PMEM*/
 
 static void __init reserve_pmem_memory(void)
 {
@@ -5265,19 +5527,28 @@ static void __init reserve_pmem_memory(void)
 	reserve_memory_for(&android_pmem_adsp_pdata);
 	reserve_memory_for(&android_pmem_smipool_pdata);
 	reserve_memory_for(&android_pmem_pdata);
-#endif
 	reserve_memory_for(&android_pmem_audio_pdata);
+#endif /*CONFIG_MSM_MULTIMEDIA_USE_ION*/
 	msm8x60_reserve_table[MEMTYPE_EBI1].size += pmem_kernel_ebi1_size;
-#endif
+#endif /*CONFIG_ANDROID_PMEM*/
 }
 
+static void __init reserve_mdp_memory(void);
 
+static void __init reserve_rtb_memory(void)
+{
+#if defined(CONFIG_MSM_RTB)
+	msm8x60_reserve_table[MEMTYPE_EBI1].size += msm_rtb_pdata.size;
+#endif
+}
 
 static void __init msm8x60_calculate_reserve_sizes(void)
 {
 	size_pmem_devices();
 	reserve_pmem_memory();
 	reserve_ion_memory();
+	reserve_mdp_memory();
+	reserve_rtb_memory();
 }
 
 static int msm8x60_paddr_to_memtype(unsigned int paddr)
@@ -5295,8 +5566,27 @@ static struct reserve_info msm8x60_reserve_info __initdata = {
 	.paddr_to_memtype = msm8x60_paddr_to_memtype,
 };
 
+static char prim_panel_name[PANEL_NAME_MAX_LEN];
+static char ext_panel_name[PANEL_NAME_MAX_LEN];
+static int __init prim_display_setup(char *param)
+{
+	if (strnlen(param, PANEL_NAME_MAX_LEN))
+		strlcpy(prim_panel_name, param, PANEL_NAME_MAX_LEN);
+	return 0;
+}
+early_param("prim_display", prim_display_setup);
+
+static int __init ext_display_setup(char *param)
+{
+	if (strnlen(param, PANEL_NAME_MAX_LEN))
+		strlcpy(ext_panel_name, param, PANEL_NAME_MAX_LEN);
+	return 0;
+}
+early_param("ext_display", ext_display_setup);
+
 static void __init msm8x60_reserve(void)
 {
+	msm8x60_set_display_params(prim_panel_name, ext_panel_name);
 	reserve_info = &msm8x60_reserve_info;
 	msm_reserve();
 }
@@ -5305,9 +5595,9 @@ static void __init msm8x60_reserve(void)
 #define EXT_CHG_VALID_MPP_2 11
 
 static struct pm8xxx_mpp_init_info isl_mpp[] = {
-	PM8XXX_MPP_INIT(EXT_CHG_VALID_MPP, D_INPUT,
+	PM8058_MPP_INIT(EXT_CHG_VALID_MPP, D_INPUT,
 		PM8058_MPP_DIG_LEVEL_S3, DIN_TO_INT),
-	PM8XXX_MPP_INIT(EXT_CHG_VALID_MPP_2, D_BI_DIR,
+	PM8058_MPP_INIT(EXT_CHG_VALID_MPP_2, D_BI_DIR,
 		PM8058_MPP_DIG_LEVEL_S3, BI_PULLUP_10KOHM),
 };
 
@@ -5781,7 +6071,7 @@ static struct pm8xxx_rtc_platform_data pm8058_rtc_pdata = {
 
 static struct pm8xxx_pwrkey_platform_data pm8058_pwrkey_pdata = {
 	.pull_up		= 1,
-	.kpd_trigger_delay_us   = 970,
+	.kpd_trigger_delay_us   = 15625,
 	.wakeup			= 1,
 };
 
@@ -6522,32 +6812,10 @@ static struct i2c_board_info wm8903_codec_i2c_info[] = {
 #ifdef CONFIG_PMIC8901
 
 #define PM8901_GPIO_INT           91
-
-static struct pm8901_gpio_platform_data pm8901_mpp_data = {
-	.gpio_base	= PM8901_GPIO_PM_TO_SYS(0),
-	.irq_base	= PM8901_MPP_IRQ(PM8901_IRQ_BASE, 0),
-};
-
-static struct resource pm8901_temp_alarm[] = {
-	{
-		.start = PM8901_TEMP_ALARM_IRQ(PM8901_IRQ_BASE),
-		.end = PM8901_TEMP_ALARM_IRQ(PM8901_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.start = PM8901_TEMP_HI_ALARM_IRQ(PM8901_IRQ_BASE),
-		.end = PM8901_TEMP_HI_ALARM_IRQ(PM8901_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-};
-
 /*
  * Consumer specific regulator names:
  *			 regulator name		consumer dev_name
  */
-static struct regulator_consumer_supply vreg_consumers_8901_MPP0[] = {
-	REGULATOR_SUPPLY("8901_mpp0",		NULL),
-};
 static struct regulator_consumer_supply vreg_consumers_8901_USB_OTG[] = {
 	REGULATOR_SUPPLY("8901_usb_otg",	NULL),
 };
@@ -6556,8 +6824,8 @@ static struct regulator_consumer_supply vreg_consumers_8901_HDMI_MVS[] = {
 };
 
 #define PM8901_VREG_INIT(_id, _min_uV, _max_uV, _modes, _ops, _apply_uV, \
-			 _always_on, _active_high) \
-	[PM8901_VREG_ID_##_id] = { \
+			 _always_on) \
+	{ \
 		.init_data = { \
 			.constraints = { \
 				.valid_modes_mask = _modes, \
@@ -6572,53 +6840,38 @@ static struct regulator_consumer_supply vreg_consumers_8901_HDMI_MVS[] = {
 			.num_consumer_supplies = \
 				ARRAY_SIZE(vreg_consumers_8901_##_id), \
 		}, \
-		.active_high = _active_high, \
+		.id = PM8901_VREG_ID_##_id, \
 	}
-
-#define PM8901_VREG_INIT_MPP(_id, _active_high) \
-	PM8901_VREG_INIT(_id, 0, 0, REGULATOR_MODE_NORMAL, \
-			REGULATOR_CHANGE_STATUS, 0, 0, _active_high)
 
 #define PM8901_VREG_INIT_VS(_id) \
 	PM8901_VREG_INIT(_id, 0, 0, REGULATOR_MODE_NORMAL, \
-			REGULATOR_CHANGE_STATUS, 0, 0, 0)
+			REGULATOR_CHANGE_STATUS, 0, 0)
 
-static struct pm8901_vreg_pdata pm8901_vreg_init_pdata[PM8901_VREG_MAX] = {
-	PM8901_VREG_INIT_MPP(MPP0, 1),
-
+static struct pm8901_vreg_pdata pm8901_vreg_init[] = {
 	PM8901_VREG_INIT_VS(USB_OTG),
 	PM8901_VREG_INIT_VS(HDMI_MVS),
 };
 
-#define PM8901_VREG(_id) { \
-	.name = "pm8901-regulator", \
-	.id = _id, \
-	.platform_data = &pm8901_vreg_init_pdata[_id], \
-	.pdata_size = sizeof(pm8901_vreg_init_pdata[_id]), \
-}
+static struct pm8xxx_misc_platform_data pm8901_misc_pdata = {
+	.priority		= 1,
+};
 
-static struct mfd_cell pm8901_subdevs[] = {
-	{	.name = "pm8901-mpp",
-		.id		= -1,
-		.platform_data	= &pm8901_mpp_data,
-		.pdata_size      = sizeof(pm8901_mpp_data),
-	},
-	{	.name = "pm8901-tm",
-		.id		= -1,
-		.num_resources  = ARRAY_SIZE(pm8901_temp_alarm),
-		.resources      = pm8901_temp_alarm,
-	},
-	PM8901_VREG(PM8901_VREG_ID_MPP0),
-	PM8901_VREG(PM8901_VREG_ID_USB_OTG),
-	PM8901_VREG(PM8901_VREG_ID_HDMI_MVS),
+static struct pm8xxx_irq_platform_data pm8901_irq_pdata = {
+	.irq_base		= PM8901_IRQ_BASE,
+	.devirq			= MSM_GPIO_TO_INT(PM8901_GPIO_INT),
+	.irq_trigger_flag	= IRQF_TRIGGER_LOW,
+};
+
+static struct pm8xxx_mpp_platform_data pm8901_mpp_pdata = {
+	.mpp_base		= PM8901_MPP_PM_TO_SYS(0),
 };
 
 static struct pm8901_platform_data pm8901_platform_data = {
-	.irq_base = PM8901_IRQ_BASE,
-	.irq = MSM_GPIO_TO_INT(PM8901_GPIO_INT),
-	.num_subdevs = ARRAY_SIZE(pm8901_subdevs),
-	.sub_devices = pm8901_subdevs,
-	.irq_trigger_flags = IRQF_TRIGGER_LOW,
+	.irq_pdata		= &pm8901_irq_pdata,
+	.mpp_pdata		= &pm8901_mpp_pdata,
+	.regulator_pdatas	= pm8901_vreg_init,
+	.num_regulators		= ARRAY_SIZE(pm8901_vreg_init),
+	.misc_pdata		= &pm8901_misc_pdata,
 };
 
 static struct msm_ssbi_platform_data msm8x60_ssbi_pm8901_pdata __devinitdata = {
@@ -7015,6 +7268,7 @@ static struct i2c_registry msm8x60_i2c_devices[] __initdata = {
 	},
 #endif
 #ifdef CONFIG_MSM_CAMERA
+#ifndef CONFIG_MSM_CAMERA_V4L2
 	{
 		I2C_SURF | I2C_FFA | I2C_FLUID ,
 		MSM_GSBI4_QUP_I2C_BUS_ID,
@@ -7027,6 +7281,7 @@ static struct i2c_registry msm8x60_i2c_devices[] __initdata = {
 		msm_camera_dragon_boardinfo,
 		ARRAY_SIZE(msm_camera_dragon_boardinfo),
 	},
+#endif
 #endif
 	{
 		I2C_SURF | I2C_FFA | I2C_FLUID,
@@ -7087,7 +7342,7 @@ static struct i2c_registry msm8x60_i2c_devices[] __initdata = {
 };
 #endif /* CONFIG_I2C */
 
-static void fixup_i2c_configs(void)
+static void __init fixup_i2c_configs(void)
 {
 #ifdef CONFIG_I2C
 #if defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)
@@ -7102,23 +7357,22 @@ static void fixup_i2c_configs(void)
 		sx150x_data[SX150X_CORE_FLUID].irq_summary =
 			PM8058_GPIO_IRQ(PM8058_IRQ_BASE, UI_INT1_N);
 #endif
-	/*
-	 * Set PMIC 8901 MPP0 active_high to 0 for surf and charm_surf. This
-	 * implies that the regulator connected to MPP0 is enabled when
-	 * MPP0 is low.
-	 */
-	if (machine_is_msm8x60_surf() || machine_is_msm8x60_fusion())
-		pm8901_vreg_init_pdata[PM8901_VREG_ID_MPP0].active_high = 0;
-	else
-		pm8901_vreg_init_pdata[PM8901_VREG_ID_MPP0].active_high = 1;
 #endif
 }
 
-static void register_i2c_devices(void)
+static void __init register_i2c_devices(void)
 {
 #ifdef CONFIG_I2C
 	u8 mach_mask = 0;
 	int i;
+#ifdef CONFIG_MSM_CAMERA_V4L2
+	struct i2c_registry msm8x60_camera_i2c_devices = {
+		I2C_SURF | I2C_FFA | I2C_FLUID,
+		MSM_GSBI4_QUP_I2C_BUS_ID,
+		msm8x60_camera_board_info.board_info,
+		msm8x60_camera_board_info.num_i2c_board_info,
+	};
+#endif
 
 	/* Build the matching 'supported_machs' bitmask */
 	if (machine_is_msm8x60_surf() || machine_is_msm8x60_fusion())
@@ -7143,6 +7397,12 @@ static void register_i2c_devices(void)
 						msm8x60_i2c_devices[i].info,
 						msm8x60_i2c_devices[i].len);
 	}
+#ifdef CONFIG_MSM_CAMERA_V4L2
+	if (msm8x60_camera_i2c_devices.machs & mach_mask)
+		i2c_register_board_info(msm8x60_camera_i2c_devices.bus,
+			msm8x60_camera_i2c_devices.info,
+			msm8x60_camera_i2c_devices.len);
+#endif
 #endif
 }
 
@@ -7224,7 +7484,7 @@ static void __init msm8x60_init_buses(void)
 #endif
 	}
 
-#if defined(CONFIG_USB_GADGET_MSM_72K) || defined(CONFIG_USB_EHCI_HCD)
+#if defined(CONFIG_USB_MSM_72K) || defined(CONFIG_USB_EHCI_HCD)
 	/*
 	 * We can not put USB regulators (8058_l6 and 8058_l7) in LPM
 	 * when we depend on USB PHY for VBUS/ID notifications. VBUS
@@ -7239,7 +7499,7 @@ static void __init msm8x60_init_buses(void)
 	msm_device_otg.dev.platform_data = &msm_otg_pdata;
 #endif
 
-#ifdef CONFIG_USB_GADGET_MSM_72K
+#ifdef CONFIG_USB_MSM_72K
 	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
 #endif
 
@@ -7298,7 +7558,7 @@ static void __init msm8x60_init_ebi2(void)
 					"msm_ebi2", "mem_clk");
 		return;
 	}
-	clk_enable(mem_clk);
+	clk_prepare_enable(mem_clk);
 	clk_put(mem_clk);
 
 	ebi2_cfg_ptr = ioremap_nocache(0x1a100000, sizeof(uint32_t));
@@ -8118,44 +8378,10 @@ static unsigned int msm8x60_sdcc_slot_status(struct device *dev)
 }
 #endif
 #endif
-
-#ifdef	CONFIG_MMC_MSM_SDC4_SUPPORT
-static int msm_sdcc_cfg_mpm_sdiowakeup(struct device *dev, unsigned mode)
-{
-	struct platform_device *pdev;
-	enum msm_mpm_pin pin;
-	int ret = 0;
-
-	pdev = container_of(dev, struct platform_device, dev);
-
-	/* Only SDCC4 slot connected to WLAN chip has wakeup capability */
-	if (pdev->id == 4)
-		pin = MSM_MPM_PIN_SDC4_DAT1;
-	else
-		return -EINVAL;
-
-	switch (mode) {
-	case SDC_DAT1_DISABLE:
-		ret = msm_mpm_enable_pin(pin, 0);
-		break;
-	case SDC_DAT1_ENABLE:
-		ret = msm_mpm_set_pin_type(pin, IRQ_TYPE_LEVEL_LOW);
-		ret = msm_mpm_enable_pin(pin, 1);
-		break;
-	case SDC_DAT1_ENWAKE:
-		ret = msm_mpm_set_pin_wake(pin, 1);
-		break;
-	case SDC_DAT1_DISWAKE:
-		ret = msm_mpm_set_pin_wake(pin, 0);
-		break;
-	default:
-		ret = -EINVAL;
-		break;
-	}
-	return ret;
-}
 #endif
-#endif
+
+#define MSM_MPM_PIN_SDC3_DAT1	21
+#define MSM_MPM_PIN_SDC4_DAT1	23
 
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
 static struct mmc_platform_data msm8x60_sdc1_data = {
@@ -8171,6 +8397,7 @@ static struct mmc_platform_data msm8x60_sdc1_data = {
 	.msmsdcc_fmax	= 48000000,
 	.nonremovable	= 1,
 	.pclk_src_dfab	= 1,
+	.msm_bus_voting_data = &sps_to_ddr_bus_voting_data,
 };
 #endif
 
@@ -8189,6 +8416,7 @@ static struct mmc_platform_data msm8x60_sdc2_data = {
 #ifdef CONFIG_MSM_SDIO_AL
 	.is_sdio_al_client = 1,
 #endif
+	.msm_bus_voting_data = &sps_to_ddr_bus_voting_data,
 };
 #endif
 
@@ -8209,6 +8437,8 @@ static struct mmc_platform_data msm8x60_sdc3_data = {
 	.msmsdcc_fmax	= 48000000,
 	.nonremovable	= 0,
 	.pclk_src_dfab  = 1,
+	.mpm_sdiowakeup_int = MSM_MPM_PIN_SDC3_DAT1,
+	.msm_bus_voting_data = &sps_to_ddr_bus_voting_data,
 };
 #endif
 
@@ -8222,7 +8452,8 @@ static struct mmc_platform_data msm8x60_sdc4_data = {
 	.msmsdcc_fmax	= 48000000,
 	.nonremovable	= 0,
 	.pclk_src_dfab  = 1,
-	.cfg_mpm_sdiowakeup = msm_sdcc_cfg_mpm_sdiowakeup,
+	.mpm_sdiowakeup_int = MSM_MPM_PIN_SDC4_DAT1,
+	.msm_bus_voting_data = &sps_to_ddr_bus_voting_data,
 };
 #endif
 
@@ -8241,6 +8472,7 @@ static struct mmc_platform_data msm8x60_sdc5_data = {
 #ifdef CONFIG_MSM_SDIO_AL
 	.is_sdio_al_client = 1,
 #endif
+	.msm_bus_voting_data = &sps_to_ddr_bus_voting_data,
 };
 #endif
 
@@ -8279,10 +8511,8 @@ static void __init msm8x60_init_mmc(void)
 	if (machine_is_msm8x60_fusion())
 		msm8x60_sdc2_data.msmsdcc_fmax = 24000000;
 	if (machine_is_msm8x60_fusion() || machine_is_msm8x60_fusn_ffa()) {
-#ifdef CONFIG_MMC_MSM_SDIO_SUPPORT
 		msm8x60_sdc2_data.sdiowakeup_irq = gpio_to_irq(144);
 		msm_sdcc_setup_gpio(2, 1);
-#endif
 		msm_add_sdcc(2, &msm8x60_sdc2_data);
 	}
 #endif
@@ -8343,10 +8573,8 @@ static void __init msm8x60_init_mmc(void)
 	if (machine_is_msm8x60_fusion())
 		msm8x60_sdc5_data.msmsdcc_fmax = 24000000;
 	if (machine_is_msm8x60_fusion() || machine_is_msm8x60_fusn_ffa()) {
-#ifdef CONFIG_MMC_MSM_SDIO_SUPPORT
 		msm8x60_sdc5_data.sdiowakeup_irq = gpio_to_irq(99);
 		msm_sdcc_setup_gpio(5, 1);
-#endif
 		msm_add_sdcc(5, &msm8x60_sdc5_data);
 	}
 #endif
@@ -8898,6 +9126,111 @@ static int lcdc_panel_power(int on)
 }
 
 #ifdef CONFIG_MSM_BUS_SCALING
+
+static struct msm_bus_vectors rotator_init_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_ROTATOR,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab = 0,
+		.ib = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_ROTATOR,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab = 0,
+		.ib = 0,
+	},
+};
+
+static struct msm_bus_vectors rotator_ui_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_ROTATOR,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_ROTATOR,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = (1024 * 600 * 4 * 2 * 60),
+		.ib  = (1024 * 600 * 4 * 2 * 60 * 1.5),
+	},
+};
+
+static struct msm_bus_vectors rotator_vga_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_ROTATOR,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = (640 * 480 * 2 * 2 * 30),
+		.ib  = (640 * 480 * 2 * 2 * 30 * 1.5),
+	},
+	{
+		.src = MSM_BUS_MASTER_ROTATOR,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = (640 * 480 * 2 * 2 * 30),
+		.ib  = (640 * 480 * 2 * 2 * 30 * 1.5),
+	},
+};
+
+static struct msm_bus_vectors rotator_720p_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_ROTATOR,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = (1280 * 736 * 2 * 2 * 30),
+		.ib  = (1280 * 736 * 2 * 2 * 30 * 1.5),
+	},
+	{
+		.src = MSM_BUS_MASTER_ROTATOR,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = (1280 * 736 * 2 * 2 * 30),
+		.ib  = (1280 * 736 * 2 * 2 * 30 * 1.5),
+	},
+};
+
+static struct msm_bus_vectors rotator_1080p_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_ROTATOR,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = (1920 * 1088 * 2 * 2 * 30),
+		.ib  = (1920 * 1088 * 2 * 2 * 30 * 1.5),
+	},
+	{
+		.src = MSM_BUS_MASTER_ROTATOR,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = (1920 * 1088 * 2 * 2 * 30),
+		.ib  = (1920 * 1088 * 2 * 2 * 30 * 1.5),
+	},
+};
+
+static struct msm_bus_paths rotator_bus_scale_usecases[] = {
+	{
+		ARRAY_SIZE(rotator_init_vectors),
+		rotator_init_vectors,
+	},
+	{
+		ARRAY_SIZE(rotator_ui_vectors),
+		rotator_ui_vectors,
+	},
+	{
+		ARRAY_SIZE(rotator_vga_vectors),
+		rotator_vga_vectors,
+	},
+	{
+		ARRAY_SIZE(rotator_720p_vectors),
+		rotator_720p_vectors,
+	},
+	{
+		ARRAY_SIZE(rotator_1080p_vectors),
+		rotator_1080p_vectors,
+	},
+};
+
+struct msm_bus_scale_pdata rotator_bus_scale_pdata = {
+	rotator_bus_scale_usecases,
+	ARRAY_SIZE(rotator_bus_scale_usecases),
+	.name = "rotator",
+};
+
 static struct msm_bus_vectors mdp_init_vectors[] = {
 	/* For now, 0th array entry is reserved.
 	 * Please leave 0 as is and don't use it
@@ -8917,51 +9250,6 @@ static struct msm_bus_vectors mdp_init_vectors[] = {
 	},
 };
 
-#ifdef CONFIG_FB_MSM_HDMI_AS_PRIMARY
-static struct msm_bus_vectors hdmi_as_primary_vectors[] = {
-	/* If HDMI is used as primary */
-	 {
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 2000000000,
-		.ib = 2000000000,
-	 },
-	 /* Master and slaves can be from different fabrics */
-	 {
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 2000000000,
-		.ib = 2000000000,
-	 },
-};
-
-static struct msm_bus_paths mdp_bus_scale_usecases[] = {
-	{
-		ARRAY_SIZE(mdp_init_vectors),
-		mdp_init_vectors,
-	},
-	{
-		ARRAY_SIZE(hdmi_as_primary_vectors),
-		hdmi_as_primary_vectors,
-	},
-	{
-		ARRAY_SIZE(hdmi_as_primary_vectors),
-		hdmi_as_primary_vectors,
-	},
-	{
-		ARRAY_SIZE(hdmi_as_primary_vectors),
-		hdmi_as_primary_vectors,
-	},
-	{
-		ARRAY_SIZE(hdmi_as_primary_vectors),
-		hdmi_as_primary_vectors,
-	},
-	{
-		ARRAY_SIZE(hdmi_as_primary_vectors),
-		hdmi_as_primary_vectors,
-	},
-};
-#else
 #ifdef CONFIG_FB_MSM_LCDC_DSUB
 static struct msm_bus_vectors mdp_sd_smi_vectors[] = {
 	/* Default case static display/UI/2d/3d if FB SMI */
@@ -9156,7 +9444,6 @@ static struct msm_bus_paths mdp_bus_scale_usecases[] = {
 		mdp_1080p_vectors,
 	},
 };
-#endif
 static struct msm_bus_scale_pdata mdp_bus_scale_pdata = {
 	mdp_bus_scale_usecases,
 	ARRAY_SIZE(mdp_bus_scale_usecases),
@@ -9183,26 +9470,7 @@ static struct msm_bus_vectors dtv_bus_init_vectors[] = {
 		.ib = 0,
 	},
 };
-#ifdef CONFIG_FB_MSM_HDMI_AS_PRIMARY
-static struct msm_bus_vectors dtv_bus_def_vectors[] = {
-	/* For now, 0th array entry is reserved.
-	 * Please leave 0 as is and don't use it
-	 */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 2000000000,
-		.ib = 2000000000,
-	},
-	/* Master and slaves can be from different fabrics */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 2000000000,
-		.ib = 2000000000,
-	},
-};
-#else
+
 static struct msm_bus_vectors dtv_bus_def_vectors[] = {
 	/* For now, 0th array entry is reserved.
 	 * Please leave 0 as is and don't use it
@@ -9221,7 +9489,26 @@ static struct msm_bus_vectors dtv_bus_def_vectors[] = {
 		.ib = 707616000,
 	},
 };
-#endif
+
+static struct msm_bus_vectors dtv_bus_hdmi_prim_vectors[] = {
+	/* For now, 0th array entry is reserved.
+	 * Please leave 0 as is and don't use it
+	 */
+	{
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab = 2000000000,
+		.ib = 2000000000,
+	},
+	/* Master and slaves can be from different fabrics */
+	{
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab = 2000000000,
+		.ib = 2000000000,
+	},
+};
+
 static struct msm_bus_paths dtv_bus_scale_usecases[] = {
 	{
 		ARRAY_SIZE(dtv_bus_init_vectors),
@@ -9232,6 +9519,7 @@ static struct msm_bus_paths dtv_bus_scale_usecases[] = {
 		dtv_bus_def_vectors,
 	},
 };
+
 static struct msm_bus_scale_pdata dtv_bus_scale_pdata = {
 	dtv_bus_scale_usecases,
 	ARRAY_SIZE(dtv_bus_scale_usecases),
@@ -9240,6 +9528,27 @@ static struct msm_bus_scale_pdata dtv_bus_scale_pdata = {
 
 static struct lcdc_platform_data dtv_pdata = {
 	.bus_scale_table = &dtv_bus_scale_pdata,
+};
+
+static struct msm_bus_paths dtv_hdmi_prim_bus_scale_usecases[] = {
+	{
+		ARRAY_SIZE(dtv_bus_init_vectors),
+		dtv_bus_init_vectors,
+	},
+	{
+		ARRAY_SIZE(dtv_bus_hdmi_prim_vectors),
+		dtv_bus_hdmi_prim_vectors,
+	},
+};
+
+static struct msm_bus_scale_pdata dtv_hdmi_prim_bus_scale_pdata = {
+	dtv_hdmi_prim_bus_scale_usecases,
+	ARRAY_SIZE(dtv_hdmi_prim_bus_scale_usecases),
+	.name = "dtv",
+};
+
+static struct lcdc_platform_data dtv_hdmi_prim_pdata = {
+	.bus_scale_table = &dtv_hdmi_prim_bus_scale_pdata,
 };
 #endif
 
@@ -9292,7 +9601,7 @@ static int mipi_dsi_panel_power(int on)
 			goto out;
 	} else {
 		/* set ldo0 to LPM */
-		rc = regulator_set_optimum_mode(ldo0, 9000);
+		rc = regulator_set_optimum_mode(ldo0, 1000);
 		if (rc < 0)
 			goto out;
 	}
@@ -9358,21 +9667,14 @@ static int atv_dac_power(int on)
 #ifdef CONFIG_FB_MSM_MIPI_DSI
 int mdp_core_clk_rate_table[] = {
 	85330000,
-	85330000,
+	128000000,
 	160000000,
-	200000000,
-};
-#elif defined(CONFIG_FB_MSM_HDMI_AS_PRIMARY)
-int mdp_core_clk_rate_table[] = {
-	200000000,
-	200000000,
-	200000000,
 	200000000,
 };
 #else
 int mdp_core_clk_rate_table[] = {
 	59080000,
-	85330000,
+	128000000,
 	128000000,
 	200000000,
 };
@@ -9380,19 +9682,31 @@ int mdp_core_clk_rate_table[] = {
 
 static struct msm_panel_common_pdata mdp_pdata = {
 	.gpio = MDP_VSYNC_GPIO,
-#ifdef CONFIG_FB_MSM_HDMI_AS_PRIMARY
-	.mdp_core_clk_rate = 200000000,
-#else
 	.mdp_core_clk_rate = 59080000,
-#endif
 	.mdp_core_clk_table = mdp_core_clk_rate_table,
 	.num_mdp_clk = ARRAY_SIZE(mdp_core_clk_rate_table),
 #ifdef CONFIG_MSM_BUS_SCALING
 	.mdp_bus_scale_table = &mdp_bus_scale_pdata,
 #endif
 	.mdp_rev = MDP_REV_41,
-	.writeback_offset = writeback_offset,
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+	.mem_hid = BIT(ION_CP_WB_HEAP_ID),
+#else
+	.mem_hid = MEMTYPE_EBI1,
+#endif
 };
+
+static void __init reserve_mdp_memory(void)
+{
+	mdp_pdata.ov0_wb_size = MSM_FB_OVERLAY0_WRITEBACK_SIZE;
+	mdp_pdata.ov1_wb_size = MSM_FB_OVERLAY1_WRITEBACK_SIZE;
+#if defined(CONFIG_ANDROID_PMEM) && !defined(CONFIG_MSM_MULTIMEDIA_USE_ION)
+	msm8x60_reserve_table[mdp_pdata.mem_hid].size +=
+		mdp_pdata.ov0_wb_size;
+	msm8x60_reserve_table[mdp_pdata.mem_hid].size +=
+		mdp_pdata.ov1_wb_size;
+#endif
+}
 
 #ifdef CONFIG_FB_MSM_TVOUT
 
@@ -9474,12 +9788,54 @@ static void __init msm_fb_add_devices(void)
 	msm_fb_register_device("lcdc", &lcdc_pdata);
 	msm_fb_register_device("mipi_dsi", &mipi_dsi_pdata);
 #ifdef CONFIG_MSM_BUS_SCALING
-	msm_fb_register_device("dtv", &dtv_pdata);
+	if (hdmi_is_primary)
+		msm_fb_register_device("dtv", &dtv_hdmi_prim_pdata);
+	else
+		msm_fb_register_device("dtv", &dtv_pdata);
 #endif
 #ifdef CONFIG_FB_MSM_TVOUT
 	msm_fb_register_device("tvenc", &atv_pdata);
 	msm_fb_register_device("tvout_device", NULL);
 #endif
+}
+
+/**
+ * Set MDP clocks to high frequency to avoid underflow when
+ * using high resolution 1200x1920 WUXGA/HDMI as primary panels
+ */
+static void set_mdp_clocks_for_wuxga(void)
+{
+	int i;
+
+	mdp_sd_smi_vectors[0].ab = 2000000000;
+	mdp_sd_smi_vectors[0].ib = 2000000000;
+	mdp_sd_smi_vectors[1].ab = 2000000000;
+	mdp_sd_smi_vectors[1].ib = 2000000000;
+
+	mdp_sd_ebi_vectors[0].ab = 2000000000;
+	mdp_sd_ebi_vectors[0].ib = 2000000000;
+	mdp_sd_ebi_vectors[1].ab = 2000000000;
+	mdp_sd_ebi_vectors[1].ib = 2000000000;
+
+	mdp_vga_vectors[0].ab = 2000000000;
+	mdp_vga_vectors[0].ib = 2000000000;
+	mdp_vga_vectors[1].ab = 2000000000;
+	mdp_vga_vectors[1].ib = 2000000000;
+
+	mdp_720p_vectors[0].ab = 2000000000;
+	mdp_720p_vectors[0].ib = 2000000000;
+	mdp_720p_vectors[1].ab = 2000000000;
+	mdp_720p_vectors[1].ib = 2000000000;
+
+	mdp_1080p_vectors[0].ab = 2000000000;
+	mdp_1080p_vectors[0].ib = 2000000000;
+	mdp_1080p_vectors[1].ab = 2000000000;
+	mdp_1080p_vectors[1].ib = 2000000000;
+
+	mdp_pdata.mdp_core_clk_rate = 200000000;
+
+	for (i = 0; i < ARRAY_SIZE(mdp_core_clk_rate_table); i++)
+		mdp_core_clk_rate_table[i] = 200000000;
 }
 
 #if (defined(CONFIG_MARIMBA_CORE)) && \
@@ -9830,23 +10186,6 @@ static void __init msm8x60_cfg_smsc911x(void)
 		PM8058_GPIO_IRQ(PM8058_IRQ_BASE, 6);
 }
 
-#ifdef CONFIG_MSM_RPM
-static struct msm_rpm_platform_data msm_rpm_data = {
-	.reg_base_addrs = {
-		[MSM_RPM_PAGE_STATUS] = MSM_RPM_BASE,
-		[MSM_RPM_PAGE_CTRL] = MSM_RPM_BASE + 0x400,
-		[MSM_RPM_PAGE_REQ] = MSM_RPM_BASE + 0x600,
-		[MSM_RPM_PAGE_ACK] = MSM_RPM_BASE + 0xa00,
-	},
-
-	.irq_ack = RPM_SCSS_CPU0_GP_HIGH_IRQ,
-	.irq_err = RPM_SCSS_CPU0_GP_LOW_IRQ,
-	.irq_vmpm = RPM_SCSS_CPU0_GP_MEDIUM_IRQ,
-	.msm_apps_ipc_rpm_reg = MSM_GCC_BASE + 0x008,
-	.msm_apps_ipc_rpm_val = 4,
-};
-#endif
-
 void msm_fusion_setup_pinctrl(void)
 {
 	struct msm_xo_voter *a1;
@@ -9901,18 +10240,21 @@ static struct msm_board_data msm8x60_dragon_board_data __initdata = {
 static void __init msm8x60_init(struct msm_board_data *board_data)
 {
 	uint32_t soc_platform_version;
-
+#ifdef CONFIG_USB_EHCI_MSM_72K
+	struct pm8xxx_mpp_config_data hsusb_phy_mpp = {
+		.type		= PM8XXX_MPP_TYPE_D_OUTPUT,
+		.level		= PM8901_MPP_DIG_LEVEL_L5,
+		.control	= PM8XXX_MPP_DOUT_CTRL_HIGH,
+	};
+#endif
 	pmic_reset_irq = PM8058_IRQ_BASE + PM8058_RESOUT_IRQ;
 
 	/*
 	 * Initialize RPM first as other drivers and devices may need
 	 * it for their initialization.
 	 */
-#ifdef CONFIG_MSM_RPM
-	BUG_ON(msm_rpm_init(&msm_rpm_data));
-#endif
-	BUG_ON(msm_rpmrs_levels_init(msm_rpmrs_levels,
-				ARRAY_SIZE(msm_rpmrs_levels)));
+	BUG_ON(msm_rpm_init(&msm8660_rpm_data));
+	BUG_ON(msm_rpmrs_levels_init(&msm_rpmrs_data));
 	if (msm_xo_init())
 		pr_err("Failed to initialize XO votes\n");
 
@@ -9992,7 +10334,11 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 	msm8x60_init_tlmm();
 	msm8x60_init_gpiomux(board_data->gpiomux_cfgs);
 	msm8x60_init_uart12dm();
+#ifdef CONFIG_MSM_CAMERA_V4L2
+	msm8x60_init_cam();
+#endif
 	msm8x60_init_mmc();
+
 
 #if defined(CONFIG_PMIC8058_OTHC) || defined(CONFIG_PMIC8058_OTHC_MODULE)
 	msm8x60_init_pm8058_othc();
@@ -10004,13 +10350,13 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 		pm8058_platform_data.keypad_pdata = &dragon_keypad_data;
 	else
 		pm8058_platform_data.keypad_pdata = &ffa_keypad_data;
-
+#ifndef CONFIG_MSM_CAMERA_V4L2
 	/* Specify reset pin for OV9726 */
 	if (machine_is_msm8x60_dragon()) {
 		msm_camera_sensor_ov9726_data.sensor_reset = 62;
 		ov9726_sensor_8660_info.mount_angle = 270;
 	}
-
+#endif
 #ifdef CONFIG_BATTERY_MSM8X60
 	if (machine_is_msm8x60_surf() || machine_is_msm8x60_ffa() ||
 		machine_is_msm8x60_fusion() || machine_is_msm8x60_dragon() ||
@@ -10041,8 +10387,8 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 	    machine_is_msm8x60_fusn_ffa() || machine_is_msm8x60_dragon()) {
 		msm8x60_cfg_smsc911x();
 		if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) != 1)
-			platform_add_devices(msm_footswitch_devices,
-					     msm_num_footswitch_devices);
+			platform_add_devices(msm8660_footswitch,
+					     msm8660_num_footswitch);
 		platform_add_devices(surf_devices,
 				     ARRAY_SIZE(surf_devices));
 
@@ -10053,16 +10399,18 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 		}
 #endif
 
+	pm8901_vreg_mpp0_init();
+
+	platform_device_register(&msm8x60_8901_mpp_vreg);
+
 #ifdef CONFIG_USB_EHCI_MSM_72K
 	/*
 	 * Drive MPP2 pin HIGH for PHY to generate ID interrupts on 8660
 	 * fluid
 	 */
-	if (machine_is_msm8x60_fluid()) {
-		pm8901_mpp_config_digital_out(1,
-			PM8901_MPP_DIG_LEVEL_L5, 1);
-	}
-		msm_add_host(0, &msm_usb_host_pdata);
+	if (machine_is_msm8x60_fluid())
+		pm8xxx_mpp_config(PM8901_MPP_PM_TO_SYS(1), &hsusb_phy_mpp);
+	msm_add_host(0, &msm_usb_host_pdata);
 #endif
 
 #ifdef CONFIG_SND_SOC_MSM8660_APQ
@@ -10137,11 +10485,7 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 	}
 #endif
 
-	msm_pm_set_platform_data(msm_pm_data, ARRAY_SIZE(msm_pm_data));
-	msm_pm_set_rpm_wakeup_irq(RPM_SCSS_CPU0_WAKE_UP_IRQ);
-	msm_cpuidle_set_states(msm_cstates, ARRAY_SIZE(msm_cstates),
-				msm_pm_data);
-	BUG_ON(msm_pm_boot_init(MSM_PM_BOOT_CONFIG_TZ, NULL));
+	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
 
 	pm8058_gpios_init();
 
@@ -10221,6 +10565,7 @@ MACHINE_START(MSM8X60_RUMI3, "QCT MSM8X60 RUMI3")
 	.map_io = msm8x60_map_io,
 	.reserve = msm8x60_reserve,
 	.init_irq = msm8x60_init_irq,
+	.handle_irq = gic_handle_irq,
 	.init_machine = msm8x60_rumi3_init,
 	.timer = &msm_timer,
 	.init_early = msm8x60_charm_init_early,
@@ -10230,6 +10575,7 @@ MACHINE_START(MSM8X60_SIM, "QCT MSM8X60 SIMULATOR")
 	.map_io = msm8x60_map_io,
 	.reserve = msm8x60_reserve,
 	.init_irq = msm8x60_init_irq,
+	.handle_irq = gic_handle_irq,
 	.init_machine = msm8x60_sim_init,
 	.timer = &msm_timer,
 	.init_early = msm8x60_charm_init_early,
@@ -10239,6 +10585,7 @@ MACHINE_START(MSM8X60_SURF, "QCT MSM8X60 SURF")
 	.map_io = msm8x60_map_io,
 	.reserve = msm8x60_reserve,
 	.init_irq = msm8x60_init_irq,
+	.handle_irq = gic_handle_irq,
 	.init_machine = msm8x60_surf_init,
 	.timer = &msm_timer,
 	.init_early = msm8x60_charm_init_early,
@@ -10248,6 +10595,7 @@ MACHINE_START(MSM8X60_FFA, "QCT MSM8X60 FFA")
 	.map_io = msm8x60_map_io,
 	.reserve = msm8x60_reserve,
 	.init_irq = msm8x60_init_irq,
+	.handle_irq = gic_handle_irq,
 	.init_machine = msm8x60_ffa_init,
 	.timer = &msm_timer,
 	.init_early = msm8x60_charm_init_early,
@@ -10257,6 +10605,7 @@ MACHINE_START(MSM8X60_FLUID, "QCT MSM8X60 FLUID")
 	.map_io = msm8x60_map_io,
 	.reserve = msm8x60_reserve,
 	.init_irq = msm8x60_init_irq,
+	.handle_irq = gic_handle_irq,
 	.init_machine = msm8x60_fluid_init,
 	.timer = &msm_timer,
 	.init_early = msm8x60_charm_init_early,
@@ -10266,6 +10615,7 @@ MACHINE_START(MSM8X60_FUSION, "QCT MSM8X60 FUSION SURF")
 	.map_io = msm8x60_map_io,
 	.reserve = msm8x60_reserve,
 	.init_irq = msm8x60_init_irq,
+	.handle_irq = gic_handle_irq,
 	.init_machine = msm8x60_charm_surf_init,
 	.timer = &msm_timer,
 	.init_early = msm8x60_charm_init_early,
@@ -10275,6 +10625,7 @@ MACHINE_START(MSM8X60_FUSN_FFA, "QCT MSM8X60 FUSION FFA")
 	.map_io = msm8x60_map_io,
 	.reserve = msm8x60_reserve,
 	.init_irq = msm8x60_init_irq,
+	.handle_irq = gic_handle_irq,
 	.init_machine = msm8x60_charm_ffa_init,
 	.timer = &msm_timer,
 	.init_early = msm8x60_charm_init_early,
@@ -10284,6 +10635,7 @@ MACHINE_START(MSM8X60_DRAGON, "QCT MSM8X60 DRAGON")
 	.map_io = msm8x60_map_io,
 	.reserve = msm8x60_reserve,
 	.init_irq = msm8x60_init_irq,
+	.handle_irq = gic_handle_irq,
 	.init_machine = msm8x60_dragon_init,
 	.timer = &msm_timer,
 	.init_early = msm8x60_charm_init_early,

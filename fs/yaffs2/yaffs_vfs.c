@@ -53,6 +53,7 @@
 #include <linux/kthread.h>
 #include <linux/delay.h>
 #include <linux/freezer.h>
+#include <linux/cleancache.h>
 
 #include <asm/div64.h>
 
@@ -65,7 +66,7 @@
 
 #define YPROC_ROOT  NULL
 
-#define Y_INIT_TIMER(a)	init_timer_on_stack(a)
+#define Y_INIT_TIMER(a, b, c)	setup_deferrable_timer_on_stack(a, b, c)
 
 #define WRITE_SIZE_STR "writesize"
 #define WRITE_SIZE(mtd) ((mtd)->writesize)
@@ -1139,6 +1140,10 @@ static int yaffs_readpage_nolock(struct file *f, struct page *pg)
 		(unsigned)(pg->index << PAGE_CACHE_SHIFT),
 		(unsigned)PAGE_CACHE_SIZE);
 
+	ret = cleancache_get_page(pg);
+	if (!ret)
+		goto cleancache_got;
+
 	obj = yaffs_dentry_to_obj(f->f_dentry);
 
 	dev = obj->my_dev;
@@ -1158,11 +1163,13 @@ static int yaffs_readpage_nolock(struct file *f, struct page *pg)
 	if (ret >= 0)
 		ret = 0;
 
+cleancache_got:
 	if (ret) {
 		ClearPageUptodate(pg);
 		SetPageError(pg);
 	} else {
 		SetPageUptodate(pg);
+		SetPageMappedToDisk(pg);
 		ClearPageError(pg);
 	}
 
@@ -1674,10 +1681,9 @@ static int yaffs_bg_thread_fn(void *data)
 		if (time_before(expires, now))
 			expires = now + HZ;
 
-		Y_INIT_TIMER(&timer);
+		Y_INIT_TIMER(&timer, yaffs_background_waker,
+				(unsigned long)current);
 		timer.expires = expires + 1;
-		timer.data = (unsigned long)current;
-		timer.function = yaffs_background_waker;
 
 		set_current_state(TASK_INTERRUPTIBLE);
 		add_timer(&timer);
@@ -2365,6 +2371,7 @@ static struct super_block *yaffs_internal_read_super(int yaffs_version,
 		dev->is_checkpointed);
 
 	yaffs_trace(YAFFS_TRACE_OS, "yaffs_read_super: done");
+	cleancache_init_fs(sb);
 	return sb;
 }
 

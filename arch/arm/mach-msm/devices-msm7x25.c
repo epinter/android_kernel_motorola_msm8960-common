@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2008 Google, Inc.
- * Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -31,7 +31,6 @@
 #include <asm/mach/mmc.h>
 #include <mach/msm_hsusb.h>
 #include <mach/usbdiag.h>
-#include <mach/usb_gadget_fserial.h>
 #include <mach/rpc_hsusb.h>
 
 #include "clock-pcom.h"
@@ -969,9 +968,11 @@ struct clk_lookup msm_clocks_7x25[] = {
 	CLK_LOOKUP("core_clk",		uart3_clk.c,	"msm_serial.2"),
 	CLK_LOOKUP("core_clk",		uart1dm_clk.c,	"msm_serial_hs.0"),
 	CLK_LOOKUP("core_clk",		uart2dm_clk.c,	"msm_serial_hs.1"),
-	CLK_LOOKUP("usb_hs_clk",	usb_hs_clk.c,	NULL),
-	CLK_LOOKUP("usb_hs_pclk",	usb_hs_p_clk.c,	NULL),
-	CLK_LOOKUP("usb_otg_clk",	usb_otg_clk.c,	NULL),
+	CLK_LOOKUP("alt_core_clk",	usb_hs_clk.c,	"msm_otg"),
+	CLK_LOOKUP("iface_clk",		usb_hs_p_clk.c,	"msm_otg"),
+	CLK_LOOKUP("alt_core_clk",	usb_hs_clk.c,	"msm_hsusb_peripheral"),
+	CLK_LOOKUP("iface_clk",		usb_hs_p_clk.c,	"msm_hsusb_peripheral"),
+	CLK_LOOKUP("alt_core_clk",	usb_otg_clk.c,	NULL),
 	CLK_LOOKUP("vdc_clk",		vdc_clk.c,	NULL),
 	CLK_LOOKUP("vfe_clk",		vfe_clk.c,	NULL),
 	CLK_LOOKUP("vfe_mdc_clk",	vfe_mdc_clk.c,	NULL),

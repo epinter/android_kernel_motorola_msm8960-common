@@ -2,6 +2,7 @@
  * soc-dapm.c  --  ALSA SoC Dynamic Audio Power Management
  *
  * Copyright 2005 Wolfson Microelectronics PLC.
+ * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * Author: Liam Girdwood <lrg@slimlogic.co.uk>
  *
@@ -59,8 +60,7 @@ static int dapm_up_seq[] = {
 	[snd_soc_dapm_pre] = 0,
 	[snd_soc_dapm_supply] = 1,
 	[snd_soc_dapm_micbias] = 2,
-	[snd_soc_dapm_aif_in] = 3,
-	[snd_soc_dapm_aif_out] = 3,
+	[snd_soc_dapm_adc] = 3,
 	[snd_soc_dapm_mic] = 4,
 	[snd_soc_dapm_mux] = 5,
 	[snd_soc_dapm_virt_mux] = 5,
@@ -69,7 +69,8 @@ static int dapm_up_seq[] = {
 	[snd_soc_dapm_mixer] = 7,
 	[snd_soc_dapm_mixer_named_ctl] = 7,
 	[snd_soc_dapm_pga] = 8,
-	[snd_soc_dapm_adc] = 9,
+	[snd_soc_dapm_aif_in] = 8,
+	[snd_soc_dapm_aif_out] = 8,
 	[snd_soc_dapm_out_drv] = 10,
 	[snd_soc_dapm_hp] = 10,
 	[snd_soc_dapm_spk] = 10,
@@ -78,6 +79,8 @@ static int dapm_up_seq[] = {
 
 static int dapm_down_seq[] = {
 	[snd_soc_dapm_pre] = 0,
+	[snd_soc_dapm_aif_in] = 1,
+	[snd_soc_dapm_aif_out] = 1,
 	[snd_soc_dapm_adc] = 1,
 	[snd_soc_dapm_hp] = 2,
 	[snd_soc_dapm_spk] = 2,
@@ -91,8 +94,6 @@ static int dapm_down_seq[] = {
 	[snd_soc_dapm_mux] = 9,
 	[snd_soc_dapm_virt_mux] = 9,
 	[snd_soc_dapm_value_mux] = 9,
-	[snd_soc_dapm_aif_in] = 10,
-	[snd_soc_dapm_aif_out] = 10,
 	[snd_soc_dapm_supply] = 11,
 	[snd_soc_dapm_post] = 12,
 };
@@ -1305,19 +1306,28 @@ static void dapm_seq_run(struct snd_soc_dapm_context *dapm,
 	struct snd_soc_dapm_context *cur_dapm = NULL;
 	int ret, i;
 	int *sort;
+	int nWidgets;
 
 	if (power_up)
 		sort = dapm_up_seq;
 	else
 		sort = dapm_down_seq;
 
+	nWidgets = ARRAY_SIZE(dapm_up_seq);
+
 	list_for_each_entry_safe(w, n, list, power_list) {
 		ret = 0;
+
+		if (!w->name)
+			continue;
+
+		if (!((w->id >= 0) && (w->id < nWidgets)))
+			continue;
 
 		/* Do we need to apply any queued changes? */
 		if (sort[w->id] != cur_sort || w->reg != cur_reg ||
 		    w->dapm != cur_dapm || w->subseq != cur_subseq) {
-			if (!list_empty(&pending))
+			if (cur_dapm && !list_empty(&pending))
 				dapm_seq_run_coalesced(cur_dapm, &pending);
 
 			if (cur_dapm && cur_dapm->seq_notifier) {
@@ -1377,7 +1387,7 @@ static void dapm_seq_run(struct snd_soc_dapm_context *dapm,
 				"Failed to apply widget power: %d\n", ret);
 	}
 
-	if (!list_empty(&pending))
+	if (cur_dapm && !list_empty(&pending))
 		dapm_seq_run_coalesced(cur_dapm, &pending);
 
 	if (cur_dapm && cur_dapm->seq_notifier) {
@@ -1499,6 +1509,8 @@ static int dapm_power_widgets(struct snd_soc_dapm_context *dapm, int event)
 
 	trace_snd_soc_dapm_start(card);
 
+	mutex_lock(&card->dapm_power_mutex);
+
 	list_for_each_entry(d, &card->dapm_list, list)
 		if (d->n_widgets || d->codec == NULL)
 			d->dev_power = 0;
@@ -1531,10 +1543,17 @@ static int dapm_power_widgets(struct snd_soc_dapm_context *dapm, int event)
 
 			trace_snd_soc_dapm_widget_power(w, power);
 
-			if (power)
+			if (power) {
 				dapm_seq_insert(w, &up_list, true);
-			else
+				dev_dbg(w->dapm->dev,
+					"%s(): power up . widget  %s\n",
+					__func__, w->name);
+			} else {
 				dapm_seq_insert(w, &down_list, false);
+				dev_dbg(w->dapm->dev,
+					"%s(): power down . widget  %s\n",
+					__func__, w->name);
+			}
 
 			w->power = power;
 			break;
@@ -1607,6 +1626,8 @@ static int dapm_power_widgets(struct snd_soc_dapm_context *dapm, int event)
 	pop_dbg(dapm->dev, card->pop_time,
 		"DAPM sequencing finished, waiting %dms\n", card->pop_time);
 	pop_wait(card->pop_time);
+
+	mutex_unlock(&card->dapm_power_mutex);
 
 	trace_snd_soc_dapm_done(card);
 

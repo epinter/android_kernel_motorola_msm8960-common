@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2009, 2012 Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -79,7 +79,7 @@ void mdp_hw_vsync_clk_enable(struct msm_fb_data_type *mfd)
 		return;
 	mutex_lock(&vsync_clk_lock);
 	if (mfd->use_mdp_vsync) {
-		clk_enable(mdp_vsync_clk);
+		clk_prepare_enable(mdp_vsync_clk);
 		vsync_clk_status = 1;
 	}
 	mutex_unlock(&vsync_clk_lock);
@@ -91,7 +91,7 @@ void mdp_hw_vsync_clk_disable(struct msm_fb_data_type *mfd)
 		return;
 	mutex_lock(&vsync_clk_lock);
 	if (mfd->use_mdp_vsync) {
-		clk_disable(mdp_vsync_clk);
+		clk_disable_unprepare(mdp_vsync_clk);
 		vsync_clk_status = 0;
 	}
 	mutex_unlock(&vsync_clk_lock);
@@ -291,7 +291,8 @@ void mdp_vsync_cfg_regs(struct msm_fb_data_type *mfd,
 }
 #endif
 
-void mdp_config_vsync(struct msm_fb_data_type *mfd)
+void mdp_config_vsync(struct platform_device *pdev,
+	struct msm_fb_data_type *mfd)
 {
 	/* vsync on primary lcd only for now */
 	if ((mfd->dest != DISPLAY_LCD) || (mfd->panel_info.pdest != DISPLAY_1)
@@ -314,7 +315,7 @@ void mdp_config_vsync(struct msm_fb_data_type *mfd)
 
 #ifdef MDP_HW_VSYNC
 		if (mdp_vsync_clk == NULL)
-			mdp_vsync_clk = clk_get(NULL, "mdp_vsync_clk");
+			mdp_vsync_clk = clk_get(&pdev->dev, "vsync_clk");
 
 		if (IS_ERR(mdp_vsync_clk)) {
 			printk(KERN_ERR "error: can't get mdp_vsync_clk!\n");

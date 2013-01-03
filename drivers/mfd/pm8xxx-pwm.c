@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -27,8 +27,14 @@
 
 #define PM8XXX_PWM_CHANNELS		3
 
-#define PM8XXX_LPG_BANKS                8
-#define PM8XXX_LPG_PWM_CHANNELS         PM8XXX_LPG_BANKS
+/*
+ * For the lack of better term to distinguish functional
+ * differences, hereby, LPG version 0 (V0, v0) denotes
+ * PM8058/8921, and version 1 (V1, v1) denotes
+ * PM8922/8038.
+ */
+#define PM8XXX_LPG_V0_PWM_CHANNELS	8
+#define PM8XXX_LPG_V1_PWM_CHANNELS	6
 #define PM8XXX_LPG_CTL_REGS		7
 
 /* PM8XXX PWM */
@@ -58,6 +64,7 @@
 #define SSBI_REG_ADDR_LPG_BANK_EN	0x144
 #define SSBI_REG_ADDR_LPG_LUT_CFG0	0x145
 #define SSBI_REG_ADDR_LPG_LUT_CFG1	0x146
+#define SSBI_REG_ADDR_LPG_TEST		0x147
 
 /* LPG Control 0 */
 #define PM8XXX_PWM_1KHZ_COUNT_MASK	0xF0
@@ -131,6 +138,10 @@
 /* LPG LUT_CFG1 */
 #define PM8XXX_PWM_LUT_READ			0x40
 
+/* TEST */
+#define PM8XXX_PWM_DTEST_MASK		0x38
+#define PM8XXX_PWM_DTEST_SHIFT		3
+#define PM8XXX_PWM_DTEST_BANK_MASK	0x07
 
 /*
  * PWM Frequency = Clock Frequency / (N * T)
@@ -141,44 +152,41 @@
  * T = Pre-divide * 2^m, where m = 0..7 (exponent)
  *
  * This is the formula to figure out m for the best pre-divide and clock:
- * (PWM Period / N) / 2^m = (Pre-divide * Clock Period)
+ * (PWM Period / N) = (Pre-divide * Clock Period) * 2^m
  */
 #define NUM_CLOCKS	3
 
-#define NSEC_1000HZ	(NSEC_PER_SEC / 1000)
+#define NSEC_1024HZ	(NSEC_PER_SEC / 1024)
 #define NSEC_32768HZ	(NSEC_PER_SEC / 32768)
 #define NSEC_19P2MHZ	(NSEC_PER_SEC / 19200000)
 
-#define CLK_PERIOD_MIN	NSEC_19P2MHZ
-#define CLK_PERIOD_MAX	NSEC_1000HZ
-
-#define NUM_LPG_PRE_DIVIDE	3  /* No default support for pre-divide = 6 */
+#define NUM_LPG_PRE_DIVIDE	4
 #define NUM_PWM_PRE_DIVIDE	2
 
-#define PRE_DIVIDE_0		2
-#define PRE_DIVIDE_1		3
-#define PRE_DIVIDE_2		5
-
-#define PRE_DIVIDE_MIN		PRE_DIVIDE_0
-#define PRE_DIVIDE_MAX		PRE_DIVIDE_2
+#define PRE_DIVIDE_1		1	/* v1 */
+#define PRE_DIVIDE_2		2
+#define PRE_DIVIDE_3		3
+#define PRE_DIVIDE_5		5
+#define PRE_DIVIDE_6		6
 
 static unsigned int pt_t[NUM_LPG_PRE_DIVIDE][NUM_CLOCKS] = {
-	{	PRE_DIVIDE_0 * NSEC_1000HZ,
-		PRE_DIVIDE_0 * NSEC_32768HZ,
-		PRE_DIVIDE_0 * NSEC_19P2MHZ,
-	},
-	{	PRE_DIVIDE_1 * NSEC_1000HZ,
-		PRE_DIVIDE_1 * NSEC_32768HZ,
-		PRE_DIVIDE_1 * NSEC_19P2MHZ,
-	},
-	{	PRE_DIVIDE_2 * NSEC_1000HZ,
+	{	PRE_DIVIDE_2 * NSEC_1024HZ,
 		PRE_DIVIDE_2 * NSEC_32768HZ,
 		PRE_DIVIDE_2 * NSEC_19P2MHZ,
 	},
+	{	PRE_DIVIDE_3 * NSEC_1024HZ,
+		PRE_DIVIDE_3 * NSEC_32768HZ,
+		PRE_DIVIDE_3 * NSEC_19P2MHZ,
+	},
+	{	PRE_DIVIDE_5 * NSEC_1024HZ,
+		PRE_DIVIDE_5 * NSEC_32768HZ,
+		PRE_DIVIDE_5 * NSEC_19P2MHZ,
+	},
+	{	PRE_DIVIDE_6 * NSEC_1024HZ,
+		PRE_DIVIDE_6 * NSEC_32768HZ,
+		PRE_DIVIDE_6 * NSEC_19P2MHZ,
+	},
 };
-
-#define MIN_MPT	((PRE_DIVIDE_MIN * CLK_PERIOD_MIN) << PM8XXX_PWM_M_MIN)
-#define MAX_MPT	((PRE_DIVIDE_MAX * CLK_PERIOD_MAX) << PM8XXX_PWM_M_MAX)
 
 /* Private data */
 struct pm8xxx_pwm_chip;
@@ -197,6 +205,7 @@ struct pwm_device {
 	int			irq;
 	struct pm8xxx_pwm_chip	*chip;
 	int			bypass_lut;
+	int			dtest_mode_supported;
 };
 
 struct pm8xxx_pwm_chip {
@@ -338,67 +347,46 @@ static void pm8xxx_pwm_calc_period(unsigned int period_us,
 {
 	int	n, m, clk, div;
 	int	best_m, best_div, best_clk;
-	int	last_err, cur_err, better_err, better_m;
-	unsigned int	tmp_p, last_p, min_err, period_n;
+	unsigned int	last_err, cur_err, min_err;
+	unsigned int	tmp_p, period_n;
 
 	/* PWM Period / N */
-	if (period_us < (40 * USEC_PER_SEC)) {  /* ~6-bit max */
+	if (period_us < ((unsigned)(-1) / NSEC_PER_USEC)) {
 		period_n = (period_us * NSEC_PER_USEC) >> 6;
 		n = 6;
-	} else if (period_us < (274 * USEC_PER_SEC)) { /* overflow threshold */
-		period_n = (period_us >> 6) * NSEC_PER_USEC;
-		if (period_n >= MAX_MPT) {
-			n = 9;
-			period_n >>= 3;
-		} else {
-			n = 6;
-		}
 	} else {
 		period_n = (period_us >> 9) * NSEC_PER_USEC;
 		n = 9;
 	}
 
-	min_err = MAX_MPT;
+	min_err = last_err = (unsigned)(-1);
 	best_m = 0;
 	best_clk = 0;
 	best_div = 0;
 	for (clk = 0; clk < NUM_CLOCKS; clk++) {
 		for (div = 0; div < pwm_chip->pwm_total_pre_divs; div++) {
-			tmp_p = period_n;
-			last_p = tmp_p;
+			/* period_n = (PWM Period / N) */
+			/* tmp_p = (Pre-divide * Clock Period) * 2^m */
+			tmp_p = pt_t[div][clk];
 			for (m = 0; m <= PM8XXX_PWM_M_MAX; m++) {
-				if (tmp_p <= pt_t[div][clk]) {
-					/* Found local best */
-					if (!m) {
-						better_err = pt_t[div][clk] -
-							tmp_p;
-						better_m = m;
-					} else {
-						last_err = last_p -
-							pt_t[div][clk];
-						cur_err = pt_t[div][clk] -
-							tmp_p;
+				if (period_n > tmp_p)
+					cur_err = period_n - tmp_p;
+				else
+					cur_err = tmp_p - period_n;
 
-						if (cur_err < last_err) {
-							better_err = cur_err;
-							better_m = m;
-						} else {
-							better_err = last_err;
-							better_m = m - 1;
-						}
-					}
-
-					if (better_err < min_err) {
-						min_err = better_err;
-						best_m = better_m;
-						best_clk = clk;
-						best_div = div;
-					}
-					break;
-				} else {
-					last_p = tmp_p;
-					tmp_p >>= 1;
+				if (cur_err < min_err) {
+					min_err = cur_err;
+					best_m = m;
+					best_clk = clk;
+					best_div = div;
 				}
+
+				if (m && cur_err > last_err)
+					/* Break for bigger cur_err */
+					break;
+
+				last_err = cur_err;
+				tmp_p <<= 1;
 			}
 		}
 	}
@@ -656,6 +644,28 @@ static int pm8xxx_pwm_change_lut(struct pwm_device *pwm,
 	return rc;
 }
 
+static int pm8xxx_pwm_set_dtest(struct pwm_device *pwm, int enable)
+{
+	int	rc;
+	u8	reg;
+
+	reg = pwm->pwm_id & PM8XXX_PWM_DTEST_BANK_MASK;
+
+	if (enable) {
+		/* Observe LPG_OUT on DTEST1*/
+		reg |= (1 << PM8XXX_PWM_DTEST_SHIFT) &
+				PM8XXX_PWM_DTEST_MASK;
+	}
+
+	rc = pm8xxx_writeb(pwm->chip->dev->parent,
+			SSBI_REG_ADDR_LPG_TEST, reg);
+	if (rc)
+		pr_err("pm8xxx_write(DTEST=0x%x) failed: rc=%d\n",
+							reg, rc);
+
+	return rc;
+}
+
 /* APIs */
 /**
  * pwm_request - request a PWM device
@@ -803,6 +813,8 @@ int pwm_enable(struct pwm_device *pwm)
 		rc = -EINVAL;
 	} else {
 		if (pwm_chip->is_lpg_supported) {
+			if (pwm->dtest_mode_supported)
+				pm8xxx_pwm_set_dtest(pwm, 1);
 			rc = pm8xxx_pwm_bank_enable(pwm, 1);
 			pm8xxx_pwm_bank_sel(pwm);
 			pm8xxx_pwm_start(pwm, 1, 0);
@@ -829,6 +841,8 @@ void pwm_disable(struct pwm_device *pwm)
 	mutex_lock(&pwm->chip->pwm_mutex);
 	if (pwm->in_use) {
 		if (pwm_chip->is_lpg_supported) {
+			if (pwm->dtest_mode_supported)
+				pm8xxx_pwm_set_dtest(pwm, 0);
 			pm8xxx_pwm_bank_sel(pwm);
 			pm8xxx_pwm_start(pwm, 0, 0);
 			pm8xxx_pwm_bank_enable(pwm, 0);
@@ -1048,11 +1062,17 @@ int pm8xxx_pwm_lut_enable(struct pwm_device *pwm, int start)
 
 	mutex_lock(&pwm->chip->pwm_mutex);
 	if (start) {
+		if (pwm->dtest_mode_supported)
+			pm8xxx_pwm_set_dtest(pwm, 1);
+
 		pm8xxx_pwm_bank_enable(pwm, 1);
 
 		pm8xxx_pwm_bank_sel(pwm);
 		pm8xxx_pwm_start(pwm, 1, 1);
 	} else {
+		if (pwm->dtest_mode_supported)
+			pm8xxx_pwm_set_dtest(pwm, 0);
+
 		pm8xxx_pwm_bank_sel(pwm);
 		pm8xxx_pwm_start(pwm, 0, 0);
 
@@ -1342,8 +1362,9 @@ static int __devexit pm8xxx_pwm_dbg_remove(void)
 
 static int __devinit pm8xxx_pwm_probe(struct platform_device *pdev)
 {
+	const struct pm8xxx_pwm_platform_data *pdata = pdev->dev.platform_data;
 	struct pm8xxx_pwm_chip	*chip;
-	int	i;
+	int	i, dtest_channel;
 	enum pm8xxx_version version;
 
 	chip = kzalloc(sizeof *chip, GFP_KERNEL);
@@ -1351,6 +1372,11 @@ static int __devinit pm8xxx_pwm_probe(struct platform_device *pdev)
 		pr_err("kzalloc() failed.\n");
 		return -ENOMEM;
 	}
+
+	if (pdata != NULL)
+		dtest_channel = pdata->dtest_channel;
+	else
+		dtest_channel = -1;
 
 	mutex_init(&chip->pwm_mutex);
 
@@ -1360,11 +1386,20 @@ static int __devinit pm8xxx_pwm_probe(struct platform_device *pdev)
 	version = pm8xxx_get_version(chip->dev->parent);
 
 	if (version == PM8XXX_VERSION_8921 ||
-			version == PM8XXX_VERSION_8058) {
+			version == PM8XXX_VERSION_8058 ||
+			version == PM8XXX_VERSION_8922 ||
+			version == PM8XXX_VERSION_8038) {
 		chip->is_lpg_supported = 1;
 	}
 	if (chip->is_lpg_supported) {
-		chip->pwm_channels = PM8XXX_LPG_PWM_CHANNELS;
+		if (version == PM8XXX_VERSION_8922 ||
+				version == PM8XXX_VERSION_8038) {
+			for (i = 0; i < NUM_CLOCKS; i++)
+				pt_t[0][i] /= PRE_DIVIDE_2;
+			chip->pwm_channels = PM8XXX_LPG_V1_PWM_CHANNELS;
+		} else {
+			chip->pwm_channels = PM8XXX_LPG_V0_PWM_CHANNELS;
+		}
 		chip->pwm_total_pre_divs = NUM_LPG_PRE_DIVIDE;
 	} else {
 		chip->pwm_channels = PM8XXX_PWM_CHANNELS;
@@ -1383,6 +1418,8 @@ static int __devinit pm8xxx_pwm_probe(struct platform_device *pdev)
 	for (i = 0; i < chip->pwm_channels; i++) {
 		chip->pwm_dev[i].pwm_id = i;
 		chip->pwm_dev[i].chip = chip;
+		if (i == dtest_channel)
+			chip->pwm_dev[i].dtest_mode_supported = 1;
 	}
 
 	platform_set_drvdata(pdev, chip);

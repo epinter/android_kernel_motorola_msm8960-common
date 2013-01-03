@@ -646,8 +646,6 @@ static void tick_nohz_switch_to_nohz(void)
 		next = ktime_add(next, tick_period);
 	}
 	local_irq_enable();
-
-	printk(KERN_INFO "Switched to NOHz mode on CPU #%d\n", smp_processor_id());
 }
 
 /*
@@ -809,8 +807,7 @@ static enum hrtimer_restart tick_sched_timer(struct hrtimer *timer)
 		update_process_times(user_mode(regs));
 		profile_tick(CPU_PROFILING);
 
-
-		if ((rq_info.init == 1) && (cpu == 0)) {
+		if ((rq_info.init == 1) && (tick_do_timer_cpu == cpu)) {
 
 			/*
 			 * update run queue statistics
@@ -857,10 +854,8 @@ void tick_setup_sched_timer(void)
 	}
 
 #ifdef CONFIG_NO_HZ
-	if (tick_nohz_enabled) {
+	if (tick_nohz_enabled)
 		ts->nohz_mode = NOHZ_MODE_HIGHRES;
-		printk(KERN_INFO "Switched to NOHz mode on CPU #%d\n", smp_processor_id());
-	}
 #endif
 }
 #endif /* HIGH_RES_TIMERS */

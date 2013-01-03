@@ -14,8 +14,14 @@
 
 #define __MSM_DAI_Q6_PDATA_H__
 
-struct msm_dai_auxpcm_pdata {
-	const char *clk;
+#define MSM_MI2S_SD0 (1 << 0)
+#define MSM_MI2S_SD1 (1 << 1)
+#define MSM_MI2S_SD2 (1 << 2)
+#define MSM_MI2S_SD3 (1 << 3)
+#define MSM_MI2S_CAP_RX 0
+#define MSM_MI2S_CAP_TX 1
+
+struct msm_dai_auxpcm_config {
 	u16 mode;
 	u16 sync;
 	u16 frame;
@@ -23,6 +29,17 @@ struct msm_dai_auxpcm_pdata {
 	u16 slot;
 	u16 data;
 	int pcm_clk_rate;
+};
+
+struct msm_mi2s_pdata {
+	u16 rx_sd_lines;
+	u16 tx_sd_lines;
+};
+
+struct msm_dai_auxpcm_pdata {
+	const char *clk;
+	struct msm_dai_auxpcm_config mode_8k;
+	struct msm_dai_auxpcm_config mode_16k;
 };
 
 #endif

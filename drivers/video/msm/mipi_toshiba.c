@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -196,7 +196,8 @@ static int mipi_toshiba_lcd_on(struct platform_device *pdev)
 		mipi_dsi_cmds_tx(mfd, &toshiba_tx_buf,
 			toshiba_wvga_display_on_cmds,
 			ARRAY_SIZE(toshiba_wvga_display_on_cmds));
-	else if (TM_GET_PID(mfd->panel.id) == MIPI_DSI_PANEL_WSVGA_PT)
+	else if (TM_GET_PID(mfd->panel.id) == MIPI_DSI_PANEL_WSVGA_PT ||
+		TM_GET_PID(mfd->panel.id) == MIPI_DSI_PANEL_WUXGA)
 		mipi_dsi_cmds_tx(mfd, &toshiba_tx_buf,
 			toshiba_wsvga_display_on_cmds,
 			ARRAY_SIZE(toshiba_wsvga_display_on_cmds));
@@ -223,11 +224,21 @@ static int mipi_toshiba_lcd_off(struct platform_device *pdev)
 	return 0;
 }
 
+void mipi_bklight_pwm_cfg(void)
+{
+	if (mipi_toshiba_pdata && mipi_toshiba_pdata->dsi_pwm_cfg)
+		mipi_toshiba_pdata->dsi_pwm_cfg();
+}
+
 static void mipi_toshiba_set_backlight(struct msm_fb_data_type *mfd)
 {
 	int ret;
+	static int bklight_pwm_cfg;
 
-	pr_debug("%s: back light level %d\n", __func__, mfd->bl_level);
+	if (bklight_pwm_cfg == 0) {
+		mipi_bklight_pwm_cfg();
+		bklight_pwm_cfg++;
+	}
 
 	if (bl_lpm) {
 		ret = pwm_config(bl_lpm, MIPI_TOSHIBA_PWM_DUTY_LEVEL *

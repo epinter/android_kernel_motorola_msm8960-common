@@ -368,6 +368,8 @@ int snd_soc_set_runtime_hwparams(struct snd_pcm_substream *substream,
 int snd_soc_jack_new(struct snd_soc_codec *codec, const char *id, int type,
 		     struct snd_soc_jack *jack);
 void snd_soc_jack_report(struct snd_soc_jack *jack, int status, int mask);
+void snd_soc_jack_report_no_dapm(struct snd_soc_jack *jack, int status,
+				 int mask);
 int snd_soc_jack_add_pins(struct snd_soc_jack *jack, int count,
 			  struct snd_soc_jack_pin *pins);
 void snd_soc_jack_notifier_register(struct snd_soc_jack *jack,
@@ -812,7 +814,9 @@ struct snd_soc_card {
 	struct list_head list;
 	struct mutex mutex;
 	struct mutex dapm_mutex;
+	struct mutex dapm_power_mutex;
 	struct mutex dsp_mutex;
+	spinlock_t dsp_spinlock;
 
 	bool instantiated;
 
@@ -896,6 +900,7 @@ struct snd_soc_dsp_runtime {
 	struct snd_pcm_runtime *runtime;
 	struct snd_pcm_hw_params params;
 	int runtime_update;
+	bool hwparam_set;
 };
 
 /* SoC machine DAI configuration, glues a codec and cpu DAI together */

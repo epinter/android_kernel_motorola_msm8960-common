@@ -176,6 +176,12 @@ static int dsp_add_new_paths(struct snd_soc_pcm_runtime *fe,
 	if (!paths)
 		goto out;
 
+	if (list == NULL) {
+		pr_err("%s:Widget list is not configured. paths=%d",
+		__func__, paths);
+		goto out;
+	}
+
 	/* find BE DAI widgets and and connect the to FE */
 	for (i = 0; i < list->num_widgets; i++) {
 
@@ -482,6 +488,9 @@ static int soc_dsp_be_dai_shutdown(struct snd_soc_pcm_runtime *fe, int stream)
 		struct snd_pcm_substream *be_substream =
 			snd_soc_dsp_get_substream(dsp_params->be, stream);
 
+		if (dsp_params->state != SND_SOC_DSP_LINK_STATE_FREE)
+			continue;
+
 		/* is this op for this BE ? */
 		if (fe->dsp[stream].runtime_update &&
 				!dsp_params->be->dsp[stream].runtime_update)
@@ -490,13 +499,11 @@ static int soc_dsp_be_dai_shutdown(struct snd_soc_pcm_runtime *fe, int stream)
 		if (--dsp_params->be->dsp[stream].users != 0)
 			continue;
 
-		if (dsp_params->state != SND_SOC_DSP_LINK_STATE_FREE)
-			continue;
-
 		dev_dbg(&dsp_params->be->dev, "dsp: close BE %s\n",
 			dsp_params->fe->dai_link->name);
 
 		soc_pcm_close(be_substream);
+		dsp_params->be->dsp[stream].hwparam_set = false;
 		be_substream->runtime = NULL;
 	}
 	return 0;
@@ -551,7 +558,8 @@ static int soc_dsp_be_dai_hw_params(struct snd_soc_pcm_runtime *fe, int stream)
 			continue;
 
 		/* first time the dsp_params is open ? */
-		if (dsp_params->be->dsp[stream].users != 1)
+		if ((dsp_params->be->dsp[stream].users != 1) &&
+		    (dsp_params->be->dsp[stream].hwparam_set == true))
 			continue;
 
 		dev_dbg(&dsp_params->be->dev, "dsp: hw_params BE %s\n",
@@ -577,6 +585,7 @@ static int soc_dsp_be_dai_hw_params(struct snd_soc_pcm_runtime *fe, int stream)
 			dev_err(&dsp_params->be->dev, "dsp: hw_params BE failed %d\n", ret);
 			return ret;
 		}
+		dsp_params->be->dsp[stream].hwparam_set = true;
 	}
 	return 0;
 }
@@ -626,6 +635,15 @@ int soc_dsp_be_dai_trigger(struct snd_soc_pcm_runtime *fe, int stream, int cmd)
 {
 	struct snd_soc_dsp_params *dsp_params;
 	int ret = 0;
+	unsigned long flags;
+
+	spin_lock_irqsave(&fe->card->dsp_spinlock, flags);
+
+	if ((cmd == SNDRV_PCM_TRIGGER_PAUSE_RELEASE) ||
+				(cmd == SNDRV_PCM_TRIGGER_PAUSE_PUSH)) {
+		spin_unlock_irqrestore(&fe->card->dsp_spinlock, flags);
+		return ret;
+	}
 
 	list_for_each_entry(dsp_params, &fe->dsp[stream].be_clients, list_be) {
 
@@ -674,10 +692,14 @@ int soc_dsp_be_dai_trigger(struct snd_soc_pcm_runtime *fe, int stream, int cmd)
 			}
 			break;
 		}
-		if (ret < 0)
+
+		if (ret < 0) {
+			spin_unlock_irqrestore(&fe->card->dsp_spinlock, flags);
 			return ret;
+		}
 	}
 
+	spin_unlock_irqrestore(&fe->card->dsp_spinlock, flags);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(soc_dsp_be_dai_trigger);
@@ -848,6 +870,7 @@ static int soc_dsp_be_dai_hw_free(struct snd_soc_pcm_runtime *fe, int stream)
 			dsp_params->fe->dai_link->name);
 
 		soc_pcm_hw_free(be_substream);
+		dsp_params->be->dsp[stream].hwparam_set = false;
 	}
 
 	return 0;

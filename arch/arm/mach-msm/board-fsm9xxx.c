@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -51,7 +51,14 @@
 #define PMIC_GPIO_SD_DET	165
 
 #define GPIO_EPHY_RST_N		37
-
+#define GPIO_MAC_TXD_3      119
+#define GPIO_MAC_TXD_2      120
+#define GPIO_MAC_TXD_1      121
+#define GPIO_MAC_TXD_0      122
+#define GPIO_MAC_TX_EN      123
+#define GPIO_MAC_MDIO       127
+#define GPIO_MAC_MDC        128
+#define GPIO_MAC_TX_CLK     133
 #define GPIO_GRFC_FTR0_0	136 /* GRFC 20 */
 #define GPIO_GRFC_FTR0_1	137 /* GRFC 21 */
 #define GPIO_GRFC_FTR1_0	145 /* GRFC 22 */
@@ -82,6 +89,15 @@
 #define GPIO_USER_FIRST		58
 #define GPIO_USER_LAST		63
 
+#define GPIO_UIM_RESET		75
+#define GPIO_UIM_DATA_IO	76
+#define GPIO_UIM_CLOCK		77
+
+#define GPIO_PM_UIM_M_RST	26	/* UIM_RST input */
+#define GPIO_PM_UIM_RST		27	/* UIM_RST output */
+#define GPIO_PM_UIM_M_CLK	28	/* UIM_CLK input */
+#define GPIO_PM_UIM_CLK		29	/* UIM_CLK output */
+
 #define FPGA_SDCC_STATUS        0x8E0001A8
 
 /* Macros assume PMIC GPIOs start at 0 */
@@ -93,6 +109,8 @@
 
 #define PMIC_GPIO_5V_PA_PWR	21	/* PMIC GPIO Number 22 */
 #define PMIC_GPIO_4_2V_PA_PWR	22	/* PMIC GPIO Number 23 */
+#define PMIC_MPP_UIM_M_DATA	0	/* UIM_DATA input */
+#define PMIC_MPP_UIM_DATA	1	/* UIM_DATA output */
 #define PMIC_MPP_3		2	/* PMIC MPP Number 3 */
 #define PMIC_MPP_6		5	/* PMIC MPP Number 6 */
 #define PMIC_MPP_7		6	/* PMIC MPP Number 7 */
@@ -174,6 +192,10 @@ static int pm8058_mpps_init(void)
 			PM8XXX_MPP_AOUT_LVL_1V25_2, AOUT_CTRL_ENABLE),
 		PM8XXX_MPP_INIT(PMIC_MPP_6, A_OUTPUT,
 			PM8XXX_MPP_AOUT_LVL_1V25_2, AOUT_CTRL_ENABLE),
+		PM8XXX_MPP_INIT(PMIC_MPP_UIM_M_DATA, D_BI_DIR,
+			PM8058_MPP_DIG_LEVEL_L3, BI_PULLUP_30KOHM),
+		PM8XXX_MPP_INIT(PMIC_MPP_UIM_DATA, D_BI_DIR,
+			PM8058_MPP_DIG_LEVEL_L3, BI_PULLUP_30KOHM),
 	};
 
 	for (i = 0; i < ARRAY_SIZE(pm8058_mpps); i++) {
@@ -472,7 +494,23 @@ static int __init buses_init(void)
 
 static struct msm_gpio phy_config_data[] = {
 	{ GPIO_CFG(GPIO_EPHY_RST_N, 0, GPIO_CFG_OUTPUT,
-		GPIO_CFG_NO_PULL, GPIO_CFG_2MA), "MAC_RST_N" },
+		GPIO_CFG_NO_PULL, GPIO_CFG_8MA), "MAC_RST_N" },
+	{ GPIO_CFG(GPIO_MAC_TXD_3, 0, GPIO_CFG_OUTPUT,
+		GPIO_CFG_NO_PULL, GPIO_CFG_8MA), "MAC_TXD_3"},
+	{ GPIO_CFG(GPIO_MAC_TXD_2, 0, GPIO_CFG_OUTPUT,
+		GPIO_CFG_NO_PULL, GPIO_CFG_8MA), "MAC_TXD_2"},
+	{ GPIO_CFG(GPIO_MAC_TXD_1, 0, GPIO_CFG_OUTPUT,
+		GPIO_CFG_NO_PULL, GPIO_CFG_8MA), "MAC_TXD_1"},
+	{ GPIO_CFG(GPIO_MAC_TXD_0, 0, GPIO_CFG_OUTPUT,
+		GPIO_CFG_NO_PULL, GPIO_CFG_8MA), "MAC_TXD_0"},
+	{ GPIO_CFG(GPIO_MAC_TX_EN, 0, GPIO_CFG_OUTPUT,
+		GPIO_CFG_NO_PULL, GPIO_CFG_8MA), "MAC_TX_EN"},
+	{ GPIO_CFG(GPIO_MAC_TX_CLK, 0, GPIO_CFG_OUTPUT,
+		GPIO_CFG_NO_PULL, GPIO_CFG_10MA), "MAC_TX_CLK"},
+	{ GPIO_CFG(GPIO_MAC_MDIO, 0, GPIO_CFG_OUTPUT,
+		GPIO_CFG_NO_PULL, GPIO_CFG_6MA), "MDIO_MAC_MDIO"},
+	{ GPIO_CFG(GPIO_MAC_MDC, 0, GPIO_CFG_OUTPUT,
+		GPIO_CFG_NO_PULL, GPIO_CFG_6MA), "MDC_MAC_MDC"},
 };
 
 static int __init phy_init(void)
@@ -574,6 +612,52 @@ static void fsm9xxx_init_uart1(void)
 }
 #endif
 
+static struct msm_gpio uart3_uim_config_data[] = {
+	{ GPIO_CFG(GPIO_UIM_RESET, 0, GPIO_CFG_OUTPUT,
+		GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), "UIM_Reset" },
+	{ GPIO_CFG(GPIO_UIM_DATA_IO, 2, GPIO_CFG_OUTPUT,
+		GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), "UIM_Data" },
+	{ GPIO_CFG(GPIO_UIM_CLOCK, 2, GPIO_CFG_OUTPUT,
+		GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), "UIM_Clock" },
+};
+
+static void fsm9xxx_init_uart3_uim(void)
+{
+	struct pm_gpio pmic_uim_gpio_in = {
+		.direction	= PM_GPIO_DIR_IN,
+		.pull		= PM_GPIO_PULL_NO,
+		.out_strength	= PM_GPIO_STRENGTH_HIGH,
+		.function	= PM_GPIO_FUNC_PAIRED,
+		.vin_sel	= PM8058_GPIO_VIN_L3,
+	};
+	struct pm_gpio pmic_uim_gpio_out = {
+		.direction	= PM_GPIO_DIR_OUT,
+		.pull		= PM_GPIO_PULL_NO,
+		.out_strength	= PM_GPIO_STRENGTH_HIGH,
+		.function	= PM_GPIO_FUNC_PAIRED,
+		.vin_sel	= PM8058_GPIO_VIN_L3,
+	};
+
+	/* TLMM */
+	msm_gpios_request_enable(uart3_uim_config_data,
+			ARRAY_SIZE(uart3_uim_config_data));
+
+	/* Put UIM to reset state */
+	gpio_direction_output(GPIO_UIM_RESET, 0);
+	gpio_set_value(GPIO_UIM_RESET, 0);
+	gpio_export(GPIO_UIM_RESET, false);
+
+	/* PMIC */
+	pm8xxx_gpio_config(PM8058_GPIO_PM_TO_SYS(GPIO_PM_UIM_M_RST),
+		&pmic_uim_gpio_in);
+	pm8xxx_gpio_config(PM8058_GPIO_PM_TO_SYS(GPIO_PM_UIM_RST),
+		&pmic_uim_gpio_out);
+	pm8xxx_gpio_config(PM8058_GPIO_PM_TO_SYS(GPIO_PM_UIM_M_CLK),
+		&pmic_uim_gpio_in);
+	pm8xxx_gpio_config(PM8058_GPIO_PM_TO_SYS(GPIO_PM_UIM_CLK),
+		&pmic_uim_gpio_out);
+}
+
 /*
  * SSBI
  */
@@ -673,6 +757,7 @@ static struct msm_ce_hw_support qcrypto_ce_hw_suppport = {
 	.shared_ce_resource = QCE_NO_SHARE_CE_RESOURCE,
 	.hw_key_support = QCE_NO_HW_KEY_SUPPORT,
 	.sha_hmac = QCE_NO_SHA_HMAC_SUPPORT,
+	.bus_scale_table = NULL,
 };
 
 struct platform_device qcrypto_device = {
@@ -723,6 +808,7 @@ static struct msm_ce_hw_support qcedev_ce_hw_suppport = {
 	.shared_ce_resource = QCE_NO_SHARE_CE_RESOURCE,
 	.hw_key_support = QCE_NO_HW_KEY_SUPPORT,
 	.sha_hmac = QCE_NO_SHA_HMAC_SUPPORT,
+	.bus_scale_table = NULL,
 };
 
 static struct platform_device qcedev_device = {
@@ -802,6 +888,7 @@ static struct platform_device *devices[] __initdata = {
 #if defined(CONFIG_SERIAL_MSM) || defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	&msm_device_uart1,
 #endif
+	&msm_device_uart3,
 #if defined(CONFIG_QFP_FUSE)
 	&fsm_qfp_fuse_device,
 #endif
@@ -810,6 +897,7 @@ static struct platform_device *devices[] __initdata = {
 	&qcedev_device,
 	&ota_qcrypto_device,
 	&fsm_xo_device,
+	&fsm9xxx_device_watchdog,
 };
 
 static void __init fsm9xxx_init_irq(void)
@@ -873,6 +961,7 @@ static void __init fsm9xxx_init(void)
 #ifdef CONFIG_SERIAL_MSM_CONSOLE
 	fsm9xxx_init_uart1();
 #endif
+	fsm9xxx_init_uart3_uim();
 #ifdef CONFIG_I2C_SSBI
 	msm_device_ssbi2.dev.platform_data = &msm_i2c_ssbi2_pdata;
 	msm_device_ssbi3.dev.platform_data = &msm_i2c_ssbi3_pdata;
@@ -894,6 +983,7 @@ MACHINE_START(FSM9XXX_SURF, "QCT FSM9XXX")
 	.boot_params = PHYS_OFFSET + 0x100,
 	.map_io = fsm9xxx_map_io,
 	.init_irq = fsm9xxx_init_irq,
+	.handle_irq = vic_handle_irq,
 	.init_machine = fsm9xxx_init,
 	.timer = &msm_timer,
 MACHINE_END

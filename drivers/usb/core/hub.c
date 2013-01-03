@@ -846,6 +846,12 @@ static void hub_activate(struct usb_hub *hub, enum hub_activation_type type)
 					USB_PORT_FEAT_C_PORT_LINK_STATE);
 		}
 
+		if ((portchange & USB_PORT_STAT_C_BH_RESET) &&
+				hub_is_superspeed(hub->hdev)) {
+			need_debounce_delay = true;
+			clear_port_feature(hub->hdev, port1,
+					USB_PORT_FEAT_C_BH_PORT_RESET);
+		}
 		/* We can forget about a "removed" device when there's a
 		 * physical disconnect or the connect status changes.
 		 */
@@ -1690,7 +1696,7 @@ void usb_disconnect(struct usb_device **pdev)
 
 #ifdef CONFIG_USB_OTG
 	if (udev->bus->hnp_support && udev->portnum == udev->bus->otg_port) {
-		cancel_delayed_work(&udev->bus->hnp_polling);
+		cancel_delayed_work_sync(&udev->bus->hnp_polling);
 		udev->bus->hnp_support = 0;
 	}
 #endif
@@ -1778,6 +1784,7 @@ static int usb_enumerate_device_otg(struct usb_device *udev)
 	int err = 0;
 
 #ifdef	CONFIG_USB_OTG
+	bool old_otg = false;
 	/*
 	 * OTG-aware devices on OTG-capable root hubs may be able to use SRP,
 	 * to wake us after we've powered off VBUS; and HNP, switching roles
@@ -1811,7 +1818,10 @@ static int usb_enumerate_device_otg(struct usb_device *udev)
 				 * compliant to revision 2.0 or subsequent
 				 * versions.
 				 */
-				if (le16_to_cpu(desc->bcdOTG) >= 0x0200)
+
+				if ((le16_to_cpu(desc->bLength) ==
+						USB_DT_OTG_SIZE) &&
+					le16_to_cpu(desc->bcdOTG) >= 0x0200)
 					goto out;
 
 				/* Legacy B-device i.e compliant to spec
@@ -1819,6 +1829,7 @@ static int usb_enumerate_device_otg(struct usb_device *udev)
 				 * a_hnp_support or b_hnp_enable before
 				 * selecting configuration.
 				 */
+				old_otg = true;
 
 				/* enable HNP before suspend, it's simpler */
 				err = usb_control_msg(udev,
@@ -1839,6 +1850,14 @@ static int usb_enumerate_device_otg(struct usb_device *udev)
 		}
 	}
 out:
+	if ((udev->quirks & USB_QUIRK_OTG_PET)) {
+		if (le16_to_cpu(udev->descriptor.bcdDevice) &
+			OTG_TTST_VBUS_OFF)
+			udev->bus->otg_vbus_off = 1;
+		if (udev->bus->is_b_host || old_otg)
+			udev->bus->quick_hnp = 1;
+	}
+
 	if (!is_targeted(udev)) {
 
 		otg_send_event(OTG_EVENT_DEV_NOT_SUPPORTED);
@@ -1859,8 +1878,12 @@ out:
 		 * re-armed if device returns STALL. B-Host also perform
 		 * HNP polling.
 		 */
-		schedule_delayed_work(&udev->bus->hnp_polling,
-			msecs_to_jiffies(THOST_REQ_POLL));
+		if (udev->bus->quick_hnp)
+			schedule_delayed_work(&udev->bus->hnp_polling,
+				msecs_to_jiffies(OTG_TTST_SUSP));
+		else
+			schedule_delayed_work(&udev->bus->hnp_polling,
+				msecs_to_jiffies(THOST_REQ_POLL));
 	}
 #endif
 	return err;

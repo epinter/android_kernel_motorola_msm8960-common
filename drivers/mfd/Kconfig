@@ -158,7 +158,6 @@ config PMIC8058
 	depends on MSM_SSBI
 	select MFD_CORE
 	select MFD_PM8XXX
-	select MSM_SHOW_RESUME_IRQ
 	help
 	  Say yes here for Qualcomm PM8058 chip.
 
@@ -805,6 +804,21 @@ config MFD_PM8018_CORE
 	  Say M here if you want to include support for PM8018 chip as a module.
 	  This will build a module called "pm8018-core".
 
+config MFD_PM8038_CORE
+	tristate "Qualcomm PM8038 PMIC chip"
+	depends on MSM_SSBI
+	select MFD_CORE
+	select MFD_PM8XXX
+	help
+	  If you say yes to this option, support will be included for the
+	  built-in PM8038 PMIC chip.
+
+	  This is required if your board has a PM8038 and uses its features,
+	  such as: MPPs, GPIOs, regulators, interrupts, and PWM.
+
+	  Say M here if you want to include support for PM8038 chip as a module.
+	  This will build a module called "pm8038-core".
+
 config MFD_PM8XXX_IRQ
 	bool "Support for Qualcomm PM8xxx IRQ features"
 	depends on MFD_PM8XXX
@@ -814,6 +828,14 @@ config MFD_PM8XXX_IRQ
 
 	  This is required to use certain other PM 8xxx features, such as GPIO
 	  and MPP.
+
+config MFD_PM8821_IRQ
+	bool "Support for Qualcomm PM8821 IRQ features"
+	default y if MFD_PM8821_CORE
+	help
+	  This is the IRQ driver for Qualcomm PM 8821 PMIC chips.
+
+	  This is required to use certain other PM 8821 features, such as MPPs.
 
 config MFD_TPS65910
 	bool "TPS65910 Power Management chip"
@@ -855,6 +877,13 @@ config MFD_PM8XXX_MISC
 	  This driver implements several miscellaneous APIs that may be needed
 	  in order to control the PM8XXX PMIC chip.
 
+config MFD_PM8XXX_SPK
+	tristate "Support for Qualcomm PM8xxx speaker APIs"
+	depends on MFD_PM8XXX
+	help
+	  This driver implements several external speaker amplifier APIs that
+	  may be needed in order to control the PM8XXX PMIC chip.
+
 config MFD_PM8XXX_BATT_ALARM
 	tristate "Support for Qualcomm PM8xxx battery voltage alarm"
 	depends on MFD_PM8XXX
@@ -864,6 +893,16 @@ config MFD_PM8XXX_BATT_ALARM
 	  normal operation.  A wakeable interrupt is triggered when the battery
 	  voltage leaves the accepatable range which then calls a notifier call
 	  chain.
+
+config WCD9304_CODEC
+        tristate "WCD9304 Codec"
+        select SLIMBUS
+        select MFD_CORE
+        default n
+        help
+          Enables the WCD9304 core driver. The core driver provides
+          read/write capability to registers which are part of the
+          WCD9304 core and gives the ability to use the WCD9304 codec.
 
 config WCD9310_CODEC
         tristate "WCD9310 Codec"

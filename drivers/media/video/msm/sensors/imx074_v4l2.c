@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -38,7 +38,7 @@ static struct msm_camera_i2c_reg_conf imx074_groupoff_settings[] = {
 static struct msm_camera_i2c_reg_conf imx074_prev_settings[] = {
 	{0x0307, 0x2D}, /*pll_multiplier*/
 	{0x0340, 0x06}, /*frame_length_lines_hi*/
-	{0x0341, 0x2D}, /*frame_length_lines_lo*/
+	{0x0341, 0x34}, /*frame_length_lines_lo*/
 	{0x0342, 0x11}, /*line_length_pclk_hi*/
 	{0x0343, 0x78}, /*line_length_pclk_lo*/
 	{0x0347, 0x00}, /*y_addr_start*/
@@ -51,8 +51,8 @@ static struct msm_camera_i2c_reg_conf imx074_prev_settings[] = {
 	{0x0383, 0x03}, /*x_odd_inc*/
 	{0x0385, 0x01}, /*y_even_inc*/
 	{0x0387, 0x03}, /*y_odd_inc*/
-	{0x3001, 0x00}, /*hmodeadd*/
-	{0x3016, 0x06}, /*vmodeadd*/
+	{0x3001, 0x80}, /*hmodeadd*/
+	{0x3016, 0x16}, /*vmodeadd*/
 	{0x3069, 0x24}, /*vapplinepos_start*/
 	{0x306b, 0x53}, /*vapplinepos_end*/
 	{0x3086, 0x00}, /*shutter*/
@@ -161,24 +161,37 @@ static struct msm_sensor_output_info_t imx074_dimensions[] = {
 		.x_output = 0x838,
 		.y_output = 0x618,
 		.line_length_pclk = 0x1178,
-		.frame_length_lines = 0x62D,
+		.frame_length_lines = 0x634,
 		.vt_pixel_clk = 216000000,
-		.op_pixel_clk = 216000000,
-		.binning_factor = 1,
+		.op_pixel_clk = 108000000,
+		.binning_factor = 2,
 	},
+};
+
+static struct msm_camera_csi_params imx074_csic_params = {
+	.data_format = CSI_10BIT,
+	.lane_cnt    = 4,
+	.lane_assign = 0xe4,
+	.dpcm_scheme = 0,
+	.settle_cnt  = 0x14,
+};
+
+static struct msm_camera_csi_params *imx074_csic_params_array[] = {
+	&imx074_csic_params,
+	&imx074_csic_params,
 };
 
 static struct msm_camera_csid_vc_cfg imx074_cid_cfg[] = {
 	{0, CSI_RAW10, CSI_DECODE_10BIT},
 	{1, CSI_EMBED_DATA, CSI_DECODE_8BIT},
+	{2, CSI_RESERVED_DATA_0, CSI_DECODE_8BIT},
 };
 
 static struct msm_camera_csi2_params imx074_csi_params = {
 	.csid_params = {
-		.lane_assign = 0xe4,
 		.lane_cnt = 4,
 		.lut_params = {
-			.num_cid = 2,
+			.num_cid = ARRAY_SIZE(imx074_cid_cfg),
 			.vc_cfg = imx074_cid_cfg,
 		},
 	},
@@ -211,23 +224,6 @@ static struct msm_sensor_exp_gain_info_t imx074_exp_gain_info = {
 	.vert_offset = 3,
 };
 
-static int imx074_sensor_config(void __user *argp)
-{
-	return msm_sensor_config(&imx074_s_ctrl, argp);
-}
-
-static struct sensor_calib_data imx074_calib_data;
-
-static int imx074_sensor_open_init(const struct msm_camera_sensor_info *data)
-{
-	return msm_sensor_open_init(&imx074_s_ctrl, data);
-}
-
-static int imx074_sensor_release(void)
-{
-	return msm_sensor_release(&imx074_s_ctrl);
-}
-
 static const struct i2c_device_id imx074_i2c_id[] = {
 	{SENSOR_NAME, (kernel_ulong_t)&imx074_s_ctrl},
 	{ }
@@ -245,62 +241,16 @@ static struct msm_camera_i2c_client imx074_sensor_i2c_client = {
 	.addr_type = MSM_CAMERA_I2C_WORD_ADDR,
 };
 
-static struct msm_camera_i2c_client imx074_eeprom_i2c_client = {
-	.addr_type = MSM_CAMERA_I2C_BYTE_ADDR,
-};
-
-static struct msm_camera_eeprom_read_t imx074_eeprom_read_tbl[] = {
-	{0x10, &imx074_calib_data.r_over_g, 2, 1},
-	{0x12, &imx074_calib_data.b_over_g, 2, 1},
-	{0x14, &imx074_calib_data.gr_over_gb, 2, 1},
-};
-
-static struct msm_camera_eeprom_data_t imx074_eeprom_data_tbl[] = {
-	{&imx074_calib_data, sizeof(struct sensor_calib_data)},
-};
-
-static struct msm_camera_eeprom_client imx074_eeprom_client = {
-	.i2c_client = &imx074_eeprom_i2c_client,
-	.i2c_addr = 0xA4,
-
-	.func_tbl = {
-		.eeprom_set_dev_addr = NULL,
-		.eeprom_init = msm_camera_eeprom_init,
-		.eeprom_release = msm_camera_eeprom_release,
-		.eeprom_get_data = msm_camera_eeprom_get_data,
-	},
-
-	.read_tbl = imx074_eeprom_read_tbl,
-	.read_tbl_size = ARRAY_SIZE(imx074_eeprom_read_tbl),
-	.data_tbl = imx074_eeprom_data_tbl,
-	.data_tbl_size = ARRAY_SIZE(imx074_eeprom_data_tbl),
-};
-
-static int imx074_sensor_v4l2_probe(const struct msm_camera_sensor_info *info,
-	struct v4l2_subdev *sdev, struct msm_sensor_ctrl *s)
-{
-	return msm_sensor_v4l2_probe(&imx074_s_ctrl, info, sdev, s);
-}
-
-static int imx074_probe(struct platform_device *pdev)
-{
-	return msm_sensor_register(pdev, imx074_sensor_v4l2_probe);
-}
-
-struct platform_driver imx074_driver = {
-	.probe = imx074_probe,
-	.driver = {
-		.name = PLATFORM_DRIVER_NAME,
-		.owner = THIS_MODULE,
-	},
-};
-
 static int __init msm_sensor_init_module(void)
 {
-	return platform_driver_register(&imx074_driver);
+	return i2c_add_driver(&imx074_i2c_driver);
 }
 
-static struct v4l2_subdev_core_ops imx074_subdev_core_ops;
+static struct v4l2_subdev_core_ops imx074_subdev_core_ops = {
+	.ioctl = msm_sensor_subdev_ioctl,
+	.s_power = msm_sensor_power,
+};
+
 static struct v4l2_subdev_video_ops imx074_subdev_video_ops = {
 	.enum_mbus_fmt = msm_sensor_v4l2_enum_fmt,
 };
@@ -315,25 +265,18 @@ static struct msm_sensor_fn_t imx074_func_tbl = {
 	.sensor_stop_stream = msm_sensor_stop_stream,
 	.sensor_group_hold_on = msm_sensor_group_hold_on,
 	.sensor_group_hold_off = msm_sensor_group_hold_off,
-	.sensor_get_prev_lines_pf = msm_sensor_get_prev_lines_pf,
-	.sensor_get_prev_pixels_pl = msm_sensor_get_prev_pixels_pl,
-	.sensor_get_pict_lines_pf = msm_sensor_get_pict_lines_pf,
-	.sensor_get_pict_pixels_pl = msm_sensor_get_pict_pixels_pl,
-	.sensor_get_pict_max_exp_lc = msm_sensor_get_pict_max_exp_lc,
-	.sensor_get_pict_fps = msm_sensor_get_pict_fps,
 	.sensor_set_fps = msm_sensor_set_fps,
 	.sensor_write_exp_gain = msm_sensor_write_exp_gain1,
 	.sensor_write_snapshot_exp_gain = msm_sensor_write_exp_gain1,
 	.sensor_setting = msm_sensor_setting,
+	.sensor_csi_setting = msm_sensor_setting1,
 	.sensor_set_sensor_mode = msm_sensor_set_sensor_mode,
 	.sensor_mode_init = msm_sensor_mode_init,
 	.sensor_get_output_info = msm_sensor_get_output_info,
-	.sensor_config = imx074_sensor_config,
-	.sensor_open_init = imx074_sensor_open_init,
-	.sensor_release = imx074_sensor_release,
+	.sensor_config = msm_sensor_config,
 	.sensor_power_up = msm_sensor_power_up,
 	.sensor_power_down = msm_sensor_power_down,
-	.sensor_probe = msm_sensor_probe,
+	.sensor_adjust_frame_lines = msm_sensor_adjust_frame_lines,
 };
 
 static struct msm_sensor_reg_t imx074_regs = {
@@ -358,11 +301,11 @@ static struct msm_sensor_ctrl_t imx074_s_ctrl = {
 	.msm_sensor_reg = &imx074_regs,
 	.sensor_i2c_client = &imx074_sensor_i2c_client,
 	.sensor_i2c_addr = 0x34,
-	.sensor_eeprom_client = &imx074_eeprom_client,
 	.sensor_output_reg_addr = &imx074_reg_addr,
 	.sensor_id_info = &imx074_id_info,
 	.sensor_exp_gain_info = &imx074_exp_gain_info,
 	.cam_mode = MSM_SENSOR_MODE_INVALID,
+	.csic_params = &imx074_csic_params_array[0],
 	.csi_params = &imx074_csi_params_array[0],
 	.msm_sensor_mutex = &imx074_mut,
 	.sensor_i2c_driver = &imx074_i2c_driver,
@@ -370,6 +313,7 @@ static struct msm_sensor_ctrl_t imx074_s_ctrl = {
 	.sensor_v4l2_subdev_info_size = ARRAY_SIZE(imx074_subdev_info),
 	.sensor_v4l2_subdev_ops = &imx074_subdev_ops,
 	.func_tbl = &imx074_func_tbl,
+	.clk_rate = MSM_SENSOR_MCLK_24HZ,
 };
 
 module_init(msm_sensor_init_module);

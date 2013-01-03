@@ -26,6 +26,7 @@
 #include <linux/sched.h>
 #include <linux/spinlock.h>
 #include <linux/rq_stats.h>
+#include <asm/smp_plat.h>
 
 #define MAX_LONG_SIZE 24
 #define DEFAULT_RQ_POLL_JIFFIES 1
@@ -95,10 +96,7 @@ static ssize_t store_run_queue_poll_ms(struct kobject *kobj,
 static ssize_t show_def_timer_ms(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
-	int64_t diff_ms;
-	diff_ms = ktime_to_ns(ktime_get()) - rq_info.def_start_time;
-	do_div(diff_ms, 1000 * 1000);
-	return snprintf(buf, MAX_LONG_SIZE, "%lld\n", diff_ms);
+	return snprintf(buf, MAX_LONG_SIZE, "%u\n", rq_info.def_interval);
 }
 
 static ssize_t store_def_timer_ms(struct kobject *kobj,
@@ -198,6 +196,14 @@ rel:
 
 static int __init msm_rq_stats_init(void)
 {
+	int ret;
+
+	/* Bail out if this is not an SMP Target */
+	if (!is_smp()) {
+		rq_info.init = 0;
+		return -ENOSYS;
+	}
+
 	rq_wq = create_singlethread_workqueue("rq_stats");
 	BUG_ON(!rq_wq);
 	INIT_WORK(&rq_info.def_timer_work, def_work_fn);
@@ -206,7 +212,9 @@ static int __init msm_rq_stats_init(void)
 	rq_info.def_timer_jiffies = DEFAULT_DEF_TIMER_JIFFIES;
 	rq_info.rq_poll_last_jiffy = 0;
 	rq_info.def_timer_last_jiffy = 0;
+	ret = init_rq_attribs();
+
 	rq_info.init = 1;
-	return init_rq_attribs();
+	return ret;
 }
 late_initcall(msm_rq_stats_init);

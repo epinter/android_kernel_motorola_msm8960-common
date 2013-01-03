@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,6 +24,8 @@
 #define SLIM_HDL_TO_LA(hdl)	((u32)((hdl) & 0xFF000000) >> 24)
 #define SLIM_HDL_TO_FLOW(hdl)	(((u32)(hdl) & 0xFF0000) >> 16)
 #define SLIM_HDL_TO_PORT(hdl)	((u32)(hdl) & 0xFF)
+
+#define SLIM_HDL_TO_CHIDX(hdl)	((u16)(hdl) & 0xFF)
 
 #define SLIM_SLAVE_PORT(p, la)	(((la)<<16) | (p))
 #define SLIM_MGR_PORT(p)	((0xFF << 16) | (p))
@@ -1074,7 +1076,7 @@ static int connect_port_ch(struct slim_controller *ctrl, u8 ch, u32 ph,
 	else
 		mc = SLIM_MSG_MC_CONNECT_SINK;
 	buf[0] = pn;
-	buf[1] = ch;
+	buf[1] = ctrl->chans[ch].chan;
 	if (la == SLIM_LA_MANAGER)
 		ctrl->ports[pn].flow = flow;
 	ret = slim_processtxn(ctrl, SLIM_MSG_DEST_LOGICALADDR, mc, 0,
@@ -1104,75 +1106,117 @@ static int disconnect_port_ch(struct slim_controller *ctrl, u32 ph)
 }
 
 /*
- * slim_connect_ports: Connect port(s) to channel.
+ * slim_connect_src: Connect source port to channel.
  * @sb: client handle
- * @srch: source handles to be connected to this channel
- * @nrsc: number of source ports
- * @sinkh: sink handle to be connected to this channel
+ * @srch: source handle to be connected to this channel
  * @chanh: Channel with which the ports need to be associated with.
- * Per slimbus specification, a channel may have multiple source-ports and 1
- * sink port.Channel specified in chanh needs to be allocated first.
+ * Per slimbus specification, a channel may have 1 source port.
+ * Channel specified in chanh needs to be allocated first.
+ * Returns -EALREADY if source is already configured for this channel.
+ * Returns -ENOTCONN if channel is not allocated
  */
-int slim_connect_ports(struct slim_device *sb, u32 *srch, int nsrc, u32 sinkh,
-			u16 chanh)
+int slim_connect_src(struct slim_device *sb, u32 srch, u16 chanh)
+{
+	struct slim_controller *ctrl = sb->ctrl;
+	int ret;
+	u8 chan = SLIM_HDL_TO_CHIDX(chanh);
+	struct slim_ich *slc = &ctrl->chans[chan];
+	enum slim_port_flow flow = SLIM_HDL_TO_FLOW(srch);
+
+	if (flow != SLIM_SRC)
+		return -EINVAL;
+
+	mutex_lock(&ctrl->m_ctrl);
+
+	if (slc->state == SLIM_CH_FREE) {
+		ret = -ENOTCONN;
+		goto connect_src_err;
+	}
+	/*
+	 * Once channel is removed, its ports can be considered disconnected
+	 * So its ports can be reassigned. Source port is zeroed
+	 * when channel is deallocated.
+	 */
+	if (slc->srch) {
+		ret = -EALREADY;
+		goto connect_src_err;
+	}
+
+	ret = connect_port_ch(ctrl, chan, srch, SLIM_SRC);
+
+	if (!ret)
+		slc->srch = srch;
+
+connect_src_err:
+	mutex_unlock(&ctrl->m_ctrl);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(slim_connect_src);
+
+/*
+ * slim_connect_sink: Connect sink port(s) to channel.
+ * @sb: client handle
+ * @sinkh: sink handle(s) to be connected to this channel
+ * @nsink: number of sinks
+ * @chanh: Channel with which the ports need to be associated with.
+ * Per slimbus specification, a channel may have multiple sink-ports.
+ * Channel specified in chanh needs to be allocated first.
+ * Returns -EALREADY if sink is already configured for this channel.
+ * Returns -ENOTCONN if channel is not allocated
+ */
+int slim_connect_sink(struct slim_device *sb, u32 *sinkh, int nsink, u16 chanh)
 {
 	struct slim_controller *ctrl = sb->ctrl;
 	int j;
 	int ret = 0;
-	u8 chan = (u8)(chanh & 0xFF);
+	u8 chan = SLIM_HDL_TO_CHIDX(chanh);
 	struct slim_ich *slc = &ctrl->chans[chan];
 
+	if (!sinkh || !nsink)
+		return -EINVAL;
+
 	mutex_lock(&ctrl->m_ctrl);
-	/* Make sure the channel is not already pending reconf. or active */
-	if (slc->state >= SLIM_CH_PENDING_ACTIVE) {
-		dev_err(&ctrl->dev, "Channel %d  already active", chan);
-		ret = -EISCONN;
-		goto connect_port_err;
-	}
 
 	/*
 	 * Once channel is removed, its ports can be considered disconnected
-	 * So its ports can be reassigned. Source port array is freed
-	 * when channel is deallocated.
+	 * So its ports can be reassigned. Sink ports are freed when channel
+	 * is deallocated.
 	 */
-	slc->srch = krealloc(slc->srch, (sizeof(u32) * nsrc), GFP_KERNEL);
-	if (!slc->srch) {
-		ret = -ENOMEM;
-		goto connect_port_err;
+	if (slc->state == SLIM_CH_FREE) {
+		ret = -ENOTCONN;
+		goto connect_sink_err;
 	}
 
-	/* connect source */
-	for (j = 0; j < nsrc; j++) {
-		ret = connect_port_ch(ctrl, chan, srch[j], SLIM_SRC);
+	for (j = 0; j < nsink; j++) {
+		enum slim_port_flow flow = SLIM_HDL_TO_FLOW(sinkh[j]);
+		if (flow != SLIM_SINK)
+			ret = -EINVAL;
+		else
+			ret = connect_port_ch(ctrl, chan, sinkh[j], SLIM_SINK);
 		if (ret) {
-			for ( ; j >= 0 ; j--)
-				disconnect_port_ch(ctrl,
-						srch[j]);
-			kfree(slc->srch);
-			slc->srch = NULL;
-			goto connect_port_err;
+			for (j = j - 1; j >= 0; j--)
+				disconnect_port_ch(ctrl, sinkh[j]);
+			goto connect_sink_err;
 		}
 	}
-	/* connect sink */
-	ret = connect_port_ch(ctrl, chan, sinkh, SLIM_SINK);
-	if (ret) {
-		for (j = 0; j < nsrc; j++)
-			disconnect_port_ch(ctrl, srch[j]);
-		kfree(slc->srch);
-		slc->srch = NULL;
-		goto connect_port_err;
+
+	slc->sinkh = krealloc(slc->sinkh, (sizeof(u32) * (slc->nsink + nsink)),
+				GFP_KERNEL);
+	if (!slc->sinkh) {
+		ret = -ENOMEM;
+		for (j = 0; j < nsink; j++)
+			disconnect_port_ch(ctrl, sinkh[j]);
+		goto connect_sink_err;
 	}
 
-	memcpy(slc->srch, srch, (sizeof(u32) * nsrc));
-	slc->nsrc = nsrc;
-	if (sinkh)
-		slc->sinkh = sinkh;
+	memcpy(slc->sinkh + slc->nsink, sinkh, (sizeof(u32) * nsink));
+	slc->nsink += nsink;
 
-connect_port_err:
+connect_sink_err:
 	mutex_unlock(&ctrl->m_ctrl);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(slim_connect_ports);
+EXPORT_SYMBOL_GPL(slim_connect_sink);
 
 /*
  * slim_disconnect_ports: Disconnect port(s) from channel
@@ -1269,6 +1313,9 @@ static void slim_add_ch(struct slim_controller *ctrl, struct slim_ich *slc)
 	int i, j;
 	int *len;
 	int sl = slc->seglen << slc->rootexp;
+	/* Channel is already active and other end is transmitting data */
+	if (slc->state >= SLIM_CH_ACTIVE)
+		return;
 	if (slc->coeff == SLIM_COEFF_1) {
 		arr = ctrl->sched.chc1;
 		len = &ctrl->sched.num_cc1;
@@ -1329,8 +1376,8 @@ static int slim_remove_ch(struct slim_controller *ctrl, struct slim_ich *slc)
 	slc->state = SLIM_CH_ALLOCATED;
 	slc->newintr = 0;
 	slc->newoff = 0;
-	for (i = 0; i < slc->nsrc; i++) {
-		ph = slc->srch[i];
+	for (i = 0; i < slc->nsink; i++) {
+		ph = slc->sinkh[i];
 		la = SLIM_HDL_TO_LA(ph);
 		/*
 		 * For ports managed by manager's ported device, no need to send
@@ -1341,11 +1388,15 @@ static int slim_remove_ch(struct slim_controller *ctrl, struct slim_ich *slc)
 			ctrl->ports[SLIM_HDL_TO_PORT(ph)].state = SLIM_P_UNCFG;
 	}
 
-	ph = slc->sinkh;
+	ph = slc->srch;
 	la = SLIM_HDL_TO_LA(ph);
 	if (la == SLIM_LA_MANAGER)
 		ctrl->ports[SLIM_HDL_TO_PORT(ph)].state = SLIM_P_UNCFG;
 
+	kfree(slc->sinkh);
+	slc->sinkh = NULL;
+	slc->srch = 0;
+	slc->nsink = 0;
 	return 0;
 }
 
@@ -1507,9 +1558,8 @@ static int slim_nextdefine_ch(struct slim_device *sb, u8 chan)
  * slim_alloc_ch: Allocate a slimbus channel and return its handle.
  * @sb: client handle.
  * @chanh: return channel handle
- * Slimbus channels are limited to 256 per specification. LSB of the handle
- * indicates channel number and MSB of the handle is used by the slimbus
- * framework. -EXFULL is returned if all channels are in use.
+ * Slimbus channels are limited to 256 per specification.
+ * -EXFULL is returned if all channels are in use.
  * Although slimbus specification supports 256 channels, a controller may not
  * support that many channels.
  */
@@ -1532,6 +1582,7 @@ int slim_alloc_ch(struct slim_device *sb, u16 *chanh)
 	*chanh = i;
 	ctrl->chans[i].nextgrp = 0;
 	ctrl->chans[i].state = SLIM_CH_ALLOCATED;
+	ctrl->chans[i].chan = (u8)(ctrl->reserved + i);
 
 	mutex_unlock(&ctrl->m_ctrl);
 	return 0;
@@ -1539,28 +1590,99 @@ int slim_alloc_ch(struct slim_device *sb, u16 *chanh)
 EXPORT_SYMBOL_GPL(slim_alloc_ch);
 
 /*
+ * slim_query_ch: Get reference-counted handle for a channel number. Every
+ * channel is reference counted by upto one as producer and the others as
+ * consumer)
+ * @sb: client handle
+ * @chan: slimbus channel number
+ * @chanh: return channel handle
+ * If request channel number is not in use, it is allocated, and reference
+ * count is set to one. If the channel was was already allocated, this API
+ * will return handle to that channel and reference count is incremented.
+ * -EXFULL is returned if all channels are in use
+ */
+int slim_query_ch(struct slim_device *sb, u8 ch, u16 *chanh)
+{
+	struct slim_controller *ctrl = sb->ctrl;
+	u16 i, j;
+	int ret = 0;
+	if (!ctrl || !chanh)
+		return -EINVAL;
+	mutex_lock(&ctrl->m_ctrl);
+	/* start with modulo number */
+	i = ch % ctrl->nchans;
+
+	for (j = 0; j < ctrl->nchans; j++) {
+		if (ctrl->chans[i].chan == ch) {
+			*chanh = i;
+			ctrl->chans[i].ref++;
+			if (ctrl->chans[i].state == SLIM_CH_FREE)
+				ctrl->chans[i].state = SLIM_CH_ALLOCATED;
+			goto query_out;
+		}
+		i = (i + 1) % ctrl->nchans;
+	}
+
+	/* Channel not in table yet */
+	ret = -EXFULL;
+	for (j = 0; j < ctrl->nchans; j++) {
+		if (ctrl->chans[i].state == SLIM_CH_FREE) {
+			ctrl->chans[i].state =
+				SLIM_CH_ALLOCATED;
+			*chanh = i;
+			ctrl->chans[i].ref++;
+			ctrl->chans[i].chan = ch;
+			ctrl->chans[i].nextgrp = 0;
+			ret = 0;
+			break;
+		}
+		i = (i + 1) % ctrl->nchans;
+	}
+query_out:
+	mutex_unlock(&ctrl->m_ctrl);
+	dev_dbg(&ctrl->dev, "query ch:%d,hdl:%d,ref:%d,ret:%d",
+				ch, i, ctrl->chans[i].ref, ret);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(slim_query_ch);
+
+/*
  * slim_dealloc_ch: Deallocate channel allocated using the API above
  * -EISCONN is returned if the channel is tried to be deallocated without
  *  being removed first.
+ *  -ENOTCONN is returned if deallocation is tried on a channel that's not
+ *  allocated.
  */
 int slim_dealloc_ch(struct slim_device *sb, u16 chanh)
 {
 	struct slim_controller *ctrl = sb->ctrl;
-	u8 chan = (u8)(chanh & 0xFF);
+	u8 chan = SLIM_HDL_TO_CHIDX(chanh);
 	struct slim_ich *slc = &ctrl->chans[chan];
 	if (!ctrl)
 		return -EINVAL;
 
 	mutex_lock(&ctrl->m_ctrl);
+	if (slc->state == SLIM_CH_FREE) {
+		mutex_unlock(&ctrl->m_ctrl);
+		return -ENOTCONN;
+	}
+	if (slc->ref > 1) {
+		slc->ref--;
+		mutex_unlock(&ctrl->m_ctrl);
+		dev_dbg(&ctrl->dev, "remove chan:%d,hdl:%d,ref:%d",
+					slc->chan, chanh, slc->ref);
+		return 0;
+	}
 	if (slc->state >= SLIM_CH_PENDING_ACTIVE) {
 		dev_err(&ctrl->dev, "Channel:%d should be removed first", chan);
 		mutex_unlock(&ctrl->m_ctrl);
 		return -EISCONN;
 	}
-	kfree(slc->srch);
-	slc->srch = NULL;
+	slc->ref--;
 	slc->state = SLIM_CH_FREE;
 	mutex_unlock(&ctrl->m_ctrl);
+	dev_dbg(&ctrl->dev, "remove chan:%d,hdl:%d,ref:%d",
+				slc->chan, chanh, slc->ref);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(slim_dealloc_ch);
@@ -1571,7 +1693,7 @@ EXPORT_SYMBOL_GPL(slim_dealloc_ch);
  */
 enum slim_ch_state slim_get_ch_state(struct slim_device *sb, u16 chanh)
 {
-	u8 chan = (u8)(chanh & 0xFF);
+	u8 chan = SLIM_HDL_TO_CHIDX(chanh);
 	struct slim_ich *slc = &sb->ctrl->chans[chan];
 	return slc->state;
 }
@@ -1589,8 +1711,8 @@ EXPORT_SYMBOL_GPL(slim_get_ch_state);
  * Channels can be grouped if multiple channels use same parameters
  * (e.g. 5.1 audio has 6 channels with same parameters. They will all be grouped
  * and given 1 handle for simplicity and avoid repeatedly calling the API)
- * -EISCONN is returned if the channel is already connected. -EBUSY is
- * returned if the channel is already allocated to some other client.
+ * -EISCONN is returned if channel is already used with different parameters.
+ * -ENXIO is returned if the channel is not yet allocated.
  */
 int slim_define_ch(struct slim_device *sb, struct slim_ch *prop, u16 *chanh,
 			u8 nchan, bool grp, u16 *grph)
@@ -1602,27 +1724,29 @@ int slim_define_ch(struct slim_device *sb, struct slim_ch *prop, u16 *chanh,
 		return -EINVAL;
 	mutex_lock(&ctrl->m_ctrl);
 	for (i = 0; i < nchan; i++) {
-		u8 chan = (u8)(chanh[i] & 0xFF);
-		dev_dbg(&ctrl->dev, "define_ch: port:%d, state:%d", chanh[i],
+		u8 chan = SLIM_HDL_TO_CHIDX(chanh[i]);
+		struct slim_ich *slc = &ctrl->chans[chan];
+		dev_dbg(&ctrl->dev, "define_ch: ch:%d, state:%d", chan,
 				(int)ctrl->chans[chan].state);
-		if (ctrl->chans[chan].state < SLIM_CH_ALLOCATED ||
-			ctrl->chans[chan].state > SLIM_CH_DEFINED) {
-			int j;
-			for (j = i - 1; j >= 0; j--)
-				ctrl->chans[chan].state = SLIM_CH_ALLOCATED;
-			ret = -EBUSY;
+		if (slc->state < SLIM_CH_ALLOCATED) {
+			ret = -ENXIO;
 			goto err_define_ch;
 		}
-		ctrl->chans[chan].prop = *prop;
-		ret = slim_nextdefine_ch(sb, chan);
-		if (ret) {
-			int j;
-			for (j = i - 1; j >= 0; j--) {
-				chan = chanh[j] & 0xFF;
-				ctrl->chans[chan].nextgrp = 0;
-				ctrl->chans[chan].state = SLIM_CH_ALLOCATED;
+		if (slc->state >= SLIM_CH_DEFINED && slc->ref >= 2) {
+			if (prop->ratem != slc->prop.ratem ||
+			prop->sampleszbits != slc->prop.sampleszbits ||
+			prop->baser != slc->prop.baser) {
+				ret = -EISCONN;
+				goto err_define_ch;
 			}
+		} else if (slc->state > SLIM_CH_DEFINED) {
+			ret = -EISCONN;
 			goto err_define_ch;
+		} else {
+			ctrl->chans[chan].prop = *prop;
+			ret = slim_nextdefine_ch(sb, chan);
+			if (ret)
+				goto err_define_ch;
 		}
 		if (i < (nchan - 1))
 			ctrl->chans[chan].nextgrp = chanh[i + 1];
@@ -1630,13 +1754,18 @@ int slim_define_ch(struct slim_device *sb, struct slim_ch *prop, u16 *chanh,
 			ctrl->chans[chan].nextgrp |= SLIM_START_GRP;
 		if (i == (nchan - 1))
 			ctrl->chans[chan].nextgrp |= SLIM_END_GRP;
-
-		ctrl->chans[chan].state = SLIM_CH_DEFINED;
 	}
 
 	if (grp)
 		*grph = chanh[0];
+	for (i = 0; i < nchan; i++) {
+		u8 chan = SLIM_HDL_TO_CHIDX(chanh[i]);
+		struct slim_ich *slc = &ctrl->chans[chan];
+		if (slc->state == SLIM_CH_ALLOCATED)
+			slc->state = SLIM_CH_DEFINED;
+	}
 err_define_ch:
+	dev_dbg(&ctrl->dev, "define_ch: ch:%d, ret:%d", *chanh, ret);
 	mutex_unlock(&ctrl->m_ctrl);
 	return ret;
 }
@@ -1849,6 +1978,9 @@ static int slim_sched_chans(struct slim_device *sb, u32 clkgear,
 				slc1 = ctrl->sched.chc1[coeff1];
 			}
 		}
+		/* Leave some slots for messaging space */
+		if (opensl1[1] == 0 && opensl1[0] == 0)
+			return -EXFULL;
 		if (opensl1[1] > opensl1[0]) {
 			int temp = opensl1[0];
 			opensl1[0] = opensl1[1];
@@ -1876,7 +2008,7 @@ static int slim_sched_chans(struct slim_device *sb, u32 clkgear,
 			*ctrlw = maxctrlw1;
 		}
 	} else {
-		struct slim_ich *slc1;
+		struct slim_ich *slc1 = NULL;
 		struct slim_ich *slc3 = ctrl->sched.chc3[coeff3];
 		u32 expshft = SLIM_MAX_CLK_GEAR - clkgear;
 		int curexp, finalexp, exp1;
@@ -2051,6 +2183,9 @@ static int slim_sched_chans(struct slim_device *sb, u32 clkgear,
 				slc1 = ctrl->sched.chc1[coeff1];
 			}
 		}
+		/* Leave some slots for messaging space */
+		if (opensl3[1] == 0 && opensl3[0] == 0)
+			return -EXFULL;
 		/* swap 1st and 2nd bucket if 2nd bucket has more open slots */
 		if (opensl3[1] > opensl3[0]) {
 			int temp = opensl3[0];
@@ -2182,7 +2317,7 @@ static void slim_sort_chan_grp(struct slim_controller *ctrl,
 	for (; last > 0; last--) {
 		struct slim_ich *slc1 = slc;
 		struct slim_ich *slc2;
-		u8 next = (u8)(slc1->nextgrp & 0xFF);
+		u8 next = SLIM_HDL_TO_CHIDX(slc1->nextgrp);
 		slc2 = &ctrl->chans[next];
 		for (second = 1; second <= last && slc2 &&
 			(slc2->state == SLIM_CH_ACTIVE ||
@@ -2197,7 +2332,7 @@ static void slim_sort_chan_grp(struct slim_controller *ctrl,
 				break;
 			}
 			slc1 = slc2;
-			next = (u8)(slc1->nextgrp & 0xFF);
+			next = SLIM_HDL_TO_CHIDX(slc1->nextgrp);
 			slc2 = &ctrl->chans[next];
 		}
 		if (slc2 == NULL)
@@ -2310,14 +2445,17 @@ static void slim_chan_changes(struct slim_device *sb, bool revert)
 					struct slim_pending_ch, pending);
 		slc = &ctrl->chans[pch->chan];
 		if (revert) {
-			u32 sl = slc->seglen << slc->rootexp;
-			if (slc->coeff == SLIM_COEFF_3)
-				sl *= 3;
-			ctrl->sched.usedslots -= sl;
-			slim_remove_ch(ctrl, slc);
-			slc->state = SLIM_CH_DEFINED;
+			if (slc->state == SLIM_CH_PENDING_ACTIVE) {
+				u32 sl = slc->seglen << slc->rootexp;
+				if (slc->coeff == SLIM_COEFF_3)
+					sl *= 3;
+				ctrl->sched.usedslots -= sl;
+				slim_remove_ch(ctrl, slc);
+				slc->state = SLIM_CH_DEFINED;
+			}
 		} else {
 			slc->state = SLIM_CH_ACTIVE;
+			slc->def++;
 		}
 		list_del_init(&pch->pending);
 		kfree(pch);
@@ -2333,6 +2471,7 @@ static void slim_chan_changes(struct slim_device *sb, bool revert)
 			if (slc->coeff == SLIM_COEFF_3)
 				sl *= 3;
 			ctrl->sched.usedslots += sl;
+			slc->def = 1;
 			slc->state = SLIM_CH_ACTIVE;
 		} else
 			slim_remove_ch(ctrl, slc);
@@ -2383,7 +2522,8 @@ int slim_reconfigure_now(struct slim_device *sb)
 	list_for_each_entry(pch, &sb->mark_define, pending) {
 		struct slim_ich *slc = &ctrl->chans[pch->chan];
 		slim_add_ch(ctrl, slc);
-		slc->state = SLIM_CH_PENDING_ACTIVE;
+		if (slc->state < SLIM_CH_ACTIVE)
+			slc->state = SLIM_CH_PENDING_ACTIVE;
 	}
 
 	list_for_each_entry(pch, &sb->mark_removal, pending) {
@@ -2433,7 +2573,7 @@ int slim_reconfigure_now(struct slim_device *sb)
 	list_for_each_entry(pch, &sb->mark_define, pending) {
 		struct slim_ich *slc = &ctrl->chans[pch->chan];
 		/* Define content */
-		wbuf[0] = pch->chan;
+		wbuf[0] = slc->chan;
 		wbuf[1] = slc->prrate;
 		wbuf[2] = slc->prop.dataf | (slc->prop.auxf << 4);
 		wbuf[3] = slc->prop.sampleszbits / SLIM_CL_PER_SL;
@@ -2456,8 +2596,9 @@ int slim_reconfigure_now(struct slim_device *sb)
 	}
 
 	list_for_each_entry(pch, &sb->mark_removal, pending) {
+		struct slim_ich *slc = &ctrl->chans[pch->chan];
 		dev_dbg(&ctrl->dev, "remove chan:%x\n", pch->chan);
-		wbuf[0] = pch->chan;
+		wbuf[0] = slc->chan;
 		ret = slim_processtxn(ctrl, SLIM_MSG_DEST_BROADCAST,
 				SLIM_MSG_MC_NEXT_REMOVE_CHANNEL, 0,
 				SLIM_MSG_MT_CORE, NULL, wbuf, 1, 4,
@@ -2466,8 +2607,9 @@ int slim_reconfigure_now(struct slim_device *sb)
 			goto revert_reconfig;
 	}
 	list_for_each_entry(pch, &sb->mark_suspend, pending) {
+		struct slim_ich *slc = &ctrl->chans[pch->chan];
 		dev_dbg(&ctrl->dev, "suspend chan:%x\n", pch->chan);
-		wbuf[0] = pch->chan;
+		wbuf[0] = slc->chan;
 		ret = slim_processtxn(ctrl, SLIM_MSG_DEST_BROADCAST,
 				SLIM_MSG_MC_NEXT_DEACTIVATE_CHANNEL, 0,
 				SLIM_MSG_MT_CORE, NULL, wbuf, 1, 4,
@@ -2489,13 +2631,13 @@ int slim_reconfigure_now(struct slim_device *sb)
 		dev_dbg(&ctrl->dev, "new-off:%d, old-off:%d\n",
 				slc->newoff, slc->offset);
 
-		if (slc->state < SLIM_CH_ACTIVE ||
+		if (slc->state < SLIM_CH_ACTIVE || slc->def < slc->ref ||
 			slc->newintr != slc->interval ||
 			slc->newoff != slc->offset) {
 			segdist |= 0x200;
 			segdist >>= curexp;
 			segdist |= (slc->newoff << (curexp + 1)) & 0xC00;
-			wbuf[0] = (u8)(slc - ctrl->chans);
+			wbuf[0] = slc->chan;
 			wbuf[1] = (u8)(segdist & 0xFF);
 			wbuf[2] = (u8)((segdist & 0xF00) >> 8) |
 					(slc->prop.prot << 4);
@@ -2522,13 +2664,13 @@ int slim_reconfigure_now(struct slim_device *sb)
 		dev_dbg(&ctrl->dev, "new-off:%d, old-off:%d\n",
 				slc->newoff, slc->offset);
 
-		if (slc->state < SLIM_CH_ACTIVE ||
+		if (slc->state < SLIM_CH_ACTIVE || slc->def < slc->ref ||
 			slc->newintr != slc->interval ||
 			slc->newoff != slc->offset) {
 			segdist |= 0x200;
 			segdist >>= curexp;
 			segdist |= 0xC00;
-			wbuf[0] = (u8)(slc - ctrl->chans);
+			wbuf[0] = slc->chan;
 			wbuf[1] = (u8)(segdist & 0xFF);
 			wbuf[2] = (u8)((segdist & 0xF00) >> 8) |
 					(slc->prop.prot << 4);
@@ -2594,19 +2736,25 @@ static int add_pending_ch(struct list_head *listh, u8 chan)
  * -EXFULL is returned if there is no space in TDM to reserve the bandwidth.
  * -EISCONN/-ENOTCONN is returned if the channel is already connected or not
  * yet defined.
+ * -EINVAL is returned if individual control of a grouped-channel is attempted.
  */
 int slim_control_ch(struct slim_device *sb, u16 chanh,
 			enum slim_ch_control chctrl, bool commit)
 {
 	struct slim_controller *ctrl = sb->ctrl;
-	struct slim_ich *slc;
 	int ret = 0;
 	/* Get rid of the group flag in MSB if any */
-	u8 chan = (u8)(chanh & 0xFF);
+	u8 chan = SLIM_HDL_TO_CHIDX(chanh);
+	struct slim_ich *slc = &ctrl->chans[chan];
+	if (!(slc->nextgrp & SLIM_START_GRP))
+		return -EINVAL;
+
 	mutex_lock(&sb->sldev_reconf);
 	mutex_lock(&ctrl->m_ctrl);
 	do {
 		slc = &ctrl->chans[chan];
+		dev_dbg(&ctrl->dev, "chan:%d,ctrl:%d,def:%d", chan, chctrl,
+					slc->def);
 		if (slc->state < SLIM_CH_DEFINED) {
 			ret = -ENOTCONN;
 			break;
@@ -2616,7 +2764,7 @@ int slim_control_ch(struct slim_device *sb, u16 chanh,
 			if (ret)
 				break;
 		} else if (chctrl == SLIM_CH_ACTIVATE) {
-			if (slc->state >= SLIM_CH_ACTIVE) {
+			if (slc->state > SLIM_CH_ACTIVE) {
 				ret = -EISCONN;
 				break;
 			}
@@ -2628,13 +2776,16 @@ int slim_control_ch(struct slim_device *sb, u16 chanh,
 				ret = -ENOTCONN;
 				break;
 			}
-			ret = add_pending_ch(&sb->mark_removal, chan);
+			if (slc->def > 0)
+				slc->def--;
+			if (slc->def == 0)
+				ret = add_pending_ch(&sb->mark_removal, chan);
 			if (ret)
 				break;
 		}
 
 		if (!(slc->nextgrp & SLIM_END_GRP))
-			chan = (u8)(slc->nextgrp & 0xFF);
+			chan = SLIM_HDL_TO_CHIDX(slc->nextgrp);
 	} while (!(slc->nextgrp & SLIM_END_GRP));
 	mutex_unlock(&ctrl->m_ctrl);
 	if (!ret && commit == true)

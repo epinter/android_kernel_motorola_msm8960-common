@@ -2324,7 +2324,7 @@ unsigned long wait_task_inactive(struct task_struct *p, long match_state)
 		 * yield - it could be a while.
 		 */
 		if (unlikely(on_rq)) {
-			ktime_t to = ktime_set(0, NSEC_PER_SEC/HZ);
+			ktime_t to = ktime_set(0, NSEC_PER_MSEC);
 
 			set_current_state(TASK_UNINTERRUPTIBLE);
 			schedule_hrtimeout(&to, HRTIMER_MODE_REL);
@@ -4149,8 +4149,6 @@ EXPORT_SYMBOL(sub_preempt_count);
  */
 static noinline void __schedule_bug(struct task_struct *prev)
 {
-	struct pt_regs *regs = get_irq_regs();
-
 	printk(KERN_ERR "BUG: scheduling while atomic: %s/%d/0x%08x\n",
 		prev->comm, prev->pid, preempt_count());
 
@@ -4158,11 +4156,7 @@ static noinline void __schedule_bug(struct task_struct *prev)
 	print_modules();
 	if (irqs_disabled())
 		print_irqtrace_events(prev);
-
-	if (regs)
-		show_regs(regs);
-	else
-		dump_stack();
+	dump_stack();
 }
 
 /*
@@ -7653,7 +7647,6 @@ void partition_sched_domains(int ndoms_new, cpumask_var_t doms_new[],
 {
 	int i, j, n;
 	int new_topology;
-	cpumask_var_t doms_temp;
 
 	mutex_lock(&sched_domains_mutex);
 
@@ -7663,20 +7656,14 @@ void partition_sched_domains(int ndoms_new, cpumask_var_t doms_new[],
 	/* Let architecture update cpu core mappings. */
 	new_topology = arch_update_cpu_topology();
 
-	cpumask_andnot(doms_temp, cpu_active_mask, cpu_isolated_map);
-
 	n = doms_new ? ndoms_new : 0;
 
 	/* Destroy deleted domains */
 	for (i = 0; i < ndoms_cur; i++) {
-		if (!new_topology) {
-			if ((n == 0) && cpumask_subset(doms_cur[i], doms_temp))
+		for (j = 0; j < n && !new_topology; j++) {
+			if (cpumask_equal(doms_cur[i], doms_new[j])
+			    && dattrs_equal(dattr_cur, i, dattr_new, j))
 				goto match1;
-			for (j = 0; j < n; j++) {
-				if (cpumask_equal(doms_cur[i], doms_new[j])
-				    && dattrs_equal(dattr_cur, i, dattr_new, j))
-					goto match1;
-			}
 		}
 		/* no match - a current sched domain not in new doms_new[] */
 		detach_destroy_domains(doms_cur[i]);

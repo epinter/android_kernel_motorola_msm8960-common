@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -55,6 +55,7 @@
 #include "msm-keypad-devices.h"
 #include "acpuclock.h"
 #include "pm.h"
+#include "irq.h"
 #include "pm-boot.h"
 #include "proc_comm.h"
 #ifdef CONFIG_USB_ANDROID
@@ -1767,7 +1768,6 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 	.phy_can_powercollapse	 = 1,
 	.ldo_init		 = msm_hsusb_ldo_init,
 	.ldo_enable		 = msm_hsusb_ldo_enable,
-	.pclk_src_name           = "ebi1_usb_clk",
 };
 
 static struct msm_hsusb_gadget_platform_data msm_gadget_pdata;
@@ -2297,6 +2297,11 @@ static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR] = {
 	},
 };
 
+static struct msm_pm_boot_platform_data msm_pm_boot_pdata __initdata = {
+	.mode = MSM_PM_BOOT_CONFIG_RESET_VECTOR_VIRT,
+	.v_addr = (unsigned int *)PAGE_OFFSET,
+};
+
 static void
 msm_i2c_gpio_config(int iface, int config_type)
 {
@@ -2437,8 +2442,8 @@ static void __init qsd8x50_init(void)
 	spi_register_board_info(msm_spi_board_info,
 				ARRAY_SIZE(msm_spi_board_info));
 	msm_pm_set_platform_data(msm_pm_data, ARRAY_SIZE(msm_pm_data));
-	BUG_ON(msm_pm_boot_init(MSM_PM_BOOT_CONFIG_RESET_VECTOR,
-				(uint32_t *)PAGE_OFFSET));
+	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
+	msm_pm_register_irqs();
 
 #ifdef CONFIG_SURF_FFA_GPIO_KEYPAD
 	if (machine_is_qsd8x50_ffa())

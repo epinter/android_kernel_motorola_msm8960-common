@@ -35,8 +35,6 @@ struct gserial {
 
 	struct usb_ep			*in;
 	struct usb_ep			*out;
-	struct usb_endpoint_descriptor	*in_desc;
-	struct usb_endpoint_descriptor	*out_desc;
 
 	/* REVISIT avoid this CDC-ACM support harder ... */
 	struct usb_cdc_line_coding port_line_coding;	/* 9600-8-N-1 etc */
@@ -55,7 +53,7 @@ struct gserial {
 	int (*send_modem_ctrl_bits)(struct gserial *p, int ctrl_bits);
 
 	/* notification changes to modem */
-	void (*notify_modem)(struct gserial *gser, u8 portno, int ctrl_bits);
+	void (*notify_modem)(void *gser, u8 portno, int ctrl_bits);
 };
 
 /* utilities to allocate/free request and buffer */

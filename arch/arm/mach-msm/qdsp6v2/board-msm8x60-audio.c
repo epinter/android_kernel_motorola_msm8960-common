@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,19 +17,16 @@
 #include <linux/delay.h>
 #include <linux/debugfs.h>
 #include <linux/mfd/pmic8058.h>
-#include <linux/pmic8058-othc.h>
 #include <linux/mfd/pmic8901.h>
 #include <linux/mfd/msm-adie-codec.h>
-#include <linux/regulator/pmic8058-regulator.h>
-#include <linux/regulator/pmic8901-regulator.h>
 #include <linux/regulator/consumer.h>
 #include <linux/regulator/machine.h>
 
 #include <mach/qdsp6v2/audio_dev_ctl.h>
-#include <mach/mpp.h>
 #include <sound/apr_audio.h>
 #include <asm/mach-types.h>
 #include <asm/uaccess.h>
+#include <mach/board-msm8660.h>
 
 #include "snddev_icodec.h"
 #include "snddev_ecodec.h"
@@ -266,10 +263,15 @@ static int config_class_d0_gpio(int enable)
 {
 	int rc;
 
-	if (enable) {
-		rc = pm8901_mpp_config_digital_out(PM8901_MPP_3,
-			PM8901_MPP_DIG_LEVEL_MSMIO, 1);
+	struct pm8xxx_mpp_config_data class_d0_mpp = {
+		.type		= PM8XXX_MPP_TYPE_D_OUTPUT,
+		.level		= PM8901_MPP_DIG_LEVEL_MSMIO,
+	};
 
+	if (enable) {
+		class_d0_mpp.control = PM8XXX_MPP_DOUT_CTRL_HIGH;
+		rc = pm8xxx_mpp_config(PM8901_MPP_PM_TO_SYS(PM8901_MPP_3),
+							&class_d0_mpp);
 		if (rc) {
 			pr_err("%s: CLASS_D0_EN failed\n", __func__);
 			return rc;
@@ -280,19 +282,44 @@ static int config_class_d0_gpio(int enable)
 		if (rc) {
 			pr_err("%s: spkr pamp gpio pm8901 mpp3 request"
 			"failed\n", __func__);
-			pm8901_mpp_config_digital_out(PM8901_MPP_3,
-			PM8901_MPP_DIG_LEVEL_MSMIO, 0);
+			class_d0_mpp.control = PM8XXX_MPP_DOUT_CTRL_LOW;
+			pm8xxx_mpp_config(PM8901_MPP_PM_TO_SYS(PM8901_MPP_3),
+						&class_d0_mpp);
 			return rc;
 		}
 
 		gpio_direction_output(SNDDEV_GPIO_CLASS_D0_EN, 1);
-		gpio_set_value(SNDDEV_GPIO_CLASS_D0_EN, 1);
+		gpio_set_value_cansleep(SNDDEV_GPIO_CLASS_D0_EN, 1);
 
 	} else {
-		pm8901_mpp_config_digital_out(PM8901_MPP_3,
-		PM8901_MPP_DIG_LEVEL_MSMIO, 0);
-		gpio_set_value(SNDDEV_GPIO_CLASS_D0_EN, 0);
+		class_d0_mpp.control = PM8XXX_MPP_DOUT_CTRL_LOW;
+		pm8xxx_mpp_config(PM8901_MPP_PM_TO_SYS(PM8901_MPP_3),
+						&class_d0_mpp);
+		gpio_set_value_cansleep(SNDDEV_GPIO_CLASS_D0_EN, 0);
 		gpio_free(SNDDEV_GPIO_CLASS_D0_EN);
+	}
+	return 0;
+}
+
+static int config_class_d1_gpio(int enable)
+{
+	int rc;
+
+	if (enable) {
+		rc = gpio_request(SNDDEV_GPIO_CLASS_D1_EN, "CLASSD1_EN");
+
+		if (rc) {
+			pr_err("%s: Right Channel spkr gpio request"
+				" failed\n", __func__);
+			return rc;
+		}
+
+		gpio_direction_output(SNDDEV_GPIO_CLASS_D1_EN, 1);
+		gpio_set_value_cansleep(SNDDEV_GPIO_CLASS_D1_EN, 1);
+
+	} else {
+		gpio_set_value_cansleep(SNDDEV_GPIO_CLASS_D1_EN, 0);
+		gpio_free(SNDDEV_GPIO_CLASS_D1_EN);
 	}
 	return 0;
 }
@@ -312,6 +339,11 @@ static int msm_snddev_poweramp_on(void)
 		pr_err("%s: d0 gpio configuration failed\n", __func__);
 		goto config_gpio_fail;
 	}
+	rc = config_class_d1_gpio(1);
+	if (rc) {
+		pr_err("%s: d1 gpio configuration failed\n", __func__);
+		goto config_gpio_fail;
+	}
 config_gpio_fail:
 	return rc;
 }
@@ -321,6 +353,7 @@ static void msm_snddev_poweramp_off(void)
 	if (atomic_dec_return(&pamp_ref_cnt) == 0) {
 		pr_debug("%s: disable stereo spkr amp\n", __func__);
 		config_class_d0_gpio(0);
+		config_class_d1_gpio(0);
 		msleep(30);
 	}
 }
@@ -2196,7 +2229,7 @@ static struct platform_device ftm_spk_l_adie_lp_rx_device = {
 };
 
 static struct adie_codec_action_unit ftm_spkr_r_adie_lp_rx_actions[] =
-	FTM_SPKR_RX_LB;
+	SPKR_R_RX;
 
 static struct adie_codec_hwsetting_entry ftm_spkr_r_adie_lp_rx_settings[] = {
 	{
@@ -2666,7 +2699,10 @@ void __init msm_snddev_init(void)
 
 		platform_add_devices(snd_devices_fluid,
 		ARRAY_SIZE(snd_devices_fluid));
-	} else if (machine_is_msm8x60_surf()) {
+	}
+	if (machine_is_msm8x60_surf() || machine_is_msm8x60_ffa()
+		|| machine_is_msm8x60_fusion()
+		|| machine_is_msm8x60_fusn_ffa()) {
 		for (i = 0; i < ARRAY_SIZE(snd_devices_ftm); i++)
 			snd_devices_ftm[i]->id = dev_id++;
 

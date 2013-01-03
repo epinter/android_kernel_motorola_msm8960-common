@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,15 +14,14 @@
 #include <linux/slab.h>
 #include <linux/err.h>
 #include <linux/platform_device.h>
-#include <linux/firmware.h>
-#include <linux/parser.h>
+#include <linux/miscdevice.h>
+#include <linux/fs.h>
 #include <linux/wcnss_wlan.h>
 #include <linux/platform_data/qcom_wcnss_device.h>
 #include <linux/workqueue.h>
 #include <linux/jiffies.h>
 #include <linux/gpio.h>
 #include <mach/peripheral-loader.h>
-#include "wcnss_riva.h"
 
 #define DEVICE "wcnss_wlan"
 #define VERSION "1.01"
@@ -31,7 +30,7 @@
 /* module params */
 #define WCNSS_CONFIG_UNSPECIFIED (-1)
 static int has_48mhz_xo = WCNSS_CONFIG_UNSPECIFIED;
-module_param(has_48mhz_xo, int, S_IRUGO);
+module_param(has_48mhz_xo, int, S_IWUSR | S_IRUGO);
 MODULE_PARM_DESC(has_48mhz_xo, "Is an external 48 MHz XO present");
 
 static struct {
@@ -42,10 +41,97 @@ static struct {
 	struct resource	*rx_irq_res;
 	struct resource	*gpios_5wire;
 	const struct dev_pm_ops *pm_ops;
-	int             smd_channel_ready;
+	int		triggered;
+	int		smd_channel_ready;
+	unsigned int	serial_number;
+	int		thermal_mitigation;
+	void		(*tm_notify)(struct device *, int);
 	struct wcnss_wlan_config wlan_config;
 	struct delayed_work wcnss_work;
 } *penv = NULL;
+
+static ssize_t wcnss_serial_number_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	if (!penv)
+		return -ENODEV;
+
+	return scnprintf(buf, PAGE_SIZE, "%08X\n", penv->serial_number);
+}
+
+static ssize_t wcnss_serial_number_store(struct device *dev,
+		struct device_attribute *attr, const char * buf, size_t count)
+{
+	unsigned int value;
+
+	if (!penv)
+		return -ENODEV;
+
+	if (sscanf(buf, "%08X", &value) != 1)
+		return -EINVAL;
+
+	penv->serial_number = value;
+	return count;
+}
+
+static DEVICE_ATTR(serial_number, S_IRUSR | S_IWUSR,
+	wcnss_serial_number_show, wcnss_serial_number_store);
+
+
+static ssize_t wcnss_thermal_mitigation_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	if (!penv)
+		return -ENODEV;
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", penv->thermal_mitigation);
+}
+
+static ssize_t wcnss_thermal_mitigation_store(struct device *dev,
+		struct device_attribute *attr, const char * buf, size_t count)
+{
+	int value;
+
+	if (!penv)
+		return -ENODEV;
+
+	if (sscanf(buf, "%d", &value) != 1)
+		return -EINVAL;
+	penv->thermal_mitigation = value;
+	if (penv->tm_notify)
+		(penv->tm_notify)(dev, value);
+	return count;
+}
+
+static DEVICE_ATTR(thermal_mitigation, S_IRUSR | S_IWUSR,
+	wcnss_thermal_mitigation_show, wcnss_thermal_mitigation_store);
+
+static int wcnss_create_sysfs(struct device *dev)
+{
+	int ret;
+
+	if (!dev)
+		return -ENODEV;
+
+	ret = device_create_file(dev, &dev_attr_serial_number);
+	if (ret)
+		return ret;
+
+	ret = device_create_file(dev, &dev_attr_thermal_mitigation);
+	if (ret) {
+		device_remove_file(dev, &dev_attr_serial_number);
+		return ret;
+	}
+	return 0;
+}
+
+static void wcnss_remove_sysfs(struct device *dev)
+{
+	if (dev) {
+		device_remove_file(dev, &dev_attr_serial_number);
+		device_remove_file(dev, &dev_attr_thermal_mitigation);
+	}
+}
 
 static void wcnss_post_bootup(struct work_struct *work)
 {
@@ -127,6 +213,22 @@ struct device *wcnss_wlan_get_device(void)
 }
 EXPORT_SYMBOL(wcnss_wlan_get_device);
 
+struct platform_device *wcnss_get_platform_device(void)
+{
+	if (penv && penv->pdev)
+		return penv->pdev;
+	return NULL;
+}
+EXPORT_SYMBOL(wcnss_get_platform_device);
+
+struct wcnss_wlan_config *wcnss_get_wlan_config(void)
+{
+	if (penv && penv->pdev)
+		return &penv->wlan_config;
+	return NULL;
+}
+EXPORT_SYMBOL(wcnss_get_wlan_config);
+
 struct resource *wcnss_wlan_get_memory_map(struct device *dev)
 {
 	if (penv && dev && (dev == &penv->pdev->dev) && penv->smd_channel_ready)
@@ -173,6 +275,33 @@ void wcnss_wlan_unregister_pm_ops(struct device *dev,
 }
 EXPORT_SYMBOL(wcnss_wlan_unregister_pm_ops);
 
+void wcnss_register_thermal_mitigation(struct device *dev,
+				void (*tm_notify)(struct device *, int))
+{
+	if (penv && dev && tm_notify)
+		penv->tm_notify = tm_notify;
+}
+EXPORT_SYMBOL(wcnss_register_thermal_mitigation);
+
+void wcnss_unregister_thermal_mitigation(
+				void (*tm_notify)(struct device *, int))
+{
+	if (penv && tm_notify) {
+		if (tm_notify != penv->tm_notify)
+			pr_err("tm_notify doesn't match registered\n");
+		penv->tm_notify = NULL;
+	}
+}
+EXPORT_SYMBOL(wcnss_unregister_thermal_mitigation);
+
+unsigned int wcnss_get_serial_number(void)
+{
+	if (penv)
+		return penv->serial_number;
+	return 0;
+}
+EXPORT_SYMBOL(wcnss_get_serial_number);
+
 static int wcnss_wlan_suspend(struct device *dev)
 {
 	if (penv && dev && (dev == &penv->pdev->dev) &&
@@ -191,31 +320,24 @@ static int wcnss_wlan_resume(struct device *dev)
 	return 0;
 }
 
-static int __devinit
-wcnss_wlan_probe(struct platform_device *pdev)
+static int
+wcnss_trigger_config(struct platform_device *pdev)
 {
 	int ret;
 	struct qcom_wcnss_opts *pdata;
 
-	/* verify we haven't been called more than once */
-	if (penv) {
-		dev_err(&pdev->dev, "cannot handle multiple devices.\n");
-		return -ENODEV;
-	}
-
-	/* create an environment to track the device */
-	penv = kzalloc(sizeof(*penv), GFP_KERNEL);
-	if (!penv) {
-		dev_err(&pdev->dev, "cannot allocate device memory.\n");
-		return -ENOMEM;
-	}
-	penv->pdev = pdev;
+	/* make sure we are only triggered once */
+	if (penv->triggered)
+		return 0;
+	penv->triggered = 1;
 
 	/* initialize the WCNSS device configuration */
 	pdata = pdev->dev.platform_data;
 	if (WCNSS_CONFIG_UNSPECIFIED == has_48mhz_xo)
 		has_48mhz_xo = pdata->has_48mhz_xo;
 	penv->wlan_config.use_48mhz_xo = has_48mhz_xo;
+
+	penv->thermal_mitigation = 0;
 
 	penv->gpios_5wire = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"wcnss_gpios_5wire");
@@ -265,8 +387,14 @@ wcnss_wlan_probe(struct platform_device *pdev)
 		goto fail_res;
 	}
 
+	/* register sysfs entries */
+	ret = wcnss_create_sysfs(&pdev->dev);
+	if (ret)
+		goto fail_sysfs;
+
 	return 0;
 
+fail_sysfs:
 fail_res:
 	if (penv->pil)
 		pil_put(penv->pil);
@@ -281,9 +409,79 @@ fail_gpio_res:
 	return ret;
 }
 
+#ifndef MODULE
+static int wcnss_node_open(struct inode *inode, struct file *file)
+{
+	struct platform_device *pdev;
+
+	pr_info(DEVICE " triggered by userspace\n");
+
+	pdev = penv->pdev;
+	return wcnss_trigger_config(pdev);
+}
+
+static const struct file_operations wcnss_node_fops = {
+	.owner = THIS_MODULE,
+	.open = wcnss_node_open,
+};
+
+static struct miscdevice wcnss_misc = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = DEVICE,
+	.fops = &wcnss_node_fops,
+};
+#endif /* ifndef MODULE */
+
+
+static int __devinit
+wcnss_wlan_probe(struct platform_device *pdev)
+{
+	/* verify we haven't been called more than once */
+	if (penv) {
+		dev_err(&pdev->dev, "cannot handle multiple devices.\n");
+		return -ENODEV;
+	}
+
+	/* create an environment to track the device */
+	penv = kzalloc(sizeof(*penv), GFP_KERNEL);
+	if (!penv) {
+		dev_err(&pdev->dev, "cannot allocate device memory.\n");
+		return -ENOMEM;
+	}
+	penv->pdev = pdev;
+
+#ifdef MODULE
+
+	/*
+	 * Since we were built as a module, we are running because
+	 * the module was loaded, therefore we assume userspace
+	 * applications are available to service PIL, so we can
+	 * trigger the WCNSS configuration now
+	 */
+	pr_info(DEVICE " probed in MODULE mode\n");
+	return wcnss_trigger_config(pdev);
+
+#else
+
+	/*
+	 * Since we were built into the kernel we'll be called as part
+	 * of kernel initialization.  We don't know if userspace
+	 * applications are available to service PIL at this time
+	 * (they probably are not), so we simply create a device node
+	 * here.  When userspace is available it should touch the
+	 * device so that we know that WCNSS configuration can take
+	 * place
+	 */
+	pr_info(DEVICE " probed in built-in mode\n");
+	return misc_register(&wcnss_misc);
+
+#endif
+}
+
 static int __devexit
 wcnss_wlan_remove(struct platform_device *pdev)
 {
+	wcnss_remove_sysfs(&pdev->dev);
 	return 0;
 }
 

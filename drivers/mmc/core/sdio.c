@@ -14,6 +14,7 @@
 
 #include <linux/mmc/host.h>
 #include <linux/mmc/card.h>
+#include <linux/mmc/mmc.h>
 #include <linux/mmc/sdio.h>
 #include <linux/mmc/sdio_func.h>
 #include <linux/mmc/sdio_ids.h>
@@ -397,8 +398,11 @@ static int mmc_sdio_init_card(struct mmc_host *host, u32 ocr,
 	/*
 	 * Call the optional HC's init_card function to handle quirks.
 	 */
-	if (host->ops->init_card)
+	if (host->ops->init_card) {
+		mmc_host_clk_hold(host);
 		host->ops->init_card(host, card);
+		mmc_host_clk_release(host);
+	}
 
 	/*
 	 * For native busses:  set card RCA and quit open drain mode.
@@ -579,6 +583,14 @@ static void mmc_sdio_remove(struct mmc_host *host)
 }
 
 /*
+ * Card detection - card is alive.
+ */
+static int mmc_sdio_alive(struct mmc_host *host)
+{
+	return mmc_select_card(host->card);
+}
+
+/*
  * Card detection callback from host.
  */
 static void mmc_sdio_detect(struct mmc_host *host)
@@ -600,7 +612,7 @@ static void mmc_sdio_detect(struct mmc_host *host)
 	/*
 	 * Just check if our card has been removed.
 	 */
-	err = mmc_select_card(host->card);
+	err = _mmc_detect_card_removed(host);
 
 	mmc_release_host(host);
 
@@ -624,6 +636,7 @@ out:
 
 		mmc_claim_host(host);
 		mmc_detach_bus(host);
+		mmc_power_off(host);
 		mmc_release_host(host);
 	}
 }
@@ -694,7 +707,7 @@ static int mmc_sdio_resume(struct mmc_host *host)
 	}
 
 	if (!err && host->sdio_irqs)
-		mmc_signal_sdio_irq(host);
+		wake_up_process(host->sdio_irq_thread);
 	mmc_release_host(host);
 
 	/*
@@ -780,6 +793,7 @@ static const struct mmc_bus_ops mmc_sdio_ops = {
 	.suspend = mmc_sdio_suspend,
 	.resume = mmc_sdio_resume,
 	.power_restore = mmc_sdio_power_restore,
+	.alive = mmc_sdio_alive,
 };
 
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,10 +13,18 @@
 #define __Q6AFE_H__
 #include <sound/apr_audio.h>
 
-#define MSM_AFE_MONO		0
-#define MSM_AFE_MONO_RIGHT	1
-#define MSM_AFE_MONO_LEFT	2
-#define MSM_AFE_STEREO		3
+#define MSM_AFE_MONO        0
+#define MSM_AFE_MONO_RIGHT  1
+#define MSM_AFE_MONO_LEFT   2
+#define MSM_AFE_STEREO      3
+#define MSM_AFE_4CHANNELS   4
+#define MSM_AFE_6CHANNELS   6
+#define MSM_AFE_8CHANNELS   8
+
+#define MSM_AFE_I2S_FORMAT_LPCM		0
+#define MSM_AFE_I2S_FORMAT_COMPR		1
+#define MSM_AFE_I2S_FORMAT_IEC60958_LPCM	2
+#define MSM_AFE_I2S_FORMAT_IEC60958_COMPR	3
 
 #define MSM_AFE_PORT_TYPE_RX 0
 #define MSM_AFE_PORT_TYPE_TX 1
@@ -60,12 +68,15 @@ enum {
 	IDX_INT_FM_TX = 29,
 	IDX_RT_PROXY_PORT_001_RX = 30,
 	IDX_RT_PROXY_PORT_001_TX = 31,
+	IDX_SECONDARY_PCM_RX = 32,
+	IDX_SECONDARY_PCM_TX = 33,
 	AFE_MAX_PORTS
 };
 
 int afe_open(u16 port_id, union afe_port_config *afe_config, int rate);
 int afe_close(int port_id);
 int afe_loopback(u16 enable, u16 rx_port, u16 tx_port);
+int afe_loopback_cfg(u16 enable, u16 dst_port, u16 src_port, u16 mode);
 int afe_sidetone(u16 tx_port_id, u16 rx_port_id, u16 enable, uint16_t gain);
 int afe_loopback_gain(u16 port_id, u16 volume);
 int afe_validate_port(u16 port_id);
@@ -73,7 +84,9 @@ int afe_get_port_index(u16 port_id);
 int afe_start_pseudo_port(u16 port_id);
 int afe_stop_pseudo_port(u16 port_id);
 int afe_cmd_memory_map(u32 dma_addr_p, u32 dma_buf_sz);
+int afe_cmd_memory_map_nowait(u32 dma_addr_p, u32 dma_buf_sz);
 int afe_cmd_memory_unmap(u32 dma_addr_p);
+int afe_cmd_memory_unmap_nowait(u32 dma_addr_p);
 
 int afe_register_get_events(u16 port_id,
 		void (*cb) (uint32_t opcode,
@@ -93,4 +106,6 @@ int afe_get_port_type(u16 port_id);
  */
 int afe_convert_virtual_to_portid(u16 port_id);
 
+int afe_pseudo_port_start_nowait(u16 port_id);
+int afe_pseudo_port_stop_nowait(u16 port_id);
 #endif /* __Q6AFE_H__ */

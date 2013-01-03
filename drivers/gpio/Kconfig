@@ -454,16 +454,6 @@ config GPIO_TPS65910
 	  Select this option to enable GPIO driver for the TPS65910
 	  chip family.
 
-config MPP_PMIC8901
-        tristate "Qualcomm PMIC8901 MPP"
-        depends on GPIOLIB && PMIC8901
-        default y
-        help
-          Say yes here to support GPIO functionality on Qualcomm's
-          PM8901 chip for MPP(Multi-Purpose Pin) pins. These pins
-          work like GPIO pins when configured as digital input and/or
-          output signals.
-
 config GPIO_PM8XXX
 	tristate "Qualcomm PM8xxx GPIO support"
 	depends on MFD_PM8XXX
@@ -487,4 +477,20 @@ config GPIO_PM8XXX_RPC
 	  This option enables support for on-chip GPIO found on Qualcomm PM8xxx
 	  PMICs through RPC.
 
+config GPIO_QPNP
+	depends on ARCH_MSMCOPPER
+	depends on OF_SPMI
+	depends on MSM_QPNP_INT
+	tristate "Qualcomm QPNP GPIO support"
+	help
+	  Say 'y' here to include support for the Qualcomm QPNP gpio
+	  support. QPNP is a SPMI based PMIC implementation.
+
+config GPIO_QPNP_DEBUG
+	depends on GPIO_QPNP
+	depends on DEBUG_FS
+	bool "Qualcomm QPNP GPIO debug support"
+	help
+	  Say 'y' here to include debug support for the Qualcomm
+	  QPNP gpio support
 endif

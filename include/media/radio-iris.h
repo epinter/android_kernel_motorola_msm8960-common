@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2011 Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2012 Code Aurora Forum. All rights reserved.
  *
  * This file is based on include/net/bluetooth/hci_core.h
  *
@@ -44,7 +44,14 @@
 /* default data access */
 #define DEFAULT_DATA_OFFSET 2
 #define DEFAULT_DATA_SIZE 249
-
+/* Power levels are 0-7, but SOC will expect values from 0-255
+ * So the each level step size will be 255/7 = 36 */
+#define FM_TX_PWR_LVL_STEP_SIZE 36
+#define FM_TX_PWR_LVL_0         0 /* Lowest power lvl that can be set for Tx */
+#define FM_TX_PWR_LVL_MAX       7 /* Max power lvl for Tx */
+#define FM_TX_PHY_CFG_MODE   0x3c
+#define FM_TX_PHY_CFG_LEN    0x10
+#define FM_TX_PWR_GAIN_OFFSET 14
 /* HCI timeouts */
 #define RADIO_HCI_TIMEOUT	(10000)	/* 10 seconds */
 
@@ -129,7 +136,8 @@ void radio_hci_event_packet(struct radio_hci_dev *hdev, struct sk_buff *skb);
 #define HCI_OCF_FM_EN_WAN_AVD_CTRL          0x0014
 #define HCI_OCF_FM_EN_NOTCH_CTRL            0x0015
 #define HCI_OCF_FM_SET_EVENT_MASK           0x0016
-
+#define HCI_OCF_FM_SET_CH_DET_THRESHOLD     0x0017
+#define HCI_OCF_FM_GET_CH_DET_THRESHOLD     0x0018
 /* HCI trans control commans opcode*/
 #define HCI_OCF_FM_ENABLE_TRANS_REQ         0x0001
 #define HCI_OCF_FM_DISABLE_TRANS_REQ        0x0002
@@ -198,7 +206,8 @@ void radio_hci_event_packet(struct radio_hci_dev *hdev, struct sk_buff *skb);
 #define HCI_FM_STATION_DBG_PARAM_CMD 12
 #define HCI_FM_ENABLE_TRANS_CMD 13
 #define HCI_FM_DISABLE_TRANS_CMD 14
-
+#define HCI_FM_GET_TX_CONFIG 15
+#define HCI_FM_GET_DET_CH_TH_CMD 16
 
 /* Defines for FM TX*/
 #define TX_PS_DATA_LENGTH 96
@@ -239,14 +248,6 @@ struct hci_fm_tx_rt {
 	__u8	pty;
 	__u8	ps_len;
 	__u8    rt_data[TX_RT_DATA_LENGTH];
-} __packed;
-
-struct hci_fm_get_trans_conf_rsp {
-	__u8    status;
-	__u8	emphasis;
-	__u8	rds_std;
-	__u32	band_low_limit;
-	__u32	band_high_limit;
 } __packed;
 
 struct hci_fm_mute_mode_req {
@@ -326,6 +327,14 @@ struct hci_fm_ssbi_peek {
 	__u16 start_address;
 } __packed;
 
+struct hci_fm_ch_det_threshold {
+	char sinr;
+	__u8 sinr_samples;
+	__u8 low_th;
+	__u8 high_th;
+
+} __packed;
+
 /*HCI events*/
 #define HCI_EV_TUNE_STATUS              0x01
 #define HCI_EV_RDS_LOCK_STATUS          0x02
@@ -361,6 +370,8 @@ struct hci_ev_tune_status {
 	__u8    stereo_prg;
 	__u8    rds_sync_status;
 	__u8    mute_mode;
+	char    sinr;
+	__u8	intf_det_th;
 } __packed;
 
 struct hci_ev_rds_rx_data {
@@ -428,6 +439,10 @@ struct hci_fm_conf_rsp {
 	struct hci_fm_recv_conf_req recv_conf_rsp;
 } __packed;
 
+struct hci_fm_get_trans_conf_rsp {
+	__u8    status;
+	struct hci_fm_trans_conf_req_struct trans_conf_rsp;
+} __packed;
 struct hci_fm_sig_threshold_rsp {
 	__u8    status;
 	__u8    sig_threshold;
@@ -501,6 +516,7 @@ enum radio_state_t {
 	FM_RECV,
 	FM_TRANS,
 	FM_RESET,
+	FM_CALIB
 };
 
 enum v4l2_cid_private_iris_t {
@@ -547,15 +563,21 @@ enum v4l2_cid_private_iris_t {
 	V4L2_CID_PRIVATE_IRIS_SSBI_POKE,
 	V4L2_CID_PRIVATE_IRIS_TX_TONE,
 	V4L2_CID_PRIVATE_IRIS_RDS_GRP_COUNTERS,
-	V4L2_CID_PRIVATE_IRIS_SET_NOTCH_FILTER,/*0x8000028*/
-	/*0x8000029 is used for tavarua specific ioctl*/
-	V4L2_CID_PRIVATE_IRIS_DO_CALIBRATION = 0x800002a,
-	V4L2_CID_PRIVATE_IRIS_READ_DEFAULT = 0x00980928,/*using private CIDs
-							under userclass*/
+	V4L2_CID_PRIVATE_IRIS_SET_NOTCH_FILTER, /* 0x8000028 */
+	V4L2_CID_PRIVATE_IRIS_SET_AUDIO_PATH, /* TAVARUA specific command */
+	V4L2_CID_PRIVATE_IRIS_DO_CALIBRATION,
+	V4L2_CID_PRIVATE_IRIS_SRCH_ALGORITHM, /* TAVARUA specific command */
+	V4L2_CID_PRIVATE_IRIS_GET_SINR,
+	V4L2_CID_PRIVATE_INTF_LOW_THRESHOLD,
+	V4L2_CID_PRIVATE_INTF_HIGH_THRESHOLD,
+	V4L2_CID_PRIVATE_SINR_THRESHOLD,
+	V4L2_CID_PRIVATE_SINR_SAMPLES,
+
+	/*using private CIDs under userclass*/
+	V4L2_CID_PRIVATE_IRIS_READ_DEFAULT = 0x00980928,
 	V4L2_CID_PRIVATE_IRIS_WRITE_DEFAULT,
 	V4L2_CID_PRIVATE_IRIS_SET_CALIBRATION,
 };
-
 
 
 enum iris_evt_t {
@@ -576,7 +598,8 @@ enum iris_evt_t {
 	IRIS_EVT_NEW_SRCH_LIST,
 	IRIS_EVT_NEW_AF_LIST,
 	IRIS_EVT_TXRDSDAT,
-	IRIS_EVT_TXRDSDONE
+	IRIS_EVT_TXRDSDONE,
+	IRIS_EVT_RADIO_DISABLED
 };
 enum emphasis_type {
 	FM_RX_EMP75 = 0x0,
@@ -660,7 +683,7 @@ enum search_t {
 
 /* Band limits */
 #define REGION_US_EU_BAND_LOW              87500
-#define REGION_US_EU_BAND_HIGH             107900
+#define REGION_US_EU_BAND_HIGH             108000
 #define REGION_JAPAN_STANDARD_BAND_LOW     76000
 #define REGION_JAPAN_STANDARD_BAND_HIGH    90000
 #define REGION_JAPAN_WIDE_BAND_LOW         90000
@@ -689,7 +712,7 @@ enum search_t {
 #define MAX_PS_LENGTH	(96)
 #define MAX_RT_LENGTH	(64)
 #define RDS_GRP_CNTR_LEN (36)
-
+#define RX_RT_DATA_LENGTH (63)
 /* Search direction */
 #define SRCH_DIR_UP		(0)
 #define SRCH_DIR_DOWN		(1)
@@ -727,13 +750,19 @@ enum search_t {
 #define RSB_CALIB_SIZE    4
 #define CALIB_DATA_OFSET  2
 #define CALIB_MODE_OFSET  1
-
 #define MAX_CALIB_SIZE 75
-struct hci_fm_set_cal_req {
+struct hci_fm_set_cal_req_proc {
 	__u8    mode;
-	/*Max calibration data size*/
-	__u8    data[MAX_CALIB_SIZE];
+	/*Max process calibration data size*/
+	__u8    data[PROCS_CALIB_SIZE];
 } __packed;
+
+struct hci_fm_set_cal_req_dc {
+	__u8    mode;
+	/*Max DC calibration data size*/
+	__u8    data[DC_CALIB_SIZE];
+} __packed;
+
 struct hci_cc_do_calibration_rsp {
 	__u8 status;
 	__u8 mode;

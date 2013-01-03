@@ -124,6 +124,12 @@ cpu_v7_switch_mm_private:
 #ifdef CONFIG_ARM_ERRATA_754322
 	dsb
 #endif
+#ifdef CONFIG_PID_IN_CONTEXTIDR
+	mrc	p15, 0, r2, c13, c0, 1		@ read current context ID
+	bic	r2, r2, #0xff			@ extract the PID
+	and	r1, r1, #0xff
+	orr	r1, r1, r2			@ insert the PID into r1
+#endif
 	mcr	p15, 0, r2, c13, c0, 1		@ set reserved context ID
 	isb
 1:	mcr	p15, 0, r0, c2, c0, 0		@ set TTB 0
@@ -219,7 +225,11 @@ cpu_v7_name:
 	 *   NOS = PRRR[24+n] = 1	- not outer shareable
 	 */
 .equ	PRRR,	0xff0a81a8
+#if defined (CONFIG_ARCH_MSM_SCORPIONMP)
+.equ	NMRR,	0x40e080e0
+#else
 .equ	NMRR,	0x40e040e0
+#endif
 
 /* Suspend/resume support: derived from arch/arm/mach-s5pv210/sleep.S */
 .globl	cpu_v7_suspend_size
@@ -282,10 +292,6 @@ cpu_resume_l1_flags:
  *
  *	Initialise TLB, Caches, and MMU state ready to switch the MMU
  *	on.  Return in r0 the new CP15 C1 control register setting.
- *
- *	We automatically detect if we have a Harvard cache, and use the
- *	Harvard cache control instructions insead of the unified cache
- *	control instructions.
  *
  *	This should be able to cover all ARMv7 cores.
  *
@@ -383,9 +389,7 @@ __v7_setup:
 #endif
 
 3:	mov	r10, #0
-#ifdef HARVARD_CACHE
 	mcr	p15, 0, r10, c7, c5, 0		@ I+BTB cache invalidate
-#endif
 	dsb
 #ifdef CONFIG_MMU
 	mcr	p15, 0, r10, c8, c7, 0		@ invalidate I + D TLBs

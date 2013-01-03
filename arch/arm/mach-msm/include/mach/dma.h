@@ -1,7 +1,7 @@
 /* linux/include/asm-arm/arch-msm/dma.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -45,8 +45,7 @@ struct msm_dmov_pdata {
 
 void msm_dmov_enqueue_cmd(unsigned id, struct msm_dmov_cmd *cmd);
 void msm_dmov_enqueue_cmd_ext(unsigned id, struct msm_dmov_cmd *cmd);
-void msm_dmov_stop_cmd(unsigned id, struct msm_dmov_cmd *cmd, int graceful);
-void msm_dmov_flush(unsigned int id);
+void msm_dmov_flush(unsigned int id, int graceful);
 int msm_dmov_exec_cmd(unsigned id, unsigned int cmdptr);
 
 #define DMOV_CRCIS_PER_CONF 10
@@ -177,11 +176,20 @@ int msm_dmov_exec_cmd(unsigned id, unsigned int cmdptr);
 #define DMOV_CE_OUT_CHAN       1
 #define DMOV_CE_OUT_CRCI       3
 
+#define DMOV_TSIF_CHAN         2
+#define DMOV_TSIF_CRCI         11
+
 #define DMOV_HSUART_GSBI6_TX_CHAN	7
 #define DMOV_HSUART_GSBI6_TX_CRCI	6
 
 #define DMOV_HSUART_GSBI6_RX_CHAN	8
 #define DMOV_HSUART_GSBI6_RX_CRCI	11
+
+#define DMOV_HSUART_GSBI9_TX_CHAN	4
+#define DMOV_HSUART_GSBI9_TX_CRCI	13
+
+#define DMOV_HSUART_GSBI9_RX_CHAN	3
+#define DMOV_HSUART_GSBI9_RX_CRCI	12
 
 #elif defined(CONFIG_ARCH_MSM9615)
 
@@ -246,10 +254,10 @@ int msm_dmov_exec_cmd(unsigned id, unsigned int cmdptr);
 #endif
 
 /* channels for APQ8064 */
-#define DMOV8064_CE_IN_CHAN        2
+#define DMOV8064_CE_IN_CHAN        0
 #define DMOV8064_CE_IN_CRCI       14
 
-#define DMOV8064_CE_OUT_CHAN       3
+#define DMOV8064_CE_OUT_CHAN       1
 #define DMOV8064_CE_OUT_CRCI       15
 
 

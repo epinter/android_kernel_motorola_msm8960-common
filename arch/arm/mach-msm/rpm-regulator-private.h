@@ -24,7 +24,8 @@ enum rpm_regulator_type {
 	RPM_REGULATOR_TYPE_SMPS,
 	RPM_REGULATOR_TYPE_VS,
 	RPM_REGULATOR_TYPE_NCP,
-	RPM_REGULATOR_TYPE_MAX = RPM_REGULATOR_TYPE_NCP,
+	RPM_REGULATOR_TYPE_CORNER,
+	RPM_REGULATOR_TYPE_MAX = RPM_REGULATOR_TYPE_CORNER,
 };
 
 struct request_member {
@@ -144,7 +145,7 @@ struct vreg_config {
 #define MICRO_TO_MILLI(uV)			((uV) / 1000)
 #define MILLI_TO_MICRO(mV)			((mV) * 1000)
 
-#if defined(CONFIG_ARCH_MSM8X60)
+#if defined(CONFIG_MSM_RPM_REGULATOR) && defined(CONFIG_ARCH_MSM8X60)
 struct vreg_config *get_config_8660(void);
 #else
 static inline struct vreg_config *get_config_8660(void)
@@ -153,7 +154,8 @@ static inline struct vreg_config *get_config_8660(void)
 }
 #endif
 
-#if defined(CONFIG_ARCH_MSM8960) || defined(CONFIG_ARCH_APQ8064)
+#if defined(CONFIG_MSM_RPM_REGULATOR) && \
+	(defined(CONFIG_ARCH_MSM8960) || defined(CONFIG_ARCH_APQ8064))
 struct vreg_config *get_config_8960(void);
 #else
 static inline struct vreg_config *get_config_8960(void)
@@ -162,10 +164,19 @@ static inline struct vreg_config *get_config_8960(void)
 }
 #endif
 
-#if defined(CONFIG_ARCH_MSM9615)
+#if defined(CONFIG_MSM_RPM_REGULATOR) && defined(CONFIG_ARCH_MSM9615)
 struct vreg_config *get_config_9615(void);
 #else
 static inline struct vreg_config *get_config_9615(void)
+{
+	return NULL;
+}
+#endif
+
+#if defined(CONFIG_MSM_RPM_REGULATOR) && defined(CONFIG_ARCH_MSM8930)
+struct vreg_config *get_config_8930(void);
+#else
+static inline struct vreg_config *get_config_8930(void)
 {
 	return NULL;
 }
