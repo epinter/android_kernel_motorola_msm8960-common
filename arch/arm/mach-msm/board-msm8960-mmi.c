@@ -1606,6 +1606,67 @@ static void __init register_i2c_devices(void)
 #endif
 }
 
+#ifdef CONFIG_USB_ANDROID_DIAG
+static struct platform_device msm8960_usb_diag_device = {
+	.name	= "usb_diag",
+	.id	= 0,
+	.dev	= {
+		.platform_data = &usb_diag_pdata,
+	},
+};
+#endif
+
+static struct platform_device usbnet_device = {
+	.name = "usbnet",
+};
+
+#define BOOT_MODE_MAX_LEN 64
+static char boot_mode[BOOT_MODE_MAX_LEN + 1];
+int __init board_boot_mode_init(char *s)
+{
+	strncpy(boot_mode, s, BOOT_MODE_MAX_LEN);
+	boot_mode[BOOT_MODE_MAX_LEN] = '\0';
+	return 1;
+}
+__setup("androidboot.mode=", board_boot_mode_init);
+
+static int boot_mode_is_factory(void)
+{
+	return !strncmp(boot_mode, "factory", BOOT_MODE_MAX_LEN);
+}
+
+#define USB_SERIAL_LENGTH 16
+static char usb_serial_num[USB_SERIAL_LENGTH + 1];
+static int __init board_serialno_setup(char *serialno)
+{
+	strncpy(usb_serial_num, serialno, USB_SERIAL_LENGTH);
+	usb_serial_num[USB_SERIAL_LENGTH] = '\0';
+	return 1;
+}
+__setup("androidboot.serialno=", board_serialno_setup);
+
+static __init void mot_init_usb(void)
+{
+	if (!strncmp(boot_mode, "bp-tools", BOOT_MODE_MAX_LEN)) {
+#ifdef CONFIG_USB_ANDROID_DIAG
+		platform_device_register(&msm8960_usb_diag_device);
+#endif
+		/* XXX
+		platform_device_register(&usb_gadget_fserial_device);
+		platform_device_register(&rndis_device);
+		*/
+		platform_device_register(&usbnet_device);
+	}
+	else if(!strncmp(boot_mode, "factory", BOOT_MODE_MAX_LEN)) {
+		platform_device_register(&usbnet_device);
+	}
+	else {
+		/* XXX platform_device_register(&rndis_device); */
+		/* MTP goes here */
+		platform_device_register(&usbnet_device);
+	}
+}
+
 static unsigned sdc_detect_gpio = 20;
 
 static struct gpiomux_setting mdp_disp_suspend_cfg = {
@@ -1879,6 +1940,7 @@ static void __init msm8960_mmi_init(void)
 							pm8921_mpps, ARRAY_SIZE(pm8921_mpps));
 
 	msm8960_init_usb(msm_hsusb_vbus_power);
+	mot_init_usb();
 
 #ifdef CONFIG_EMU_DETECTION
 	mot_init_emu_detection(otg_control_data);
