@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,10 +15,14 @@
 
 #include <linux/regulator/gpio-regulator.h>
 #include <linux/mfd/pm8xxx/pm8921.h>
+#include <linux/i2c.h>
 #include <linux/i2c/sx150x.h>
 #include <mach/irqs.h>
 #include <mach/msm_spi.h>
 #include <mach/rpm-regulator.h>
+#include <mach/msm_memtypes.h>
+#include <mach/msm_rtb.h>
+#include <mach/msm_cache_dump.h>
 #include <linux/spi/spi.h>
 #include <mach/board.h>
 #include <linux/leds.h>
