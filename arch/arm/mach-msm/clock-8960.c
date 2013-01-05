@@ -5983,8 +5983,8 @@ static struct clk_lookup msm_clocks_8930[] = {
 
 int __init msm_clocks_8960_v1_info(struct clk_lookup **ptr, int *num_lookups)
 {
-	*ptr = msm_clocks_8960_v1;
-	*num_lookups = ARRAY_SIZE(msm_clocks_8960_v1);
+	*ptr = msm_clocks_8960;
+	*num_lookups = ARRAY_SIZE(msm_clocks_8960);
 	return 0;
 }
 
@@ -6263,16 +6263,18 @@ static void __init reg_init(void)
 
 static void __init msm8960_clock_pre_init(void)
 {
+    size_t num_lookups = ARRAY_SIZE(msm_clocks_8960);
+
 	if (camera_single_mclk) {
 		int i;
 		pr_info("using cam0_clk for all cameras\n");
 		for (i = 0; i < num_lookups; i++) {
-			const char *dev_id = msm_clocks_8960_v1[i].dev_id;
-			const char *con_id = msm_clocks_8960_v1[i].con_id;
+			const char *dev_id = msm_clocks_8960[i].dev_id;
+			const char *con_id = msm_clocks_8960[i].con_id;
 			if (dev_id && con_id &&
 					!memcmp(dev_id, "msm_camera", 10) &&
 					!memcmp(con_id, "cam_clk", 7))
-				msm_clocks_8960_v1[i].clk = &cam0_clk.c;
+				msm_clocks_8960[i].clk = &cam0_clk.c;
 		}
 	}
 
