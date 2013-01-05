@@ -254,18 +254,6 @@ extern spinlock_t smem_lock;
 
 void smd_diag(void);
 
-<<<<<<< HEAD
-struct interrupt_stat {
-	uint32_t smd_in_count;
-	uint32_t smd_out_hardcode_count;
-	uint32_t smd_out_config_count;
-
-	uint32_t smsm_in_count;
-	uint32_t smsm_out_hardcode_count;
-	uint32_t smsm_out_config_count;
-};
-extern struct interrupt_stat interrupt_stats[NUM_SMD_SUBSYSTEMS];
-=======
 #define BARCODE_MAX_LEN 64
 #define MACHINE_MAX_LEN 32
 #define CARRIER_MAX_LEN 64
@@ -280,6 +268,16 @@ struct mmi_unit_info_v1 {
 	char carrier[CARRIER_MAX_LEN+1];
 	char baseband[BASEBAND_MAX_LEN+1];
 };
->>>>>>> a00d81d... IKQCOMSD1-593 Export MMI specific unit info to modem over SMEM
+
+struct interrupt_stat {
+	uint32_t smd_in_count;
+	uint32_t smd_out_hardcode_count;
+	uint32_t smd_out_config_count;
+
+	uint32_t smsm_in_count;
+	uint32_t smsm_out_hardcode_count;
+	uint32_t smsm_out_config_count;
+};
+extern struct interrupt_stat interrupt_stats[NUM_SMD_SUBSYSTEMS];
 
 #endif
