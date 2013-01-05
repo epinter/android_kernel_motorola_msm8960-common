@@ -893,6 +893,7 @@ static int msm_pm_enter(suspend_state_t state)
 	bool allow[MSM_PM_SLEEP_MODE_NR];
 	int i;
 	int64_t period = 0;
+	int64_t time = msm_pm_timer_enter_suspend(&period);
 #ifdef CONFIG_PM8921_BMS
 	int rc;
 	int64_t mAs;
@@ -902,7 +903,6 @@ static int msm_pm_enter(suspend_state_t state)
 	if (rc)
 		mAs = 0;
 #endif
-	int64_t time = msm_pm_timer_enter_suspend(&period);
 
 	if (MSM_PM_DEBUG_SUSPEND & msm_pm_debug_mask)
 		pr_info("%s\n", __func__);
