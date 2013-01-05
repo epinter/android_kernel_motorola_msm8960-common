@@ -25,7 +25,6 @@
 #include <linux/interrupt.h>
 #include <asm/fiq.h>
 #include <asm/hardware/gic.h>
-#include <linux/nmi.h>
 #include <mach/msm_iomap.h>
 #include <asm/mach-types.h>
 #include <mach/scm.h>
@@ -148,20 +147,10 @@ static int panic_wdog_handler(struct notifier_block *this,
 	return NOTIFY_DONE;
 }
 
-static int touch_nmi_wdog_handler(struct notifier_block *this,
-		unsigned long event, void *ptr)
-{
-	if (!enable)
-		return NOTIFY_DONE;
-	__raw_writel(1, msm_tmr0_base + WDT0_RST);
-	return NOTIFY_DONE;
-}
-
 static struct notifier_block panic_blk = {
 	.notifier_call	= panic_wdog_handler,
 };
 
-<<<<<<< HEAD
 struct wdog_disable_work_data {
 	struct work_struct work;
 	struct completion complete;
@@ -192,12 +181,6 @@ static void wdog_disable_work(struct work_struct *work)
 	pr_info("MSM Watchdog deactivated.\n");
 }
 
-=======
-static struct notifier_block touch_nmi_blk = {
-	.notifier_call  = touch_nmi_wdog_handler,
-};
-
->>>>>>> 6025e30... IKHSS7-8501 msm: watchdog: register to nmi wdog notifier chain
 static int wdog_enable_set(const char *val, struct kernel_param *kp)
 {
 	int ret = 0;
@@ -215,7 +198,6 @@ static int wdog_enable_set(const char *val, struct kernel_param *kp)
 	if (ret)
 		goto done;
 
-<<<<<<< HEAD
 	if (runtime_disable == 1) {
 		if (old_val)
 			goto done;
@@ -224,31 +206,6 @@ static int wdog_enable_set(const char *val, struct kernel_param *kp)
 		schedule_work_on(0, &work_data.work);
 		wait_for_completion(&work_data.complete);
 	} else {
-=======
-	switch (runtime_disable) {
-
-	case 1:
-		if (!old_val) {
-			__raw_writel(0, msm_tmr0_base + WDT0_EN);
-			mb();
-			disable_percpu_irq(WDT0_ACCSCSSNBARK_INT);
-			free_percpu_irq(WDT0_ACCSCSSNBARK_INT, percpu_pdata);
-			free_percpu(percpu_pdata);
-			enable = 0;
-			atomic_notifier_chain_unregister(&panic_notifier_list,
-			       &panic_blk);
-			atomic_notifier_chain_unregister(
-					&touch_watchdog_notifier_head,
-					&touch_nmi_blk);
-			cancel_delayed_work(&dogwork_struct);
-			/* may be suspended after the first write above */
-			__raw_writel(0, msm_tmr0_base + WDT0_EN);
-			printk(KERN_INFO "MSM Watchdog deactivated.\n");
-		}
-	break;
-
-	default:
->>>>>>> 6025e30... IKHSS7-8501 msm: watchdog: register to nmi wdog notifier chain
 		runtime_disable = old_val;
 		ret = -EINVAL;
 	}
@@ -416,8 +373,6 @@ static void init_watchdog_work(struct work_struct *work)
 	__raw_writel(1, msm_tmr0_base + WDT0_EN);
 	__raw_writel(1, msm_tmr0_base + WDT0_RST);
 	last_pet = sched_clock();
-	atomic_notifier_chain_register(&touch_watchdog_notifier_head,
-			&touch_nmi_blk);
 
 	if (!has_vic)
 		enable_percpu_irq(WDT0_ACCSCSSNBARK_INT, IRQ_TYPE_EDGE_RISING);
